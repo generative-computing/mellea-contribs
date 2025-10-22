@@ -25,7 +25,6 @@ dependencies = [
 [dependency-groups]
 # Use these like:
 # pip install -e . --group dev
-# pip install mellea --group dev
 dev = [
     "isort>=6.0.0",
     "pre-commit>=4.2.0",
