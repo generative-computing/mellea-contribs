@@ -1,4 +1,4 @@
-<img src="https://github.com/generative-computing/mellea-contribs/raw/main/docs/mellea-contribs.jpg" height=100>
+<img src="https://github.com/generative-computing/mellea-contribs/raw/main/mellea-contribs.jpg" height=100>
 
 
 # Mellea Contribs
