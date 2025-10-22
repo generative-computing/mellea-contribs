@@ -1,0 +1,137 @@
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[project]
+name = "mellea-contribs"
+version = "0.1.2"
+authors = [
+    { name = "Nathan Fulton", email = "nathan@ibm.com" },
+    # add your name here!
+]
+description = "mellea-contribs is a library for incubating generative programming libraries"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "mellea"
+]
+
+[dependency-groups]
+# Use these like:
+# pip install -e . --group dev
+# pip install mellea --group dev
+dev = [
+    "isort>=6.0.0",
+    "pre-commit>=4.2.0",
+    "pylint>=3.3.4",
+    "ruff>=0.11.6",
+    "pdm>=2.24.0",
+    "pytest",
+    "pytest-asyncio",
+    "mypy>=1.17.0",
+    "python-semantic-release~=7.32",
+]
+
+notebook = [
+    "ipykernel>=6.29.5",
+    "ipython>=8.36.0",
+    "jupyter>=1.1.1",
+]
+
+docs = [
+    "sphinx_rtd_theme",
+    "sphinx-autodoc-typehints",
+    "sphinx_mdinclude",
+]
+
+[tool.ruff]
+target-version = "py310"
+respect-gitignore = true
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint]
+select = [
+  # "B",  # flake8-bugbear
+  "C",  # flake8-comprehensions
+  "C9", # mccabe
+  "D",  # flake8-docstrings
+  "E",   # pycodestyle errors (default)
+  "F",   # pyflakes (default)
+  "I",   # isort
+  "PD",  # pandas-vet
+  "PIE", # pie
+  # "PTH", # pathlib
+  "Q", # flake8-quotes
+  # "RET", # return
+  "RUF", # Enable all ruff-specific checks
+  # "SIM", # simplify
+  "S307", # eval
+  # "T20",  # (disallow print statements) keep debugging statements out of the codebase
+  "W",     # pycodestyle warnings
+  "ASYNC", # async
+  "UP",    # pyupgrade
+]
+
+ignore = [
+  "RUF001", # ambiguous unicode characters (these occur in examples).
+  "C408",   # Unnecessary `dict()` call (rewrite as a literal)
+  "E501",   # Line too long, handled by ruff formatter
+  # "D107",   # "Missing docstring in __init__",
+  "F401",   # imported but unused; consider using `importlib.util.find_spec` to test for "
+  "F811",   # "redefinition of the same function"
+  "PL",     # Pylint
+  "RUF012", # Mutable Class Attributes
+#   "UP006",  # List vs list, etc
+#   "UP007",  # Option and Union
+#   "UP035",  # `typing.Set` is deprecated, use `set` instead"
+  "PD901",  # Avoid using the generic variable name `df` for DataFrames
+  "C901", # Complexity warnings
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.codespell]
+ignore-words-list = 'mellea,hashi,noo,Asai,asai,nd,mot,rouge,Rouge'
+check-filenames = true
+check-hidden = false
+regex = "(?<![a-z])[a-z'`]+|[A-Z][a-z'`]*|[a-z]+'[a-z]*|[a-z]+(?=[_-])|[a-z]+(?=[A-Z])|\\d+"
+skip = 'requirements.txt,uv.lock,CHANGELOG.md'
+
+[tool.mypy]
+disable_error_code = ["empty-body", "import-untyped"]
+python_version = "3.10"
+
+[tool.pytest.ini_options]
+markers = [
+    "qualitative: Marks the test as needing an exact output from an LLM; set by an ENV variable for CICD. All tests marked with this will xfail in CI/CD"
+]
+asyncio_mode = "auto"  # Don't require explicitly marking async tests.
+
+[tool.semantic_release]
+# for default values check:
+# https://github.com/python-semantic-release/python-semantic-release/blob/v7.32.2/semantic_release/defaults.cfg
+
+version_source = "tag_only"
+branch = "main"
+
+# configure types which should trigger minor and patch version bumps respectively
+# (note that they must be a subset of the configured allowed types):
+parser_angular_allowed_types = "build,chore,ci,docs,feat,fix,perf,style,refactor,test,release"
+parser_angular_minor_types = "release"
+parser_angular_patch_types = "fix,perf,feat"
