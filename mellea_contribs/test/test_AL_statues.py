@@ -1,4 +1,4 @@
-from mellea.stdlib.reqlib.check_AL_statutes import parse_AL, check_AL, validate_AL_statutes, get_AL_statutes
+from mellea_contribs.reqlib.check_AL_statutes import parse_AL, check_AL, validate_AL_statutes, get_AL_statutes
 
 from mellea import start_session
 from mellea.stdlib.requirement import req
