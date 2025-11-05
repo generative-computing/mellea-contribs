@@ -21,6 +21,16 @@ class Core:
         return yesno.answer == "yes"
 
 
+    async def abinary(m:MelleaSession, prompt:str):
+
+        output = await m.ainstruct(f"{prompt} Answer yes or no.",
+                                   format=YesNo)
+
+        yesno = YesNo.model_validate_json(output.value)
+
+        return yesno.answer == "yes"
+
+
     def choice(self:MelleaSession, prompt:str, choices:list[str]):
 
         class Choice(BaseModel):
@@ -34,5 +44,16 @@ class Core:
         return choice.answer
 
 
+    async def achoice(self:MelleaSession, prompt:str, choices:list[str]):
+
+        class Choice(BaseModel):
+            answer : Literal[choices]
+
+        output = await self.ainstruct(f"{prompt} Respond with one of the following answers: " + ",".join([f"'{c}'" for c in choices]) + ".",
+                                      format=Choice)
+
+        choice = Choice.model_validate_json(output.value)
+
+        return choice.answer
 
 
