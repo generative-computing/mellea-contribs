@@ -11,7 +11,7 @@ class YesNo(BaseModel):
 
 class Core:
 
-    def binary(m:MelleaSession, prompt):
+    def binary(m:MelleaSession, prompt:str):
 
         output = m.instruct(f"{prompt} Answer yes or no.",
                             format=YesNo)
@@ -21,7 +21,7 @@ class Core:
         return yesno.answer == "yes"
 
 
-    def choice(self:MelleaSession, prompt, choices:list[str]):
+    def choice(self:MelleaSession, prompt:str, choices:list[str]):
 
         class Choice(BaseModel):
             answer : Literal[choices]
