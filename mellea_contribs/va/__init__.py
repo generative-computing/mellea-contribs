@@ -57,6 +57,8 @@ class Relation(Core):
     async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
                       symmetric:bool=False,
                       asymmetric:bool=False,
+                      reflexive:bool=False,
+                      irreflexive:bool=False,
                       positional:bool=True,
                       shuffle:bool=True, **kwargs) -> bool:
         """Evaluates a query that evaluates a binary relation.
@@ -68,6 +70,8 @@ class Relation(Core):
             vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
             symmetric: Declares the relation to be symmetric. Half of the queries swap x and y.
             asymmetric: Declares the relation to be asymmetric. Half of the queries swap x and y, and asks if they violate the criteria. This mitigates LLM's psycophancy bias toward answering "yes".
+            reflexive: Declares the relation to be reflexive, i.e., if x == y, returns True immediately.
+            irreflexive: Declares the relation to be irreflexive, i.e., if x == y, returns False immediately.
             positional: Half of the queries shuffle the order of presenting x and y. This mitigates the positional bias.
             shuffle: It shuffles the variation of queries (symmetric/positional variations).
                      This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
@@ -77,6 +81,12 @@ class Relation(Core):
         """
 
         assert not (symmetric and asymmetric), "symmetric and asymmetric flags are mutually exclusive"
+
+        if x == y:
+            if reflexive:
+                return True
+            if irreflexive:
+                return False
 
         if vote % 2 == 0:
             FancyLogger.get_logger().warning(
@@ -137,6 +147,8 @@ class Relation(Core):
     def binary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
                symmetric:bool=False,
                asymmetric:bool=False,
+               reflexive:bool=False,
+               irreflexive:bool=False,
                positional:bool=True,
                shuffle:bool=True, **kwargs) -> bool:
         return _run_async_in_thread(abinary(m, criteria, x, y, symmetric, vote, **kwargs))
