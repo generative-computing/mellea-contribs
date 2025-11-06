@@ -72,7 +72,7 @@ class Relation(Core):
             asymmetric: Declares the relation to be asymmetric. Half of the queries swap x and y, and asks if they violate the criteria. This mitigates LLM's psycophancy bias toward answering "yes".
             reflexive: Declares the relation to be reflexive, i.e., if x == y, returns True immediately.
             irreflexive: Declares the relation to be irreflexive, i.e., if x == y, returns False immediately.
-            positional: Half of the queries shuffle the order of presenting x and y. This mitigates the positional bias.
+            positional: Permute the order of presenting x and y. This mitigates the positional bias.
             shuffle: It shuffles the variation of queries (symmetric/positional variations).
                      This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
                      For example, when shuffle = False and vote = 1, the query always contains the original x y in the x y order.
@@ -95,65 +95,33 @@ class Relation(Core):
             vote += 1
 
         if symmetric:
-            if positional:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{x}\nX:{y}",
-                ]
-            else:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
-                ]
+            args = [(x,y),(y,x)]
+            target = [True,True]
         elif asymmetric:
-            if positional:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
-                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nY:{x}\nX:{y}",
-                ]
-            else:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
-                ]
+            args = [(x,y),(y,x)]
+            target = [True,False]
         else:
+            args = [(x,y)]
+            target = [True]
+
+        prompts = []
+        for (x, y), t in zip(args, target):
+            prompts.append((f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}", t))
             if positional:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
-                ]
-            else:
-                prompts = [
-                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
-                ]
+                prompts.append((f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}", t))
 
         if shuffle:
             random.shuffle(prompts)
 
         tasks = [
             m.abool(p)
-            for i, p in zip(range(vote),itertools.cycle(prompts))
+            for i, (p, t) in zip(range(vote),itertools.cycle(prompts))
         ]
 
         answers = asyncio.gather(*tasks)
 
+        answers = [ t == a for (p, t), a in zip(itertools.cycle(prompts), answers) ]
+
         return answers.count(True) >= (vote // 2) + 1
 
-
-    def binary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
-               symmetric:bool=False,
-               asymmetric:bool=False,
-               reflexive:bool=False,
-               irreflexive:bool=False,
-               positional:bool=True,
-               shuffle:bool=True, **kwargs) -> bool:
-        return _run_async_in_thread(abinary(m, criteria, x, y, symmetric, vote, **kwargs))
-
-
-
-class Sorting(Arity):
 
