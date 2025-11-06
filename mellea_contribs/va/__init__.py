@@ -56,7 +56,7 @@ class Relation(Core):
 
     async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
                       symmetric:bool=False,
-                      antisymmetric:bool=False,
+                      asymmetric:bool=False,
                       positional:bool=True,
                       shuffle:bool=True, **kwargs) -> bool:
         """Evaluates a query that evaluates a binary relation.
@@ -67,7 +67,7 @@ class Relation(Core):
             y: the second element
             vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
             symmetric: Declares the relation to be symmetric. Half of the queries swap x and y.
-            antisymmetric: Declares the relation to be antisymmetric. Half of the queries swap x and y, and asks if they violate the criteria. This mitigates LLM's psycophancy bias toward answering "yes".
+            asymmetric: Declares the relation to be asymmetric. Half of the queries swap x and y, and asks if they violate the criteria. This mitigates LLM's psycophancy bias toward answering "yes".
             positional: Half of the queries shuffle the order of presenting x and y. This mitigates the positional bias.
             shuffle: It shuffles the variation of queries (symmetric/positional variations).
                      This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
@@ -76,7 +76,7 @@ class Relation(Core):
             bool.
         """
 
-        assert not (symmetric and antisymmetric), "symmetric and antisymmetric flags are mutually exclusive"
+        assert not (symmetric and asymmetric), "symmetric and asymmetric flags are mutually exclusive"
 
         if vote % 2 == 0:
             FancyLogger.get_logger().warning(
@@ -97,7 +97,7 @@ class Relation(Core):
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
                 ]
-        elif antisymmetric:
+        elif asymmetric:
             if positional:
                 prompts = [
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
@@ -136,7 +136,7 @@ class Relation(Core):
 
     def binary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
                symmetric:bool=False,
-               antisymmetric:bool=False,
+               asymmetric:bool=False,
                positional:bool=True,
                shuffle:bool=True, **kwargs) -> bool:
         return _run_async_in_thread(abinary(m, criteria, x, y, symmetric, vote, **kwargs))
