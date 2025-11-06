@@ -281,3 +281,35 @@ Relation.ge = sync_wrapper(Relation.age)
 Relation.eq = sync_wrapper(Relation.aeq)
 
 
+async def async_merge_sort(lst, cmp):
+    if len(lst) <= 1:
+        return lst
+    mid = len(lst) // 2
+    left = await async_merge_sort(lst[:mid], cmp)
+    right = await async_merge_sort(lst[mid:], cmp)
+    return await async_merge(left, right, cmp)
+
+async def async_merge(left, right, cmp):
+    result = []
+    while left and right:
+        if await cmp(left[0], right[0]):
+            result.append(left.pop(0))
+        else:
+            result.append(right.pop(0))
+    return result + left + right
+
+
+class Sort(Relation):
+
+    async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
+                    vote:int=3,
+                    positional:bool=True,
+                    shuffle:bool=True, **kwargs) -> bool:
+
+        async def cmp(x, y):
+            return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
+
+        return async_merge_sort(elems, cmp)
+
+
+Sort.sort = sync_wrapper(Sort.asort)
