@@ -12,7 +12,12 @@ from pydantic import BaseModel
 from typing import Literal
 
 
-
+def sync_wrapper(async_fn):
+    """Wrap an async function so it can be called synchronously."""
+    @functools.wraps(async_fn)
+    def wrapper(*args, **kwargs):
+        return _run_async_in_thread(async_fn(*args, **kwargs))
+    return wrapper
 
 
 class YesNo(BaseModel):
@@ -41,15 +46,10 @@ class Core:
 
         return choice.answer
 
-    def bool(m:MelleaSession, prompt:str, **kwargs) -> bool:
-        return _run_async_in_thread(abool(m, prompt, **kwargs))
+    pass
 
-    def choice(m:MelleaSession, prompt:str, choices:list[str], **kwargs) -> str:
-        return _run_async_in_thread(achoice(m, prompt, **kwargs))
-
-
-
-
+Core.bool = sync_wrapper(Core.abool)
+Core.choice = sync_wrapper(Core.achoice)
 
 
 class Relation(Core):
