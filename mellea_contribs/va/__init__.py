@@ -193,7 +193,91 @@ class Relation(Core):
         return answers.count(True) >= (vote // 2) + 1
 
 
+    async def agt(m:MelleaSession, criteria:str, x:str, y:str, *,
+                  vote:int=3,
+                  positional:bool=True,
+                  shuffle:bool=True, **kwargs) -> bool:
+        """Evaluates a query that evaluates a "greater-than" relation.
+
+        Args:
+            criteria: A natural language statement on variables X and Y. LLM decides if X and Y satisfy this critria, and this function returns yes if so.
+            x: the first element
+            y: the second element
+            vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
+            positional: Permute the order of presenting x and y. This mitigates the positional bias.
+            shuffle: It shuffles the variation of queries (symmetric/positional variations).
+                     This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
+                     For example, when shuffle = False and vote = 1, the query always contains the original x y in the x y order.
+        Returns:
+            bool.
+        """
+        return await m.abinary(criteria, x, y,
+                               vote=vote,
+                               symmetric=False,
+                               asymmetric=True,
+                               reflexive=False,
+                               irreflexive=True,
+                               shuffle=shuffle, **kwargs)
+
+    async def age(m:MelleaSession, criteria:str, x:str, y:str, *,
+                  vote:int=3,
+                  positional:bool=True,
+                  shuffle:bool=True, **kwargs) -> bool:
+        """Evaluates a query that evaluates a "greater-than-equal" relation.
+
+        Args:
+            criteria: A natural language statement on variables X and Y. LLM decides if X and Y satisfy this critria, and this function returns yes if so.
+            x: the first element
+            y: the second element
+            vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
+            positional: Permute the order of presenting x and y. This mitigates the positional bias.
+            shuffle: It shuffles the variation of queries (symmetric/positional variations).
+                     This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
+                     For example, when shuffle = False and vote = 1, the query always contains the original x y in the x y order.
+        Returns:
+            bool.
+        """
+        return await m.abinary(criteria, x, y,
+                               vote=vote,
+                               symmetric=False,
+                               asymmetric=True,
+                               reflexive=True,
+                               irreflexive=False,
+                               shuffle=shuffle, **kwargs)
+
+
+    async def aeq(m:MelleaSession, criteria:str, x:str, y:str, *,
+                  vote:int=3,
+                  positional:bool=True,
+                  shuffle:bool=True, **kwargs) -> bool:
+        """Evaluates a query that evaluates an equivalence relation.
+
+        Args:
+            criteria: A natural language statement on variables X and Y. LLM decides if X and Y satisfy this critria, and this function returns yes if so.
+            x: the first element
+            y: the second element
+            vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
+            positional: Permute the order of presenting x and y. This mitigates the positional bias.
+            shuffle: It shuffles the variation of queries (symmetric/positional variations).
+                     This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
+                     For example, when shuffle = False and vote = 1, the query always contains the original x y in the x y order.
+        Returns:
+            bool.
+        """
+        return await m.abinary(criteria, x, y,
+                               vote=vote,
+                               symmetric=True,
+                               asymmetric=False,
+                               reflexive=True,
+                               irreflexive=False,
+                               shuffle=shuffle, **kwargs)
+
+
+
 Relation.binary = sync_wrapper(Relation.abinary)
 Relation.ternary = sync_wrapper(Relation.aternary)
+Relation.gt = sync_wrapper(Relation.agt)
+Relation.ge = sync_wrapper(Relation.age)
+Relation.eq = sync_wrapper(Relation.aeq)
 
 
