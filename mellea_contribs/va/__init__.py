@@ -1,5 +1,6 @@
 
 import functools
+import itertools
 import asyncio
 from mellea import MelleaSession
 from mellea.helpers.fancy_logger import FancyLogger
@@ -52,8 +53,19 @@ class Core:
 
 class Arity(Core):
 
-    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, symmetric:bool=True, vote:int=3, **kwargs) -> bool:
-        """Evaluates a binary boolean function.
+    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3, symmetric:bool=True, positional:bool=True, **kwargs) -> bool:
+        """Evaluates a query that corresponds to a binary boolean function.
+
+        Args:
+            criteria: A natural language statement on variables X and Y. LLM decides if X and Y satisfy this critria, and this function returns yes if so.
+            x: the first element
+            y: the second element
+            vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
+            symmetric: If True, half of the queries swap x and y, and count the number of "no" for majority voting instead. This mitigates LLM's psycophancy bias toward answering "yes".
+            shuffle: If True, shuffles the order of presenting x and y. This mitigates the positional bias.
+
+        Returns:
+            bool.
         """
 
         if vote % 2 == 0:
@@ -63,19 +75,34 @@ class Arity(Core):
             vote += 1
 
         if symmetric:
-            tasks = [
-                m.abool(f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}")
-                for _ in range(vote // 2 + 1)
-            ] + [
-                m.abool(f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}")
-                for _ in range(vote // 2)
-            ]
-
+            if positional:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{x}\nX:{y}",
+                ]
+            else:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
+                ]
         else:
-            tasks = [
-                m.abool(f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}")
-                for _ in range(vote)
-            ]
+            if positional:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
+                ]
+            else:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                ]
+
+
+        tasks = [
+            m.abool(p)
+            for i, p in zip(range(vote),itertools.cycle(prompts))
+        ]
 
         answers = asyncio.gather(*tasks)
 
