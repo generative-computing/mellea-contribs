@@ -1,4 +1,5 @@
 
+import random
 import functools
 import itertools
 import asyncio
@@ -51,22 +52,31 @@ class Core:
 
 
 
-class Arity(Core):
+class Relation(Core):
 
-    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3, symmetric:bool=True, positional:bool=True, **kwargs) -> bool:
-        """Evaluates a query that corresponds to a binary boolean function.
+    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
+                      symmetric:bool=False,
+                      antisymmetric:bool=False,
+                      positional:bool=True,
+                      shuffle:bool=True, **kwargs) -> bool:
+        """Evaluates a query that evaluates a binary relation.
 
         Args:
             criteria: A natural language statement on variables X and Y. LLM decides if X and Y satisfy this critria, and this function returns yes if so.
             x: the first element
             y: the second element
             vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
-            symmetric: If True, half of the queries swap x and y, and count the number of "no" for majority voting instead. This mitigates LLM's psycophancy bias toward answering "yes".
-            shuffle: If True, shuffles the order of presenting x and y. This mitigates the positional bias.
-
+            symmetric: Declares the relation to be symmetric. Half of the queries swap x and y.
+            antisymmetric: Declares the relation to be antisymmetric. Half of the queries swap x and y, and asks if they violate the criteria. This mitigates LLM's psycophancy bias toward answering "yes".
+            positional: Half of the queries shuffle the order of presenting x and y. This mitigates the positional bias.
+            shuffle: It shuffles the variation of queries (symmetric/positional variations).
+                     This helps when you are making multiple queries with a small vote count (less than 2*2=4 variations).
+                     For example, when shuffle = False and vote = 1, the query always contains the original x y in the x y order.
         Returns:
             bool.
         """
+
+        assert not (symmetric and antisymmetric), "symmetric and antisymmetric flags are mutually exclusive"
 
         if vote % 2 == 0:
             FancyLogger.get_logger().warning(
@@ -87,6 +97,19 @@ class Arity(Core):
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
                 ]
+        elif antisymmetric:
+            if positional:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nY:{y}\nX:{x}",
+                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nY:{x}\nX:{y}",
+                ]
+            else:
+                prompts = [
+                    f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
+                    f"Do X and Y violate the following criteria? \nCriteria: {criteria}\nX:{y}\nY:{x}",
+                ]
         else:
             if positional:
                 prompts = [
@@ -98,6 +121,8 @@ class Arity(Core):
                     f"Do X and Y satisfy the following criteria? \nCriteria: {criteria}\nX:{x}\nY:{y}",
                 ]
 
+        if shuffle:
+            random.shuffle(prompts)
 
         tasks = [
             m.abool(p)
@@ -106,10 +131,14 @@ class Arity(Core):
 
         answers = asyncio.gather(*tasks)
 
-        return (answers[:majority].count(True) + answers[majority:].count(False)) >= majority
+        return answers.count(True) >= (vote // 2) + 1
 
 
-    def binary(m:MelleaSession, criteria:str, x:str, y:str, symmetric:bool=True, vote:int=3, **kwargs) -> bool:
+    def binary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
+               symmetric:bool=False,
+               antisymmetric:bool=False,
+               positional:bool=True,
+               shuffle:bool=True, **kwargs) -> bool:
         return _run_async_in_thread(abinary(m, criteria, x, y, symmetric, vote, **kwargs))
 
 
