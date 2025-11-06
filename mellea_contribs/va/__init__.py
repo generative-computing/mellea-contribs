@@ -54,7 +54,8 @@ Core.choice = sync_wrapper(Core.achoice)
 
 class Relation(Core):
 
-    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, vote:int=3,
+    async def abinary(m:MelleaSession, criteria:str, x:str, y:str, *,
+                      vote:int=3,
                       symmetric:bool=False,
                       asymmetric:bool=False,
                       reflexive:bool=False,
@@ -125,7 +126,8 @@ class Relation(Core):
         return answers.count(True) >= (vote // 2) + 1
 
 
-    async def aternary(m:MelleaSession, criteria:str, x:str, y:str, z:str, vote:int=3,
+    async def aternary(m:MelleaSession, criteria:str, x:str, y:str, z:str, *,
+                       vote:int=3,
                        symmetric:bool=False,
                        asymmetric:bool=False,
                        positional:bool=True,
