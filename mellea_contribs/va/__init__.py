@@ -298,8 +298,19 @@ async def async_merge(left, right, cmp):
             result.append(right.pop(0))
     return result + left + right
 
+async def async_max(lst, cmp):
+    if len(lst) <= 1:
+        return lst[0]
+    mid = len(lst) // 2
+    left = await async_max(lst[:mid], cmp)
+    right = await async_max(lst[mid:], cmp)
+    if await cmp(left, right):
+        return left
+    else:
+        return right
 
-class Sort(Relation):
+
+class Sequence(Relation):
 
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
@@ -311,5 +322,18 @@ class Sort(Relation):
 
         return async_merge_sort(elems, cmp)
 
+    async def amax(m:MelleaSession, criteria:str, elems:list[str], *,
+                   vote:int=3,
+                   positional:bool=True,
+                   shuffle:bool=True, **kwargs) -> bool:
+
+        async def cmp(x, y):
+            return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
+
+        return async_max(elems, cmp)
+
 
 Sort.sort = sync_wrapper(Sort.asort)
+Sort.max = sync_wrapper(Sort.amax)
+
+
