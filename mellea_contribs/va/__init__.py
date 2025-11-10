@@ -355,7 +355,7 @@ class Sequence(Relation):
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
                     positional:bool=True,
-                    shuffle:bool=True, **kwargs) -> bool:
+                    shuffle:bool=True, **kwargs) -> list[str]:
 
         async def acmp(x, y):
             return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
@@ -365,7 +365,7 @@ class Sequence(Relation):
     async def amax(m:MelleaSession, criteria:str, elems:list[str], *,
                    vote:int=3,
                    positional:bool=True,
-                   shuffle:bool=True, **kwargs) -> bool:
+                   shuffle:bool=True, **kwargs) -> str:
 
         async def acmp(x, y):
             return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
@@ -378,7 +378,7 @@ class Sequence(Relation):
                       positional:bool=True,
                       shuffle:bool=True,
                       block_size:int=5,
-                      **kwargs) -> bool:
+                      **kwargs) -> str:
         """
         If exact = True, use quickselect.
         Otherwise, return the approximate median returned by median of medians.
