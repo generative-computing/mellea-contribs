@@ -281,30 +281,30 @@ Relation.ge = sync_wrapper(Relation.age)
 Relation.eq = sync_wrapper(Relation.aeq)
 
 
-async def async_merge_sort(lst, cmp):
+async def async_merge_sort(lst:list[str], acmp):
     if len(lst) <= 1:
         return lst
     mid = len(lst) // 2
-    left = await async_merge_sort(lst[:mid], cmp)
-    right = await async_merge_sort(lst[mid:], cmp)
-    return await async_merge(left, right, cmp)
+    left = await async_merge_sort(lst[:mid], acmp)
+    right = await async_merge_sort(lst[mid:], acmp)
+    return await async_merge(left, right, acmp)
 
-async def async_merge(left, right, cmp):
+async def async_merge(left:list[str], right:list[str], acmp):
     result = []
     while left and right:
-        if await cmp(left[0], right[0]):
+        if await acmp(left[0], right[0]):
             result.append(left.pop(0))
         else:
             result.append(right.pop(0))
     return result + left + right
 
-async def async_max(lst, cmp):
+async def async_max(lst:list[str], acmp):
     if len(lst) <= 1:
         return lst[0]
     mid = len(lst) // 2
-    left = await async_max(lst[:mid], cmp)
-    right = await async_max(lst[mid:], cmp)
-    if await cmp(left, right):
+    left = await async_max(lst[:mid], acmp)
+    right = await async_max(lst[mid:], acmp)
+    if await acmp(left, right):
         return left
     else:
         return right
@@ -317,20 +317,20 @@ class Sequence(Relation):
                     positional:bool=True,
                     shuffle:bool=True, **kwargs) -> bool:
 
-        async def cmp(x, y):
+        async def acmp(x, y):
             return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
 
-        return async_merge_sort(elems, cmp)
+        return async_merge_sort(elems, acmp)
 
     async def amax(m:MelleaSession, criteria:str, elems:list[str], *,
                    vote:int=3,
                    positional:bool=True,
                    shuffle:bool=True, **kwargs) -> bool:
 
-        async def cmp(x, y):
+        async def acmp(x, y):
             return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
 
-        return async_max(elems, cmp)
+        return async_max(elems, acmp)
 
 
 Sort.sort = sync_wrapper(Sort.asort)
