@@ -125,7 +125,6 @@ class Relation(Core):
 
         return answers.count(True) >= (vote // 2) + 1
 
-
     async def aternary(m:MelleaSession, criteria:str, x:str, y:str, z:str, *,
                        vote:int=3,
                        symmetric:bool=False,
@@ -192,7 +191,6 @@ class Relation(Core):
 
         return answers.count(True) >= (vote // 2) + 1
 
-
     async def agt(m:MelleaSession, criteria:str, x:str, y:str, *,
                   vote:int=3,
                   positional:bool=True,
@@ -245,7 +243,6 @@ class Relation(Core):
                                irreflexive=False,
                                shuffle=shuffle, **kwargs)
 
-
     async def aeq(m:MelleaSession, criteria:str, x:str, y:str, *,
                   vote:int=3,
                   positional:bool=True,
@@ -271,7 +268,6 @@ class Relation(Core):
                                reflexive=True,
                                irreflexive=False,
                                shuffle=shuffle, **kwargs)
-
 
 
 Relation.binary = sync_wrapper(Relation.abinary)
@@ -309,7 +305,6 @@ async def async_max(lst:list[str], acmp):
     else:
         return right
 
-
 async def async_mom(seq:list[str], acmp, asort, block_size=5):
     """
     Median of medians algorithm for finding an approximate median. Worst-case runtime O(n)
@@ -329,7 +324,6 @@ async def async_mom(seq:list[str], acmp, asort, block_size=5):
 
     # Step 3: Recursively find the pivot
     return await async_mom(medians, acmp, asort, block_size=block_size)
-
 
 async def async_quickselect(seq:list[str], k, acmp, asort, block_size=5):
     """
