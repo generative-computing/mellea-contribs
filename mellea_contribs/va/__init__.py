@@ -310,6 +310,51 @@ async def async_max(lst:list[str], acmp):
         return right
 
 
+async def async_mom(seq:list[str], acmp, asort, block_size=5):
+    """
+    Median of medians algorithm for finding an approximate median. Worst-case runtime O(n)
+    """
+
+    async def median_fixed(seq):
+        return await asort(seq)[len(seq)//2]
+
+    if len(seq) <= block_size:
+        return await median_fixed(seq)
+
+    # Step 1: Divide into groups of block_size
+    groups = itertools.batched(seq, block_size)
+
+    # Step 2: Find median of each group
+    medians = asyncio.gather(*[median_fixed(g) for g in groups])
+
+    # Step 3: Recursively find the pivot
+    return await async_mom(medians, acmp, asort, block_size=block_size)
+
+
+async def async_quickselect(seq:list[str], k, acmp, asort, block_size=5):
+    """
+    Quickselect algorithm that uses median-of-medians for pivot selection. Worst-case runtime O(n^2)
+    """
+
+    pivot = await async_mom(medians, acmp, asort, block_size=block_size)
+
+    # Step 4: Partition
+    lows, highs = [], []
+    for x in seq:
+        if await acmp(x, pivot):
+            lows.append(x)
+        else:
+            highs.append(x)
+
+    # Step block_size: Recurse
+    if k < len(lows):
+        return await async_quickselect(lows, k, acmp, asort, block_size=block_size)
+    elif k == len(lows):
+        return pivot
+    else:
+        return await async_quickselect(highs, k - len(lows), acmp, asort, block_size=block_size)
+
+
 class Sequence(Relation):
 
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
@@ -332,8 +377,33 @@ class Sequence(Relation):
 
         return async_max(elems, acmp)
 
+    async def amedian(m:MelleaSession, criteria:str, elems:list[str], *,
+                      exact = False,
+                      vote:int=3,
+                      positional:bool=True,
+                      shuffle:bool=True,
+                      block_size:int=5,
+                      **kwargs) -> bool:
+        """
+        If exact = True, use quickselect.
+        Otherwise, return the approximate median returned by median of medians.
+        """
+
+        async def acmp(x, y):
+            return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
+
+        async def asort(elems:list[str]):
+            return await m.asort(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
+
+        if exact:
+            return await async_quickselect(elems, len(elems)//2, acmp, asort, block_size=block_size)
+        else:
+            return await async_mom(elems, acmp, asort, block_size=block_size)
+
+
 
 Sort.sort = sync_wrapper(Sort.asort)
 Sort.max = sync_wrapper(Sort.amax)
+Sort.median = sync_wrapper(Sort.amedian)
 
 
