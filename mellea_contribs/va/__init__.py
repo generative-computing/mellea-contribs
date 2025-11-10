@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from typing import Literal
 
+logger = FancyLogger.get_logger()
 
 def sync_wrapper(async_fn):
     """Wrap an async function so it can be called synchronously."""
@@ -90,7 +91,7 @@ class Relation(Core):
                 return False
 
         if vote % 2 == 0:
-            FancyLogger.get_logger().warning(
+            logger.warning(
                 "the specified number of votes in a majority vote is even, making ties possible. Increasing the value by one to avoid this."
             )
             vote += 1
@@ -153,7 +154,7 @@ class Relation(Core):
         assert not (symmetric and asymmetric), "symmetric and asymmetric flags are mutually exclusive"
 
         if vote % 2 == 0:
-            FancyLogger.get_logger().warning(
+            logger.warning(
                 "the specified number of votes in a majority vote is even, making ties possible. Increasing the value by one to avoid this."
             )
             vote += 1
