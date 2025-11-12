@@ -105,6 +105,41 @@ class Sequence(Relation):
 
         return [o.value for o in asyncio.gather(*tasks)]
 
+    async def afind(m:MelleaSession, criteria:str, elems:list[str], **kwargs) -> str | None:
+
+        """
+        Returns any element which satisfies the criteria.
+        It checks the criteria over the elements concurrently and returns the earliest element that satisfied the criteria,
+        cancelling all running or pending LLM calls.
+
+        Args:
+            vote: When >=1, it samples multiple selections in each turn, and perform a majority voting.
+        """
+
+        if vote % 2 == 0:
+            logger.warning(
+                "the specified number of votes in a majority vote is even, making ties possible. Increasing the value by one to avoid this."
+            )
+            vote += 1
+
+        async def per_elem(elem):
+            tasks = [
+                m.abool("Does the input satisfy the criteria?\n"+
+                        f"Criteria: {criteria}\n"+
+                        f"Input: {elem}")
+                for _ in range(vote)
+            ]
+            return asyncio.gather(*tasks).count(True) >= (vote // 2 + 1), elem
+
+        tasks = [
+            per_elem(elem)
+            for elem in elems
+        ]
+
+        async for answer, elem in asyncio.as_completed(*tasks):
+            if answer:
+                return elem
+        pass
 
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
@@ -152,6 +187,7 @@ class Sequence(Relation):
 
 
 Sequence.map = sync_wrapper(Sequence.amap)
+Sequence.find = sync_wrapper(Sequence.afind)
 Sequence.sort = sync_wrapper(Sequence.asort)
 Sequence.max = sync_wrapper(Sequence.amax)
 Sequence.median = sync_wrapper(Sequence.amedian)
