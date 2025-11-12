@@ -137,7 +137,7 @@ class Sequence(Relation):
 
 
 
-Sort.sort = sync_wrapper(Sort.asort)
-Sort.max = sync_wrapper(Sort.amax)
-Sort.median = sync_wrapper(Sort.amedian)
+Sequence.sort = sync_wrapper(Sequence.asort)
+Sequence.max = sync_wrapper(Sequence.amax)
+Sequence.median = sync_wrapper(Sequence.amedian)
 
