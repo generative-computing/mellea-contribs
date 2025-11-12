@@ -141,6 +141,20 @@ class Sequence(Relation):
                 return elem
         pass
 
+    async def amerge(m:MelleaSession, criteria:str, elems1:list[str], elems2:list[str], *,
+                     vote:int=3,
+                     positional:bool=True,
+                     shuffle:bool=True, **kwargs) -> list[str]:
+        """
+        Given two lists already sorted according to the criteria,
+        merge them into a list so that the resulting list is also sorted according to the criteria.
+        """
+
+        async def acmp(x, y):
+            return await m.agt(criteria, x, y, vote=vote, positional=positional, shuffle=shuffle, **kwargs)
+
+        return async_merge(elems1, elems2, acmp)
+
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
                     positional:bool=True,
@@ -188,6 +202,7 @@ class Sequence(Relation):
 
 Sequence.map = sync_wrapper(Sequence.amap)
 Sequence.find = sync_wrapper(Sequence.afind)
+Sequence.merge = sync_wrapper(Sequence.amerge)
 Sequence.sort = sync_wrapper(Sequence.asort)
 Sequence.max = sync_wrapper(Sequence.amax)
 Sequence.median = sync_wrapper(Sequence.amedian)
