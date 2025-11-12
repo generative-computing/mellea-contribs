@@ -17,6 +17,48 @@ class Subset(Core):
     """
     Subset powerup provides methods for selecting a subset of the input set.
     """
+
+    async def afilter(m:MelleaSession,
+                      criteria: str,
+                      elems:list[str],
+                      *,
+                      vote:int=3,
+                      **kwargs) -> list[str]:
+        """
+        Returns a subset whose elements all satisfy the criteria.
+
+        Args:
+            vote: When >=1, it samples multiple selections in each turn, and perform a majority voting.
+        """
+
+        if vote % 2 == 0:
+            logger.warning(
+                "the specified number of votes in a majority vote is even, making ties possible. Increasing the value by one to avoid this."
+            )
+            vote += 1
+
+        async def per_elem(elem):
+            tasks = [
+                m.abool("Does the input satisfy the criteria?\n"+
+                        f"Criteria: {criteria}\n"+
+                        f"Input: {elem}")
+                for _ in range(vote)
+            ]
+            return asyncio.gather(*tasks).count(True) >= (vote // 2 + 1)
+
+        tasks = [
+            per_elem(elem)
+            for elem in elems
+        ]
+
+        results = []
+        for answer, elem in zip(asyncio.gather(*tasks), elems):
+            if answer:
+                results.append(elem)
+
+        return results
+
+
     async def asubset(m:MelleaSession,
                       description:str,
                       criteria: str,
@@ -76,4 +118,5 @@ class Subset(Core):
         return current
 
 
+Subset.filter = sync_wrapper(Subset.afilter)
 Subset.subset = sync_wrapper(Subset.asubset)
