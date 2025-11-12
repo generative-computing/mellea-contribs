@@ -89,8 +89,22 @@ async def async_quickselect(seq:list[str], k, acmp, asort, block_size=5):
 class Sequence(Relation):
     """
     Sequence powerup provides a set of sequence operations, such as
-    sorting a list of strings, selecting an element, or extracting the median according to some criteria.
+    mapping a list of strings,
+    sorting a list of strings,
+    selecting an element, or extracting the median according to some criteria.
     """
+
+    async def amap(m:MelleaSession, criteria:str, elems:list[str], **kwargs) -> list[str]:
+
+        tasks = [
+            m.ainstruct("Apply the criteria to the target. \n"+
+                        f"Criteria: {criteria}\n"
+                        f"Target: {elem}")
+            for elem in elems
+        ]
+
+        return [o.value for o in asyncio.gather(*tasks)]
+
 
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
@@ -137,6 +151,7 @@ class Sequence(Relation):
 
 
 
+Sequence.map = sync_wrapper(Sequence.amap)
 Sequence.sort = sync_wrapper(Sequence.asort)
 Sequence.max = sync_wrapper(Sequence.amax)
 Sequence.median = sync_wrapper(Sequence.amedian)
