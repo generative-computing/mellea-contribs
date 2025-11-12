@@ -43,14 +43,16 @@ class Core:
     async def achoice(self:MelleaSession, prompt:str, choices:list[str], **kwargs) -> str:
 
         class Choice(BaseModel):
-            answer : Literal[choices]
+            answer : Literal[*[ str(i) for i in range(len(choices))]]
 
-        output = await self.ainstruct(f"{prompt} Respond with one of the following answers: " + ",".join([f"'{c}'" for c in choices]) + ".",
+        output = await self.ainstruct(f"{prompt}\n" +
+                                      f"Answer the index (0-{len(choices)-1}) of one of the following choices: \n" +
+                                      "\n".join([f"index {i}: {c}" for i, c in enumerate(choices)]),
                                       format=Choice, **kwargs)
 
         choice = Choice.model_validate_json(output.value)
 
-        return choice.answer
+        return int(choice.answer)
 
     pass
 
