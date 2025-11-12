@@ -692,3 +692,34 @@ class Cluster(Relation):
 
 
 Cluster.cluster = sync_wrapper(Sort.acluster)
+
+
+
+class Submodular(Core):
+    async def agreedy_submodular_maximization(m:MelleaSession,
+                                              criteria: str,
+                                              elems:list[str],
+                                              k:int,
+                                              *,
+                                              vote:int=3,
+                                              positional:bool=True,
+                                              **kwargs):
+
+        current = []
+        remaining = elems.copy()
+
+        for _ in range(k):
+            chosen = await m.achoice(f"{criteria}\n" +
+                                     "The current set:\n" +
+                                     "\n".join(current) + "\n",
+                                     remaining,
+                                     vote=vote,
+                                     positional=positional,
+                                     **kwargs)
+            current.append(chosen)
+            remaining.remove(chosen)
+
+        return current
+
+
+Submodular.greedy_submodular_maximization = sync_wrapper(Submodular.agreedy_submodular_maximization)
