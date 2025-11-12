@@ -718,11 +718,13 @@ class Subset(Core):
 
         The criteria is assumed to be contain a modular or submodular aspect.
 
+
         Example 1:
 
         description = "We are building a team of culturally diverse members."
 
         criteria = "Maximize the cultural diversity among the members."
+
 
         Example 2:
 
