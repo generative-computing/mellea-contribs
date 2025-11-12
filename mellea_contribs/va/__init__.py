@@ -40,19 +40,39 @@ class Core:
 
         return yesno.answer == "yes"
 
-    async def achoice(self:MelleaSession, prompt:str, choices:list[str], **kwargs) -> str:
+    async def achoice(self:MelleaSession, prompt:str, choices:list[str], *, vote:int=3, positional:bool=True, **kwargs) -> str:
 
+        # note: constraint decoding does not respect pydantic.conint
+        L = len(choices)
         class Choice(BaseModel):
-            answer : Literal[*[ str(i) for i in range(len(choices))]]
+            answer : Literal[*[ str(i) for i in range(L)]]
 
-        output = await self.ainstruct(f"{prompt}\n" +
-                                      f"Answer the index (0-{len(choices)-1}) of one of the following choices: \n" +
-                                      "\n".join([f"index {i}: {c}" for i, c in enumerate(choices)]),
-                                      format=Choice, **kwargs)
+        async def choose(choices:list[str]) -> str:
+            output = await self.ainstruct(f"{prompt}\n" +
+                                          f"Answer the index (0-{L-1}) of one of the following choices: \n" +
+                                          "\n".join([f"index {i}: {c}" for i, c in enumerate(_choices)]),
+                                          format=Choice, **kwargs)
+            index = int(Choice.model_validate_json(output.value))
+            return choices[index]
 
-        choice = Choice.model_validate_json(output.value)
+        if positional:
+            # enumerate random permutations while avoiding duplicaes
+            shuffled = set()
+            while len(shuffled) < vote:
+                _choices = choices.copy()
+                random.shuffle(_choices)
+                shuffled.add(tuple(choices))
+            inputs = list(shuffled)
+        else:
+            inputs = [ choices for _ in range(vote) ]
 
-        return int(choice.answer)
+        tasks = [choose(_choices) for _choices in inputs]
+
+        choices = asyncio.gather(*tasks)
+
+        counter = Counter(choices)
+
+        return counter.most_common(1)[0][0]
 
     pass
 
