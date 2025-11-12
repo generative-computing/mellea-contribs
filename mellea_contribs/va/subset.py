@@ -14,6 +14,9 @@ from .util import sync_wrapper
 from .core import Core
 
 class Subset(Core):
+    """
+    Subset powerup provides methods for selecting a subset of the input set.
+    """
     async def asubset(m:MelleaSession,
                       description:str,
                       criteria: str,
@@ -22,7 +25,7 @@ class Subset(Core):
                       *,
                       vote:int=3,
                       positional:bool=True,
-                      **kwargs):
+                      **kwargs) -> list[str]:
         """
         Greedily select a k-elements subset from elems, maximizing the given criteria.
 

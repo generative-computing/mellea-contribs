@@ -14,6 +14,11 @@ from .util import sync_wrapper
 from .core import Core
 
 class Relation(Core):
+    """
+    The Relation powerup defines methods for binary and ternary predicates.
+    Options can be used to declare the property of the predicate,
+    such as being symmetric or reflexive with regard to certain arguments.
+    """
 
     async def abinary(m:MelleaSession, criteria:str, x:str, y:str, *,
                       vote:int=3,

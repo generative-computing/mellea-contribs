@@ -16,8 +16,14 @@ class YesNo(BaseModel):
     answer : Literal["yes","no"]
 
 class Core:
+    """
+    The Core powerup provides a core functionality for extracting the embedded reward model in the model.
+    """
 
     async def abool(m:MelleaSession, prompt:str, **kwargs) -> bool:
+        """
+        Answers a yes/no question.
+        """
 
         output = await m.ainstruct(f"{prompt} Answer yes or no.",
                                    format=YesNo, **kwargs)
@@ -27,6 +33,14 @@ class Core:
         return yesno.answer == "yes"
 
     async def achoice(self:MelleaSession, prompt:str, choices:list[str], *, vote:int=3, positional:bool=True, **kwargs) -> str:
+        """
+        Answers a multiple-choice question. Returns an element of choices.
+
+        Args:
+            vote: When >=1, it samples multiple selections in each turn, and perform a majority voting.
+            positional: Shuffle the order to present the elements to the LLM in order to mitigate the positional bias.
+
+        """
 
         # note: constraint decoding does not respect pydantic.conint
         L = len(choices)

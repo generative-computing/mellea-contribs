@@ -87,6 +87,10 @@ async def async_quickselect(seq:list[str], k, acmp, asort, block_size=5):
 
 
 class Sequence(Relation):
+    """
+    Sequence powerup provides a set of sequence operations, such as
+    sorting a list of strings, selecting an element, or extracting the median according to some criteria.
+    """
 
     async def asort(m:MelleaSession, criteria:str, elems:list[str], *,
                     vote:int=3,
