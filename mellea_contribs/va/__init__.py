@@ -667,3 +667,6 @@ class Cluster(Relation):
         logger.debug(f"Elapsed time: {formatted}")
 
         return model.fit_predict(embeddings)
+
+
+Cluster.cluster = sync_wrapper(Sort.acluster)
