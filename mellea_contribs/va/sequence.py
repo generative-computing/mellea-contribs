@@ -94,21 +94,21 @@ class Sequence(Relation):
     selecting an element, or extracting the median according to some criteria.
     """
 
-    async def amap(m:MelleaSession, criteria:str, elems:list[str], **kwargs) -> list[str]:
+    async def amap(m:MelleaSession, variable:str, output:str, elems:list[str], **kwargs) -> list[str]:
 
         tasks = [
-            m.ainstruct("Apply the criteria to the target. \n"+
-                        f"Criteria: {criteria}\n"
-                        f"Target: {elem}")
+            m.ainstruct(f"Given a value of {variable}, answer the value of the output. \n"+
+                        f"{variable}: {elem}\n" +
+                        f"Output: {output}\n")
             for elem in elems
         ]
 
         return [o.value for o in asyncio.gather(*tasks)]
 
-    async def afind(m:MelleaSession, criteria:str, elems:list[str], **kwargs) -> str | None:
+    async def afind(m:MelleaSession, variable:str, criteria:str, elems:list[str], **kwargs) -> str | None:
 
         """
-        Returns any element which satisfies the criteria.
+        Returns any element which satisfies the criteria about the variable.
         It checks the criteria over the elements concurrently and returns the earliest element that satisfied the criteria,
         cancelling all running or pending LLM calls.
 
@@ -124,9 +124,9 @@ class Sequence(Relation):
 
         async def per_elem(elem):
             tasks = [
-                m.abool("Does the input satisfy the criteria?\n"+
-                        f"Criteria: {criteria}\n"+
-                        f"Input: {elem}")
+                m.abool(f"Does {variable} satisfy the criteria?\n"+
+                        f"{variable}: {elem}\n"+
+                        f"Criteria: {criteria}")
                 for _ in range(vote)
             ]
             return asyncio.gather(*tasks).count(True) >= (vote // 2 + 1), elem

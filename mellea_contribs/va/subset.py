@@ -19,6 +19,7 @@ class Subset(Core):
     """
 
     async def afilter(m:MelleaSession,
+                      variable: str,
                       criteria: str,
                       elems:list[str],
                       *,
@@ -39,9 +40,9 @@ class Subset(Core):
 
         async def per_elem(elem):
             tasks = [
-                m.abool("Does the input satisfy the criteria?\n"+
-                        f"Criteria: {criteria}\n"+
-                        f"Input: {elem}")
+                m.abool(f"Does {variable} satisfy the criteria?\n"+
+                        f"{variable}: {elem}\n"+
+                        f"Criteria: {criteria}")
                 for _ in range(vote)
             ]
             return asyncio.gather(*tasks).count(True) >= (vote // 2 + 1)
