@@ -13,6 +13,7 @@ from typing import Literal
 import numpy as np
 
 from sklearn.base import ClusterMixin
+from sklearn.cluster import DBSCAN
 
 from .util import sync_wrapper
 from .relation import Relation
@@ -168,8 +169,8 @@ class Cluster(Relation):
                 for t, a in zip(triplets, answers) ]
 
     async def acluster(m:MelleaSession, criteria:str, elems:list[str],
-                       model : ClusterMixin,
                        *,
+                       model : ClusterMixin = None,
                        vote:int=3,
                        positional:bool=True,
                        shuffle:bool=True,
@@ -190,7 +191,7 @@ class Cluster(Relation):
         Args:
             criteria: triplet comparison criteria
             elems: list of strings to cluster
-            model: an instance of sklearn.base.ClusterMixin, such as sklearn.cluster.KMEANS, sklearn.cluster.AgglomerativeClustering
+            model: an instance of sklearn.base.ClusterMixin, such as sklearn.cluster.KMEANS, sklearn.cluster.AgglomerativeClustering. default = sklearn.cluster.DBSCAN
 
             vote: an odd integer specifying the number of queries to make. The final result is a majority vote over the results. Since the LLM answers "yes"/"no", by default it counts "yes". If it is even, we add 1 to make it an odd number.
             positional: Permute the order of presenting x and y. This mitigates the positional bias.
@@ -215,6 +216,9 @@ class Cluster(Relation):
         Either triplets_per_item or num_triplets must be specified.
         triplets_per_item and num_triplets are mutually exclusive (cannot be specified at the same time).
         """
+
+        if model is None:
+            model = DBSCAN()
 
         if verbose:
             logger.setLevel(logging.DEBUG)
@@ -280,6 +284,6 @@ class Cluster(Relation):
         return model.fit_predict(embeddings)
 
 
-Cluster.cluster = sync_wrapper(Sort.acluster)
+Cluster.cluster = sync_wrapper(Cluster.acluster)
 
 
