@@ -5,17 +5,16 @@ and provides actionable feedback for the repair loop when issues are found.
 """
 
 import ast
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 from mellea.stdlib.base import Context
-from mellea.stdlib.reqlib.python import extract_python_code
 from mellea.stdlib.requirement import Requirement, ValidationResult
 
 from .import_resolution import (
-    ImportIssue,
     ImportSuggestion,
     find_undefined_names,
     get_installed_packages,
@@ -26,6 +25,112 @@ from .import_resolution import (
     resolve_module_not_found,
     resolve_undefined_name,
 )
+
+
+def _score_code_block(code: str) -> int:
+    """Score a code block to determine if it's likely the main answer.
+
+    Args:
+        code: The code block to score.
+
+    Returns:
+        Score indicating likelihood this is the primary code block.
+    """
+    score = 0
+    lines = code.split("\n")
+
+    # Longer blocks generally better
+    score += min(len(lines), 10)
+
+    # Prefer complete functions/classes
+    if "def " in code or "class " in code:
+        score += 5
+
+    # Prefer blocks with actual logic
+    if any(keyword in code for keyword in ["if ", "for ", "while ", "try:", "with "]):
+        score += 3
+
+    # Penalize blocks that are mostly imports/comments
+    non_trivial_lines = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.strip().startswith(("#", "import ", "from "))
+    ]
+    if len(non_trivial_lines) < 2:
+        score -= 5
+
+    return score
+
+
+def extract_python_code(text: str) -> str | None:
+    """Extract Python code from markdown code blocks or plain text.
+
+    Uses intelligent extraction strategy:
+    1. Finds all ```python...``` blocks
+    2. Scores each block (prefers longer, non-test code after positive cues)
+    3. Returns highest-scoring block
+    4. Falls back to generic blocks or raw text
+
+    Args:
+        text: The text to extract Python code from.
+
+    Returns:
+        The extracted Python code, or None if no code found.
+    """
+    # Try explicit python code blocks first
+    python_block_pattern = r"```python\s*\n(.*?)```"
+    matches = re.findall(python_block_pattern, text, re.DOTALL)
+
+    if matches:
+        if len(matches) == 1:
+            return matches[0].strip()
+
+        # Multiple blocks - need to be smart about which one
+        best_block = None
+        best_score = -999
+
+        for match in matches:
+            match_pos = text.find(f"```python\n{match}")
+            context_before = text[max(0, match_pos - 200) : match_pos]
+
+            score = _score_code_block(match) + (
+                5 if "correct" in context_before.lower() else 0
+            )
+
+            if score > best_score:
+                best_score = score
+                best_block = match
+
+        return best_block.strip() if best_block else matches[0].strip()
+
+    # Try generic code blocks
+    generic_block_pattern = r"```\s*\n(.*?)```"
+    matches = re.findall(generic_block_pattern, text, re.DOTALL)
+    if matches:
+        for match in matches:
+            candidate = match.strip()
+            if any(
+                keyword in candidate
+                for keyword in [
+                    "def ",
+                    "class ",
+                    "import ",
+                    "from ",
+                    "if ",
+                    "for ",
+                    "while ",
+                ]
+            ):
+                return candidate
+
+    # If no code blocks, check if entire text looks like Python
+    stripped_text = text.strip()
+    if any(
+        keyword in stripped_text for keyword in ["def ", "class ", "import ", "from "]
+    ):
+        return stripped_text
+
+    return None
 
 
 class PythonImportRepair(Requirement):
@@ -102,10 +207,7 @@ class PythonImportRepair(Requirement):
         """
         last_output = ctx.last_output()
         if last_output is None or last_output.value is None:
-            return ValidationResult(
-                result=False,
-                reason="No output found in context",
-            )
+            return ValidationResult(result=False, reason="No output found in context")
 
         code = extract_python_code(last_output.value)
         if not code:
@@ -162,7 +264,9 @@ class PythonImportRepair(Requirement):
                     for alias in node.names:
                         module_name = alias.name.split(".")[0]
                         if not is_module_available(module_name):
-                            suggestions = resolve_module_not_found(module_name, packages)
+                            suggestions = resolve_module_not_found(
+                                module_name, packages
+                            )
                             issues.append(
                                 (f"Module not found: '{module_name}'", suggestions)
                             )
@@ -170,7 +274,9 @@ class PythonImportRepair(Requirement):
                     if node.module:
                         module_name = node.module.split(".")[0]
                         if not is_module_available(module_name):
-                            suggestions = resolve_module_not_found(module_name, packages)
+                            suggestions = resolve_module_not_found(
+                                module_name, packages
+                            )
                             issues.append(
                                 (f"Module not found: '{module_name}'", suggestions)
                             )
@@ -179,8 +285,7 @@ class PythonImportRepair(Requirement):
 
         if not issues:
             return ValidationResult(
-                result=True,
-                reason="All imports appear valid (static analysis)",
+                result=True, reason="All imports appear valid (static analysis)"
             )
 
         return self._format_feedback(issues)
@@ -211,9 +316,7 @@ class PythonImportRepair(Requirement):
         Returns:
             ValidationResult with suggestions for any issues found.
         """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(code)
             temp_file = f.name
 
@@ -241,10 +344,7 @@ class PythonImportRepair(Requirement):
                 reason=f"Execution timed out after {self._timeout} seconds",
             )
         except Exception as e:
-            return ValidationResult(
-                result=False,
-                reason=f"Execution error: {e!s}",
-            )
+            return ValidationResult(result=False, reason=f"Execution error: {e!s}")
         finally:
             try:
                 Path(temp_file).unlink()
@@ -285,8 +385,7 @@ class PythonImportRepair(Requirement):
 
         except Exception as e:
             return ValidationResult(
-                result=False,
-                reason=f"Sandbox execution error: {e!s}",
+                result=False, reason=f"Sandbox execution error: {e!s}"
             )
 
     def _parse_and_suggest(self, error_text: str) -> ValidationResult:
@@ -319,15 +418,11 @@ class PythonImportRepair(Requirement):
                 suggestions = resolve_undefined_name(error.name, packages)
             elif error.error_type == "import_error":
                 suggestions = resolve_import_error(
-                    error.name,
-                    error.from_module or "",
-                    packages,
+                    error.name, error.from_module or "", packages
                 )
             elif error.error_type == "attribute_error":
                 suggestions = resolve_attribute_error(
-                    error.name,
-                    error.from_module or "",
-                    packages,
+                    error.name, error.from_module or "", packages
                 )
 
             issues.append((error.original_error, suggestions))
@@ -335,8 +430,7 @@ class PythonImportRepair(Requirement):
         return self._format_feedback(issues)
 
     def _format_feedback(
-        self,
-        issues: list[tuple[str, list[ImportSuggestion]]],
+        self, issues: list[tuple[str, list[ImportSuggestion]]]
     ) -> ValidationResult:
         """Format issues and suggestions into repair feedback.
 
@@ -356,7 +450,4 @@ class PythonImportRepair(Requirement):
                     f"  - Suggestion: `{suggestion.import_statement}` ({suggestion.reason})"
                 )
 
-        return ValidationResult(
-            result=False,
-            reason="\n".join(feedback_lines),
-        )
+        return ValidationResult(result=False, reason="\n".join(feedback_lines))
