@@ -21,7 +21,9 @@ from .common_aliases import COMMON_ALIASES, MODULE_RELOCATIONS
 class ImportIssue:
     """Represents a detected import-related error."""
 
-    error_type: Literal["module_not_found", "import_error", "name_error", "attribute_error"]
+    error_type: Literal[
+        "module_not_found", "import_error", "name_error", "attribute_error"
+    ]
     name: str
     original_error: str
     from_module: str | None = None
@@ -65,7 +67,9 @@ def parse_execution_error(error_text: str) -> list[ImportIssue]:
         )
 
     # ImportError: cannot import name 'xxx' from 'yyy'
-    import_pattern = r"ImportError: cannot import name ['\"]([^'\"]+)['\"] from ['\"]([^'\"]+)['\"]"
+    import_pattern = (
+        r"ImportError: cannot import name ['\"]([^'\"]+)['\"] from ['\"]([^'\"]+)['\"]"
+    )
     for match in re.finditer(import_pattern, error_text):
         errors.append(
             ImportIssue(
@@ -224,8 +228,7 @@ def get_installed_packages() -> set[str]:
 
 
 def resolve_undefined_name(
-    name: str,
-    installed_packages: set[str] | None = None,
+    name: str, installed_packages: set[str] | None = None
 ) -> list[ImportSuggestion]:
     """Resolve an undefined name to possible import statements.
 
@@ -272,10 +275,7 @@ def resolve_undefined_name(
         from rapidfuzz import fuzz, process
 
         matches = process.extract(
-            name_lower,
-            list(installed_packages),
-            scorer=fuzz.ratio,
-            limit=3,
+            name_lower, list(installed_packages), scorer=fuzz.ratio, limit=3
         )
         for match_name, score, _ in matches:
             if score > 70 and match_name != name_lower:
@@ -294,8 +294,7 @@ def resolve_undefined_name(
 
 
 def resolve_module_not_found(
-    module_name: str,
-    installed_packages: set[str] | None = None,
+    module_name: str, installed_packages: set[str] | None = None
 ) -> list[ImportSuggestion]:
     """Suggest corrections for ModuleNotFoundError.
 
@@ -320,10 +319,7 @@ def resolve_module_not_found(
         from rapidfuzz import fuzz, process
 
         matches = process.extract(
-            module_name,
-            list(installed_packages),
-            scorer=fuzz.ratio,
-            limit=3,
+            module_name, list(installed_packages), scorer=fuzz.ratio, limit=3
         )
 
         for match_name, score, _ in matches:
@@ -354,9 +350,7 @@ def resolve_module_not_found(
 
 
 def resolve_import_error(
-    name: str,
-    from_module: str,
-    installed_packages: set[str] | None = None,
+    name: str, from_module: str, installed_packages: set[str] | None = None
 ) -> list[ImportSuggestion]:
     """Suggest corrections for ImportError (cannot import name from module).
 
@@ -402,9 +396,7 @@ def resolve_import_error(
 
 
 def resolve_attribute_error(
-    attribute_name: str,
-    module_name: str,
-    installed_packages: set[str] | None = None,
+    attribute_name: str, module_name: str, installed_packages: set[str] | None = None
 ) -> list[ImportSuggestion]:
     """Suggest corrections for AttributeError on module access.
 
