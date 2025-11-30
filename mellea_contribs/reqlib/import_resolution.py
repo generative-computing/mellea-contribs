@@ -132,59 +132,39 @@ def find_undefined_names(code: str) -> set[str]:
     tree = ast.parse(code)
     defined: set[str] = set(dir(builtins))
 
-    # Walk AST to collect all defined names
     for node in ast.walk(tree):
-        # Imports
         if isinstance(node, ast.Import):
             for alias in node.names:
                 defined.add(alias.asname if alias.asname else alias.name.split(".")[0])
         elif isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                if alias.name == "*":
-                    # Can't track star imports statically
-                    continue
-                defined.add(alias.asname if alias.asname else alias.name)
-
-        # Function and class definitions
+                if alias.name != "*":
+                    defined.add(alias.asname if alias.asname else alias.name)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             defined.add(node.name)
-            # Add function parameters
             _collect_args(node.args, defined)
         elif isinstance(node, ast.ClassDef):
             defined.add(node.name)
-
-        # Lambda parameters
         elif isinstance(node, ast.Lambda):
             _collect_args(node.args, defined)
-
-        # Assignments
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             defined.add(node.id)
-
-        # For loop targets
         elif isinstance(node, ast.For | ast.AsyncFor):
             _collect_target_names(node.target, defined)
-
-        # Comprehension variables
         elif isinstance(node, ast.comprehension):
             _collect_target_names(node.target, defined)
-
-        # With statement variables
         elif isinstance(node, ast.With | ast.AsyncWith):
             for item in node.items:
                 if item.optional_vars:
                     _collect_target_names(item.optional_vars, defined)
-
-        # Exception handlers
         elif isinstance(node, ast.ExceptHandler):
             if node.name:
                 defined.add(node.name)
-
-        # Named expressions (walrus operator)
         elif isinstance(node, ast.NamedExpr):
             _collect_target_names(node.target, defined)
+        elif isinstance(node, ast.match_case):
+            _collect_pattern_names(node.pattern, defined)
 
-    # Collect all used names (Load context)
     used: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
@@ -210,6 +190,39 @@ def _collect_args(args: ast.arguments, names: set[str]) -> None:
         names.add(args.vararg.arg)
     if args.kwarg:
         names.add(args.kwarg.arg)
+
+
+def _collect_pattern_names(pattern: ast.pattern, names: set[str]) -> None:
+    """Collect names bound by match statement patterns (Python 3.10+).
+
+    Args:
+        pattern: The AST pattern node from a match case.
+        names: Set to add discovered names to.
+    """
+    if isinstance(pattern, ast.MatchAs):
+        if pattern.name:
+            names.add(pattern.name)
+        if pattern.pattern:
+            _collect_pattern_names(pattern.pattern, names)
+    elif isinstance(pattern, ast.MatchOr):
+        for p in pattern.patterns:
+            _collect_pattern_names(p, names)
+    elif isinstance(pattern, ast.MatchSequence):
+        for p in pattern.patterns:
+            _collect_pattern_names(p, names)
+    elif isinstance(pattern, ast.MatchMapping):
+        for p in pattern.patterns:
+            _collect_pattern_names(p, names)
+        if pattern.rest:
+            names.add(pattern.rest)
+    elif isinstance(pattern, ast.MatchClass):
+        for p in pattern.patterns:
+            _collect_pattern_names(p, names)
+        for p in pattern.kwd_patterns:
+            _collect_pattern_names(p, names)
+    elif isinstance(pattern, ast.MatchStar):
+        if pattern.name:
+            names.add(pattern.name)
 
 
 def _collect_target_names(target: ast.expr, names: set[str]) -> None:

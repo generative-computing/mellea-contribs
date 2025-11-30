@@ -161,6 +161,19 @@ squares = [x * x for x in range(10)]
         assert "y" not in undefined
         assert "kwargs" not in undefined
 
+    def test_match_statement_case_variable(self):
+        """Test that match statement case variables are not flagged."""
+        code = """
+match command:
+    case "quit":
+        pass
+    case other:
+        print(other)
+"""
+        undefined = find_undefined_names(code)
+        assert "other" not in undefined
+        assert "command" in undefined
+
     def test_exception_handler_vars_not_undefined(self):
         """Test that exception handler variables are not flagged."""
         code = """
@@ -370,6 +383,26 @@ def process_data(data):
     def test_extract_capital_python(self):
         """Test extracting code with capital 'Python' tag."""
         text = """```Python
+def hello():
+    pass
+```"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "def hello" in code
+
+    def test_extract_py_tag(self):
+        """Test extracting code with 'py' tag."""
+        text = """```py
+def hello():
+    pass
+```"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "def hello" in code
+
+    def test_extract_python3_tag(self):
+        """Test extracting code with 'python3' tag."""
+        text = """```python3
 def hello():
     pass
 ```"""
