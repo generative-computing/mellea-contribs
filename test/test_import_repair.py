@@ -1,10 +1,12 @@
 """Tests for import repair functionality."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from mellea_contribs.reqlib.common_aliases import COMMON_ALIASES, MODULE_RELOCATIONS
+from mellea_contribs.reqlib.import_repair import PythonImportRepair, extract_python_code
 from mellea_contribs.reqlib.import_resolution import (
-    ImportIssue,
     find_undefined_names,
     get_installed_packages,
     is_module_available,
@@ -283,3 +285,163 @@ class TestGetInstalledPackages:
         packages = get_installed_packages()
         # Some common stdlib modules should be discoverable
         assert len(packages) > 0
+
+
+class TestExtractPythonCode:
+    """Test Python code extraction from markdown."""
+
+    def test_extract_single_python_block(self):
+        """Test extracting single python code block."""
+        text = """Here is the code:
+```python
+import numpy as np
+x = np.array([1, 2, 3])
+```
+"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "numpy" in code
+        assert "np.array" in code
+
+    def test_extract_generic_block(self):
+        """Test extracting generic code block with Python content."""
+        text = """Here is the code:
+```
+def hello():
+    print("Hello")
+```
+"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "def hello" in code
+
+    def test_extract_raw_python(self):
+        """Test extracting raw Python (no code blocks)."""
+        text = """import os
+def main():
+    pass
+"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "import os" in code
+
+    def test_extract_multiple_blocks_picks_best(self):
+        """Test that multiple blocks picks the best one."""
+        text = """Here's a simple example:
+```python
+x = 1
+```
+
+Here's the correct solution:
+```python
+def process_data(data):
+    for item in data:
+        if item > 0:
+            print(item)
+    return data
+```
+"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "def process_data" in code
+
+    def test_extract_returns_none_for_no_code(self):
+        """Test returning None when no code found."""
+        text = "This is just regular text with no code."
+        code = extract_python_code(text)
+        assert code is None
+
+
+class TestPythonImportRepairClass:
+    """Test PythonImportRepair requirement class."""
+
+    def test_instantiation_static_mode(self):
+        """Test creating requirement in static analysis mode."""
+        req = PythonImportRepair()
+        assert "static analysis" in req.description
+        assert req._allow_unsafe is False
+
+    def test_instantiation_execution_mode(self):
+        """Test creating requirement in execution mode."""
+        req = PythonImportRepair(allow_unsafe_execution=True)
+        assert "execution-based" in req.description
+        assert req._allow_unsafe is True
+
+    def test_validate_with_mock_context_valid_code(self):
+        """Test validation with valid imports passes."""
+        req = PythonImportRepair()
+
+        # Mock the mellea Context
+        mock_output = MagicMock()
+        mock_output.value = """```python
+import os
+import sys
+
+def main():
+    print(os.getcwd())
+    print(sys.version)
+```"""
+        mock_ctx = MagicMock()
+        mock_ctx.last_output.return_value = mock_output
+
+        result = req._validate_imports(mock_ctx)
+        assert bool(result) is True
+
+    def test_validate_with_mock_context_missing_import(self):
+        """Test validation detects missing imports."""
+        req = PythonImportRepair()
+
+        mock_output = MagicMock()
+        mock_output.value = """```python
+x = np.array([1, 2, 3])
+y = pd.DataFrame({"a": [1, 2]})
+```"""
+        mock_ctx = MagicMock()
+        mock_ctx.last_output.return_value = mock_output
+
+        result = req._validate_imports(mock_ctx)
+        assert bool(result) is False
+        assert "np" in result.reason or "pd" in result.reason
+        assert "numpy" in result.reason or "pandas" in result.reason
+
+    def test_validate_syntax_error(self):
+        """Test validation catches syntax errors."""
+        req = PythonImportRepair()
+
+        mock_output = MagicMock()
+        mock_output.value = """```python
+def broken(
+    print("missing paren"
+```"""
+        mock_ctx = MagicMock()
+        mock_ctx.last_output.return_value = mock_output
+
+        result = req._validate_imports(mock_ctx)
+        assert bool(result) is False
+        assert "Syntax error" in result.reason
+
+    def test_validate_no_output(self):
+        """Test validation handles missing output."""
+        req = PythonImportRepair()
+
+        mock_ctx = MagicMock()
+        mock_ctx.last_output.return_value = None
+
+        result = req._validate_imports(mock_ctx)
+        assert bool(result) is False
+        assert "No output" in result.reason
+
+    def test_validate_unavailable_module(self):
+        """Test validation detects unavailable modules."""
+        req = PythonImportRepair()
+
+        mock_output = MagicMock()
+        mock_output.value = """```python
+import nonexistent_module_xyz123
+```"""
+        mock_ctx = MagicMock()
+        mock_ctx.last_output.return_value = mock_output
+
+        result = req._validate_imports(mock_ctx)
+        assert bool(result) is False
+        assert "nonexistent_module_xyz123" in result.reason
