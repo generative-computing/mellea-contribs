@@ -77,8 +77,8 @@ def extract_python_code(text: str) -> str | None:
     Returns:
         The extracted Python code, or None if no code found.
     """
-    # Try explicit python code blocks first
-    python_block_pattern = r"```python\s*\n(.*?)```"
+    # Try explicit python code blocks first (case-insensitive)
+    python_block_pattern = r"```[Pp]ython\s*\n(.*?)```"
     matches = re.findall(python_block_pattern, text, re.DOTALL)
 
     if matches:

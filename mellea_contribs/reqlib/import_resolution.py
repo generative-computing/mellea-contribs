@@ -149,18 +149,13 @@ def find_undefined_names(code: str) -> set[str]:
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             defined.add(node.name)
             # Add function parameters
-            for arg in node.args.args:
-                defined.add(arg.arg)
-            for arg in node.args.posonlyargs:
-                defined.add(arg.arg)
-            for arg in node.args.kwonlyargs:
-                defined.add(arg.arg)
-            if node.args.vararg:
-                defined.add(node.args.vararg.arg)
-            if node.args.kwarg:
-                defined.add(node.args.kwarg.arg)
+            _collect_args(node.args, defined)
         elif isinstance(node, ast.ClassDef):
             defined.add(node.name)
+
+        # Lambda parameters
+        elif isinstance(node, ast.Lambda):
+            _collect_args(node.args, defined)
 
         # Assignments
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
@@ -196,6 +191,25 @@ def find_undefined_names(code: str) -> set[str]:
             used.add(node.id)
 
     return used - defined
+
+
+def _collect_args(args: ast.arguments, names: set[str]) -> None:
+    """Collect parameter names from function/lambda arguments.
+
+    Args:
+        args: The ast.arguments node containing parameters.
+        names: Set to add discovered names to.
+    """
+    for arg in args.args:
+        names.add(arg.arg)
+    for arg in args.posonlyargs:
+        names.add(arg.arg)
+    for arg in args.kwonlyargs:
+        names.add(arg.arg)
+    if args.vararg:
+        names.add(args.vararg.arg)
+    if args.kwarg:
+        names.add(args.kwarg.arg)
 
 
 def _collect_target_names(target: ast.expr, names: set[str]) -> None:

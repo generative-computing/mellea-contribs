@@ -145,6 +145,22 @@ squares = [x * x for x in range(10)]
         undefined = find_undefined_names(code)
         assert "x" not in undefined
 
+    def test_lambda_params_not_undefined(self):
+        """Test that lambda parameters are not flagged."""
+        code = "fn = lambda x, y: x + y"
+        undefined = find_undefined_names(code)
+        assert "x" not in undefined
+        assert "y" not in undefined
+
+    def test_lambda_complex_params_not_undefined(self):
+        """Test that complex lambda parameters are not flagged."""
+        code = "fn = lambda x, *args, y=1, **kwargs: x + y"
+        undefined = find_undefined_names(code)
+        assert "x" not in undefined
+        assert "args" not in undefined
+        assert "y" not in undefined
+        assert "kwargs" not in undefined
+
     def test_exception_handler_vars_not_undefined(self):
         """Test that exception handler variables are not flagged."""
         code = """
@@ -350,6 +366,16 @@ def process_data(data):
         text = "This is just regular text with no code."
         code = extract_python_code(text)
         assert code is None
+
+    def test_extract_capital_python(self):
+        """Test extracting code with capital 'Python' tag."""
+        text = """```Python
+def hello():
+    pass
+```"""
+        code = extract_python_code(text)
+        assert code is not None
+        assert "def hello" in code
 
 
 class TestPythonImportRepairClass:
