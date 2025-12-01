@@ -1,186 +1,196 @@
 from mellea.stdlib.requirement import Requirement, ValidationResult
 from mellea.stdlib.base import Context, CBlock
+from eyecite.models import FullCaseCitation, CitationBase
+from eyecite import get_citations
+from citeurl import Citator
+from typing import Any, Optional
+from playwright.sync_api import sync_playwright
+from urllib.parse import urljoin
 
 import json
 import os
 import re
-from eyecite import get_citations, clean_text
-from typing import Any
+import requests
 
 # region: citation_exists function and helpers
 
-def normalize_case_name(name) -> str:
+"""
+Validator: Ensure that every case-law citation in an LLM output corresponds to a real case in the
+provided case metadata database.
+
+Process:
+1. Extract citations from LLM output using citeurl.
+2. Convert citation objects to URLs.
+3. For each cite.case.law URL:
+       - Use Playwright to extract metadata URL.
+       - Fetch JSON metadata.
+       - Compare its case ID against the known database.
+4. If any citation fails, return ValidationResult(False).
+5. If all succeed, return ValidationResult(True).
+"""
+
+def text_to_urls(text: str) -> list[str]:
     """
-    Converts a case name to a standard format.
+    Extracts all citation URLs from the given text using citeurl.
 
     Args:
-        name: A string representing the case name.
+        text: An LLM output
 
     Returns:
-        A normalized case name.
+        A list of citation URLs.
+
+    Behavior:
+        - If a citation does not have a URL attribute, we return a ValidationResult(False)
+          so that the parent validator can fail accordingly.
     """
-    # 1. Lowercase everything
-    name = name.lower()
+    citator = Citator()
+    citations = citator.list_cites(text)
 
-    # 2. Normalize 'vs', 'vs.', 'v', 'versus' to 'v.'
-    name = re.sub(r'\b(vs\.?|versus|v)(?!\.)\b', 'v.', name)
-
-    # 3. Remove all non-alphanumeric characters except periods, spaces, and apostrophes
-    name = re.sub(r"[^a-z0-9.& ']+", '', name)
-
-    # 4. Replace multiple spaces with a single space
-    name = re.sub(r'\s+', ' ', name)
-
-    return name.strip()
-
-# might not be needed
-# def ensure_list_of_dicts(obj: Any) -> list[dict]:
-#     """
-#     Normalize any JSON-like object into a list of dictionaries.
-
-#     Accepts:
-#       - A JSON string (object or array)
-#       - A single dict
-#       - A list of dicts
-
-#     Args:
-#         obj: Any data type, ideally something that can unpacked into a dictionary
-
-#     Returns:
-#         The unpacked object in list of dictionary form or raises an error.
-#     """
-#     # JSON string
-#     if isinstance(obj, str):
-#         try:
-#             obj = json.loads(obj)
-#         except json.JSONDecodeError as e:
-#             raise ValueError(f"Invalid JSON string: {e!s}")
-
-#     # Single dict
-#     if isinstance(obj, dict):
-#         return [obj]
-
-#     # List of dicts
-#     if isinstance(obj, list):
-#         if all(isinstance(item, dict) for item in obj):
-#             return obj
-#         else:
-#             raise ValueError("List contains non-dictionary elements")
-
-#     raise TypeError(f"Unsupported metadata format: {type(obj)}")
-
-# alternatively:
-# should this take in last_output instead of the whole context?
-# get case name: take LLM output and extract case name --> a string which you get from ctx.last_output() is the input
-# so the argument should be ctx.last_output.value: str
-
-def extract_case_names(ctx: Context) -> list[str]:
-    """
-    Given an LLM output, use eyecite to parse the text and collect case names.
-
-    Args:
-        ctx: An LLM output that may contain multiple citations.
-
-    Returns:
-        A list of case names.
-    """
-    # should i clean text??
-
-    # install hyperscan if not already installed
-    # !pip install hyperscan
-    # tokenizer = HyperscanTokenizer(cache_dir=".test_cache")
-    # citations = get_citations(cleaned_text, tokenizer=tokenizer)
-
-    # or this?
-    # cleaned_text = clean_text(text, ["html", "all_whitespace"])
-    # citations = get_citations(cleaned_text)
-
-    # get_citations outputs a list of citations
-    citations = get_citations(ctx.last_output().value)
-    case_names = set()
+    urls = []
+    errors = []
 
     for citation in citations:
-        plaintiff = citation.metadata.get("plaintiff")
-        defendant = citation.metadata.get("defendant")
-        if plaintiff and defendant:
-            case_names.add(f"{plaintiff} v. {defendant}")
-            # name = citation.metadata['plaintiff'] + " v. " + citation.metadata['defendant']
-            # case_names.add(name)
-        
-    return list(case_names)
+        if hasattr(citation, "URL") and citation.URL:
+            urls.append(citation.URL)
+        else:
+            # Record a descriptive error about the invalid citation object
+            errors.append(f"Citation has no URL attribute: {repr(citation)}")
 
-def citation_exists(ctx: Context, case_metadata: list[dict]) -> ValidationResult:
+    if errors:
+        # Raise one combined error
+        error_msg = "Some citations did not contain URLs:\n" + "\n".join(errors)
+        return ValidationResult(False, reason=error_msg)
+
+    return urls
+
+
+def extract_case_metadata_url(page_url: str) -> str:
     """
-    Given an LLM output and a list of dictionaries, checks that list (which represents a collection of
-    case metadata json files) to see if the given case names can be found in it.
+    Visits a cite.case.law page using Playwright and extracts the "Download case metadata" link.
 
     Args:
-        ctx: Context that contains the case names we're checking for
-        case_metadata: a list of dictionaries which represents a collection of case metadata json files
+        page_url: A cite.case.law page
 
     Returns:
-        A validation result indicating if a match was found between given case names and database
+        A URL to the JSON metadata for the case or a false ValidationResult if the link cannot be found
+    """
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+        page = browser.new_page()
+        page.goto(page_url)
+        
+        # Wait for the metadata link to appear
+        link = page.wait_for_selector("a:has-text('Download case metadata')")
+        if not link:
+            return ValidationResult(False, reason=f"No metadata link found on page: {page_url}")
+
+        # Extract relative href
+        href = link.get_attribute("href")
+        if not href:
+            return ValidationResult(False, reason=f"Metadata link missing href attribute on page: {page_url}")
+
+        # Build the absolute metadata URL
+        return urljoin(page_url, href)
+    
+
+def metadata_url_to_json(metadata_url: str) -> dict:
+    """
+    Fetches JSON metadata for a case.
+
+    Args:
+        metadata_url: Fully-qualified URL to metadata.json
+
+    Returns:
+        A dictionary representing the JSON metadata.
+    """
+    resp = requests.get(metadata_url)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def collect_ids_in_database(database: list[dict]) -> set:
+    """
+    Collects all case IDs from the provided caselaw metadata.
+
+    Args:
+        database: A list of case dictionaries loaded from a caselaw JSON dataset.
+
+    Returns:
+        A set of all unique case IDs.
+    """
+    return {case["id"] for case in database}
+
+
+def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
+    """
+    Validator:
+    Ensures that every cite.case.law URL in the LLM output corresponds to a real case in the provided case metadata database.
+
+    Args:
+        ctx: Mellea runtime context containing the last LLM output.
+        database: Parsed caselaw metadata database of JSON objects.
+
+    Returns:
+        ValidationResult indicating pass/fail.
     """
     if ctx is None:
-        return ValidationResult(False, reason="No context provided in output")
+        return ValidationResult(False, reason="No context provided in output.")
     
-    # 1) this will spit out a bunch of words --> look through to extract case names
-    # 2) use eyecite (might have to do some conversion)
     last_output = ctx.last_output() 
 
-    # if last_output is None or not getattr(output, "value", None):
     if last_output is None:
-        return ValidationResult(False, reason="No last output found in context")
+        return ValidationResult(False, reason="No last output found in contex.")
     
-    # 3) run checking
-    # call get_case_name func
-    case_names = extract_case_names(ctx)
-
-    if not case_names or not isinstance(case_names, list[str]):
-        return ValidationResult(False, reason="No case names provided in output")
+    if type(last_output) != str:
+        return ValidationResult(False, reason="Last output must be a string.")
     
-    normalized_case_names = [normalize_case_name(case_name) for case_name in case_names]
+    # List of urls of citations found in the LLM output
+    output_citation_urls = text_to_urls(last_output)
+
+    # text_to_urls may return a ValidationResult (error condition)
+    if isinstance(output_citation_urls, ValidationResult):
+        return output_citation_urls
     
-    case_names = set()
-    case_name_abb = set()
+    if output_citation_urls is None or output_citation_urls == []:
+        # No citations, so trivially valid
+        return ValidationResult(True, reason="No citations found.")
 
-    # add name and name_abbreviation from the database
-    for case in case_metadata:
-        if 'name' in case:
-            case_names.add(normalize_case_name(case['name']))
-        if 'name_abbreviation' in case:
-            case_name_abb.add(normalize_case_name(case['name_abbreviation']))
+    database_ids = collect_ids_in_database(database)
 
-    # Check both name and name_abbreviation
-    for normalized_case_name in normalized_case_names:
-        if normalized_case_name not in case_names and normalized_case_name not in case_name_abb:
-            # probably want to change this to the actual case name at some point
-            # maybe keep a tuple structure or something
-            return ValidationResult(False, reason=f"'{normalized_case_name}' not found in database")
+    for url in output_citation_urls:
+
+        # If this URL is Caselaw, do direct comparison within database by using case id
+        if "cite.case.law" in url:
+            try:
+                metadata_url = extract_case_metadata_url(url)
+                metadata = metadata_url_to_json(metadata_url)
+                case_id = metadata["id"]
+
+            except Exception as e:
+                return ValidationResult(False, reason=f"Failed to retrieve metadata for {url}: {e}")
+            
+            if case_id not in database_ids:
+                return ValidationResult(False, reason=f"Case {case_id} not found in database")
         
+        else:
+            # Non-caselaw citations (e.g., statutes): ignore
+            # Extending functionality to be done later: use LLM as judge to see if citations match
+            continue
+
     return ValidationResult(True, reason="All case names found in database")
-
-    # check if this code chunk is right later
-    # db_names = {normalize_case_name(c["name"]) for c in case_metadata if "name" in c}
-    # db_abbrevs = {
-    #     normalize_case_name(c["name_abbreviation"]) for c in case_metadata if "name_abbreviation" in c
-    # }
-
-    # for name in normalized_output_names:
-    #     if name not in db_names and name not in db_abbrevs:
-    #         return ValidationResult(False, reason=f"Case '{name}' not found in database")
-
-    # return ValidationResult(True, reason="All case names found in database")
-
+    
 
 class CaseNameExistsInDatabase(Requirement):
     """
-    Checks if the output case name exists in the provided case metadata database.
+    Requirement wrapper for Mellea that ensures case citations in LLM output
+    refer to real cases in the provided metadata database.
     """
-    def __init__(self, case_metadata: str):
+    # is this taking in the right parameters?
+    def __init__(self, case_metadata: list[dict]):
         self._case_metadata = case_metadata
         super().__init__(
             description="The case name should exist in the provided case metadata database.",
             validation_fn=lambda ctx: citation_exists(ctx, self._case_metadata),
         )
+
 # endregion
