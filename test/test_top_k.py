@@ -1,12 +1,10 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from mellea_contribs.reqlib.double_round_robin import double_round_robin
 from mellea import start_session
-from mellea.helpers.fancy_logger import FancyLogger
-
-FancyLogger.get_logger().setLevel("WARNING")
+from mellea_contribs.reqlib.top_k import top_k
 
 ITEMS = [
     {
@@ -33,27 +31,25 @@ ITEMS = [
 ]
 
 
-def test_generic_double_round_robin():
+
+def test_top_k_selection():
     m = start_session()
 
     comparison_prompt = """
-        Select which option is more likely to be the primary root-cause
-        based on severity and the signals in each option's grounding context.
+    Select which items are the most severe issues.
+    Higher severity and latency indicate a worse issue.
     """
 
-    results = double_round_robin(
-        items=ITEMS,
-        comparison_prompt=comparison_prompt,
-        m=m
-    )
+    results = top_k(items=ITEMS, comparison_prompt=comparison_prompt, m=m, k=2)
 
-    print("\nDRR Results:")
+    print("\nTop-K Results:")
     for item, score in results:
         print(f"{item['name']}: {score}")
 
     assert len(results) == 3
     assert all(isinstance(score, int) for _, score in results)
+    assert sum(score for _, score in results) == 2  # top-2 selected
+
 
 if __name__ == "__main__":
-    test_generic_double_round_robin()
-
+    test_top_k_selection()

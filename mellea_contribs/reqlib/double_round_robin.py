@@ -18,10 +18,13 @@ When should an agent use it?
 """
 
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 from mellea.backends.types import ModelOption
 from mellea.stdlib.requirement import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
+from mellea.helpers.fancy_logger import FancyLogger
+
+logger = FancyLogger.get_logger()
 
 DRR_CACHE: Dict[str, Any] = {}
 
@@ -32,7 +35,7 @@ def cached(fn):
     def wrapper(*args, **kwargs):
         key = cache_key(
             kwargs.get("items") or args[0],
-            kwargs.get("context") or args[3],
+            kwargs.get("context") or args[3] if len(args) > 3 else None,
             kwargs.get("comparison_prompt") or args[1]
         )
         if key in DRR_CACHE:
@@ -55,67 +58,63 @@ def compare_pair(item_a: Any,
                  item_b: Any,
                  comparison_prompt: str,
                  m,
-                 context: Any = None) -> str:
+                 context: Optional[Any] = None) -> Optional[str]:
 
-    prompt = f"""
-        You are doing a pairwise comparison between two items.
-        
+    try:
+        prompt = f"""
         Option A:
-        {json.dumps(item_a, indent=2) if not isinstance(item_a, str) else item_a}
-        
+        {json.dumps(item_a, indent=2, default=str) if not isinstance(item_a, str) else item_a}
+
         Option B:
-        {json.dumps(item_b, indent=2) if not isinstance(item_b, str) else item_b}
-        
+        {json.dumps(item_b, indent=2, default=str) if not isinstance(item_b, str) else item_b}
+
         Task:
         {comparison_prompt}
-        
-        Respond ONLY with:
-        A
-        or
-        B
+
+        Respond ONLY with a single token: A or B
         """
+    except Exception as e:
+        logger.warning(f"Failed to construct prompt: {e}")
+        return None
+
+    system_prompt = "You are a terse pairwise selector. Output exactly one token: A or B."
 
     validator = lambda s: extract_choice(s) in ["A", "B"]
 
     response = m.instruct(
         prompt,
-        grounding_context=context,
-        model_options={ModelOption.SYSTEM_PROMPT: prompt},
+        grounding_context=context if context else None,
+        model_options={ModelOption.SYSTEM_PROMPT: system_prompt},
         requirements=[req("Response must be 'A' or 'B'", validation_fn=simple_validate(validator))],
         strategy=RejectionSamplingStrategy(loop_budget=2),
     )
 
     raw = getattr(response, "value", "").strip()
     winner = extract_choice(raw)
-
-    if winner is None:
-        return "A"
-
-    return winner
+    return winner  # can be None if model output is invalid
 
 @cached
 def double_round_robin(items: List[Any],
                        comparison_prompt: str,
                        m,
-                       context: Any = None) -> List[Tuple[Any, int]]:
+                       context: Optional[Any] = None) -> List[Tuple[Any, int]]:
 
     n = len(items)
     scores = {i: 0 for i in range(n)}  # index → score
 
     for i in range(n):
         for j in range(i + 1, n):
-
             winner1 = compare_pair(items[i], items[j], comparison_prompt, m, context)
             winner2 = compare_pair(items[j], items[i], comparison_prompt, m, context)
 
             if winner1 == "A":
                 scores[i] += 1
-            else:
+            elif winner1 == "B":
                 scores[j] += 1
 
             if winner2 == "A":
                 scores[j] += 1
-            else:
+            elif winner2 == "B":
                 scores[i] += 1
 
     results = [(items[i], scores[i]) for i in range(n)]
