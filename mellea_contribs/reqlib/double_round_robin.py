@@ -1,14 +1,15 @@
 """
-double_round_robin.py
-
-Author:
+Author: IBM Research – Mellea Agent Team
 Maintainer: Mellea Agent - IBM Research
 
-Purpose:Standalone library for Double Round Robin (DRR) evaluation of root cause judgments for Mellea agents.
+Purpose: Generic Double Round Robin (DRR) engine for Mellea agents.DRR performs pairwise comparisons between multiple items, using LLM judgment.
 
-What is Double Round Robin (DRR)?
-DRR is a pairwise comparison method to determine the most appropriate judgment label for a given entity by evaluating all possible pairs of candidate labels twice
-(A vs B and B vs A). The label that wins the most pairwise comparisons is selected as the final judgment.
+What DRR Does:
+- Takes N items to compare.
+- Runs every possible pair (A vs B, B vs A).
+- The model decides winner ("A" or "B").
+- Each winner gets a point.
+- Returns all items with accumulated scores.
 
 When should an agent use it?
 - When multiple candidate judgments exist for an entity.
@@ -17,81 +18,106 @@ When should an agent use it?
 """
 
 import json
+from typing import Any, Dict, List, Tuple
 from mellea.backends.types import ModelOption
-from mellea.stdlib.sampling import RejectionSamplingStrategy
 from mellea.stdlib.requirement import req, simple_validate
-from typing import Dict, Any, List
+from mellea.stdlib.sampling import RejectionSamplingStrategy
 
-JUDGMENT_CACHE: Dict[str, Any] = {}
+DRR_CACHE: Dict[str, Any] = {}
 
-def cache_key(entity_id: str, stage: str, payload: Any) -> str:
-    return f"{entity_id}::{stage}::{hash(str(payload))}"
+def cache_key(items: List[Any], context: Any, prompt: str) -> str:
+    return f"{hash(str(items))}::{hash(str(context))}::{hash(prompt)}"
 
-def cached(stage_name):
-    def decorator(fn):
-        def wrapper(entity_id, *args, **kwargs):
-            payload = (args, kwargs)
-            key = cache_key(entity_id, stage_name, payload)
-            if key in JUDGMENT_CACHE:
-                return JUDGMENT_CACHE[key]
-            result = fn(entity_id, *args, **kwargs)
-            JUDGMENT_CACHE[key] = result
-            return result
-        return wrapper
-    return decorator
+def cached(fn):
+    def wrapper(*args, **kwargs):
+        key = cache_key(
+            kwargs.get("items") or args[0],
+            kwargs.get("context") or args[3],
+            kwargs.get("comparison_prompt") or args[1]
+        )
+        if key in DRR_CACHE:
+            return DRR_CACHE[key]
+        result = fn(*args, **kwargs)
+        DRR_CACHE[key] = result
+        return result
+    return wrapper
 
-LABELS = ["PRIMARY_FAILURE", "EXONERATE", "INSUFFICIENT_EVIDENCE", "DEFER", "SYMPTOMS_ONLY"]
 
-def extract_label(raw_output: str, valid_labels: List[str]) -> str:
-    lines = [line.strip() for line in raw_output.strip().splitlines() if line.strip()]
-    for line in reversed(lines):
-        if line in valid_labels:
-            return line
-    return "INSUFFICIENT_EVIDENCE"  # fallback if nothing matches
+def extract_choice(raw: str) -> str:
+    cleaned = raw.strip().strip('\'" .!?\n\r\t').upper()
+    if cleaned.startswith("A"):
+        return "A"
+    if cleaned.startswith("B"):
+        return "B"
+    return None
 
-@cached("pairwise_eval")
-def evaluate_pair(entity_id: str, a: str, b: str, entity_context: Dict[str, Any], m) -> str:
+def compare_pair(item_a: Any,
+                 item_b: Any,
+                 comparison_prompt: str,
+                 m,
+                 context: Any = None) -> str:
+
     prompt = f"""
-        Compare two judgments for the entity {entity_id} based on its observability context.
-        Option A: {a}
-        Option B: {b}
-        Which judgment is more appropriate? Respond ONLY with either '{a}' or '{b}'.
-        Context (JSON): {json.dumps(entity_context, indent=2)}
+        You are doing a pairwise comparison between two items.
+        
+        Option A:
+        {json.dumps(item_a, indent=2) if not isinstance(item_a, str) else item_a}
+        
+        Option B:
+        {json.dumps(item_b, indent=2) if not isinstance(item_b, str) else item_b}
+        
+        Task:
+        {comparison_prompt}
+        
+        Respond ONLY with:
+        A
+        or
+        B
         """
+
+    validator = lambda s: extract_choice(s) in ["A", "B"]
+
     response = m.instruct(
         prompt,
+        grounding_context=context,
         model_options={ModelOption.SYSTEM_PROMPT: prompt},
-        grounding_context=entity_context,
-        requirements=[
-            req(
-                f"Response must be either '{a}' or '{b}'",
-                validation_fn=simple_validate(lambda s: s.strip() == a or s.strip() == b),
-            )
-        ],
+        requirements=[req("Response must be 'A' or 'B'", validation_fn=simple_validate(validator))],
         strategy=RejectionSamplingStrategy(loop_budget=2),
     )
 
-    raw = getattr(response, "value", a).strip()
-    return extract_label(raw, LABELS)
+    raw = getattr(response, "value", "").strip()
+    winner = extract_choice(raw)
 
-@cached("double_round_robin")
-def run_double_round_robin(entity_id: str, entity_context: Dict[str, Any], m, labels: List[str] = None) -> str:
-    if labels is None:
-        labels = LABELS
-    scores = {lbl: 0 for lbl in labels}
+    if winner is None:
+        return "A"
 
-    for i in range(len(LABELS)):
-        for j in range(i + 1, len(LABELS)):
-            A = LABELS[i]
-            B = LABELS[j]
-            winner1 = evaluate_pair(entity_id, A, B, entity_context, m)
-            winner2 = evaluate_pair(entity_id, B, A, entity_context, m)
+    return winner
 
-            winner1 = extract_label(winner1, LABELS)
-            winner2 = extract_label(winner2, LABELS)
+@cached
+def double_round_robin(items: List[Any],
+                       comparison_prompt: str,
+                       m,
+                       context: Any = None) -> List[Tuple[Any, int]]:
 
-            scores[winner1] += 1
-            scores[winner2] += 1
+    n = len(items)
+    scores = {i: 0 for i in range(n)}  # index → score
 
-    final = max(scores.items(), key=lambda x: x[1])[0]
-    return final
+    for i in range(n):
+        for j in range(i + 1, n):
+
+            winner1 = compare_pair(items[i], items[j], comparison_prompt, m, context)
+            winner2 = compare_pair(items[j], items[i], comparison_prompt, m, context)
+
+            if winner1 == "A":
+                scores[i] += 1
+            else:
+                scores[j] += 1
+
+            if winner2 == "A":
+                scores[j] += 1
+            else:
+                scores[i] += 1
+
+    results = [(items[i], scores[i]) for i in range(n)]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
