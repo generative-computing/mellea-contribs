@@ -31,7 +31,6 @@ ITEMS = [
 ]
 
 
-
 def test_top_k_selection():
     m = start_session()
 
@@ -43,12 +42,11 @@ def test_top_k_selection():
     results = top_k(items=ITEMS, comparison_prompt=comparison_prompt, m=m, k=2)
 
     print("\nTop-K Results:")
-    for item, score in results:
-        print(f"{item['name']}: {score}")
+    for item in results:
+        print(f"{item['name']}")
 
-    assert len(results) == 3
-    assert all(isinstance(score, int) for _, score in results)
-    assert sum(score for _, score in results) == 2  # top-2 selected
+    assert all(item in ITEMS for item in results)
+    assert len(results) == 2
 
 
 if __name__ == "__main__":

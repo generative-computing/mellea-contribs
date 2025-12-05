@@ -52,34 +52,30 @@ def extract_top_k(raw: str, items: List[Any]) -> List[Any]:
     try:
         parsed = json.loads(raw)
         if isinstance(parsed, list):
-            return [item for item in parsed if item in [i["name"] if isinstance(i, dict) else i for i in items]]
+            names_to_items = {i["name"]: i for i in items if isinstance(i, dict)}
+            return [names_to_items[i] if i in names_to_items else i for i in parsed if i in names_to_items or i in items]
     except Exception:
         pass
     return []
-
 
 @cached
 def top_k(items: List[Any],
           comparison_prompt: str,
           m,
           k: int = 1,
-          context: Optional[Any] = None) -> List[Tuple[Any, int]]:
+          context: Optional[Any] = None) -> List[Any]:
     system_prompt = f"You are a terse Top-{k} selector. Output exactly {k} item names as a valid JSON array, no additional text."
 
-    try:
-        user_prompt = f"""
-        TASK: Select the top {k} items based on the following criteria:
+    user_prompt = f"""
+    TASK: Select the top {k} items based on the following criteria:
 
-        {comparison_prompt}
+    {comparison_prompt}
 
-        Items:
-        {json.dumps(items, indent=2, default=str)}
+    Items:
+    {json.dumps(items, indent=2, default=str)}
 
-        Respond ONLY with a JSON array of exactly {k} items.
-        """
-    except Exception as e:
-        print(f"Error constructing prompt: {e}")
-        user_prompt = comparison_prompt
+    Respond ONLY with a JSON array of exactly {k} items.
+    """
 
     response = m.instruct(
         user_prompt,
@@ -94,9 +90,4 @@ def top_k(items: List[Any],
 
     selected = extract_top_k(getattr(response, "value", ""), items)
 
-    scores = {i["name"] if isinstance(i, dict) else i: 1 if (i["name"] if isinstance(i, dict) else i) in selected else 0
-              for i in items}
-
-    results = [(i, scores[i["name"] if isinstance(i, dict) else i]) for i in items]
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
+    return selected
