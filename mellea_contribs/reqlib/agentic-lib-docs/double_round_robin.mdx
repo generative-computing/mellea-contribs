@@ -1,0 +1,53 @@
+---
+title: Double Round Robin (DRR) Engine
+description: Pairwise-comparison ranking module for Mellea agents.
+---
+
+import { Callout } from "@/components/Callout";
+
+# Double Round Robin (DRR)
+
+The **Double Round Robin (DRR)** engine performs stable, pairwise LLM comparisons across a set of candidate items.
+It is useful when an agent needs **robust ranking** and **disambiguation** beyond simple scoring or confidence values.
+
+---
+
+## 🔍 What DRR Does
+
+- Takes **N items** as input.
+- For every pair `(A, B)`:
+  - Runs **A vs B**
+  - Runs **B vs A**
+- The LLM outputs a **single token**: `"A"` or `"B"`.
+- Winners accumulate points.
+- Returns items sorted by **descending score**.
+
+<Callout>
+DRR is especially helpful when multiple candidate judgments exist for the same entity and the agent needs a more reliable tie-breaker.
+</Callout>
+
+---
+
+## 🚀 When Should an Agent Use DRR?
+
+- When multiple candidate judgments conflict.
+- When confidence values are ambiguous or noisy.
+- When pairwise, head-to-head comparison is more reliable than raw scores.
+- When the agent requires **stable ranking logic** across many alternatives.
+
+---
+
+## 🧠 Core API
+
+### `double_round_robin(items, comparison_prompt, m, context=None)`
+Runs the full DRR cycle and returns:
+
+```python
+[(item, score), ...]  # sorted by score (highest first)
+
+Parameters
+
+items: list of objects or strings
+comparison_prompt: instruction describing how the model should decide
+m: Mellea model/session
+context : grounding context passed to m.instruct
