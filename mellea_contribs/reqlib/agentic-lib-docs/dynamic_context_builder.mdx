@@ -1,0 +1,44 @@
+---
+title: DynamicContextBuilder
+sidebarTitle: DynamicContextBuilder
+---
+
+# `mellea_contribs.reqlib.dynamic_context_builder`
+
+A reusable component for building structured, LLM-friendly grounding context for Mellea agents.
+
+## Overview
+
+`DynamicContextBuilder` helps agents construct clean, readable, multi-section grounding context blocks without manually writing formatting logic.
+
+It automatically:
+
+- Organizes arbitrary context fields (`logs`, `events`, `metrics`, ...)
+- Removes empty or missing fields
+- Pretty-prints lists and dictionaries
+- Produces either:
+  - A plain string, or
+  - A `TemplateRepresentation` object suitable for advanced LLM workflows
+
+This makes agent reasoning loops cleaner, more consistent, and easier to debug.
+
+---
+
+## Class: `DynamicContextBuilder`
+
+### Signature
+
+```python
+DynamicContextBuilder(
+    return_template: bool = False,
+    indent: int = 2,
+    **context_fields: Any,
+)
+
+Constructs a dynamic grounding context block using any number of keyword fields.
+
+| Name               | Type   | Description                                                                               |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------- |
+| `return_template`  | `bool` | If `True`, returns a `TemplateRepresentation` instead of a string.                        |
+| `indent`           | `int`  | Number of spaces used when pretty-printing JSON structures.                               |
+| `**context_fields` | `Any`  | Arbitrary fields to include in the grounding context (e.g., `logs`, `events`, `metrics`). |
