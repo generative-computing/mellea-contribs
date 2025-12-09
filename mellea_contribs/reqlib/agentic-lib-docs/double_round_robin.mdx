@@ -22,13 +22,10 @@ It is useful when an agent needs **robust ranking** and **disambiguation** beyon
 - Winners accumulate points.
 - Returns items sorted by **descending score**.
 
-<Callout>
-DRR is especially helpful when multiple candidate judgments exist for the same entity and the agent needs a more reliable tie-breaker.
-</Callout>
 
 ---
 
-## 🚀 When Should an Agent Use DRR?
+## When Should an Agent Use DRR?
 
 - When multiple candidate judgments conflict.
 - When confidence values are ambiguous or noisy.
@@ -37,7 +34,7 @@ DRR is especially helpful when multiple candidate judgments exist for the same e
 
 ---
 
-## 🧠 Core API
+## Core API
 
 ### `double_round_robin(items, comparison_prompt, m, context=None)`
 Runs the full DRR cycle and returns:
