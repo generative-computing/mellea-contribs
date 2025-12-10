@@ -1,4 +1,4 @@
-from mellea_contribs.tools.grounding_context_formatter import GroundingContextFormatter
+from mellea_contribs.reqlib.grounding_context_formatter import GroundingContextFormatter
 from mellea.stdlib.base import TemplateRepresentation
 
 
