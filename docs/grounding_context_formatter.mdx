@@ -1,15 +1,15 @@
 ---
-title: DynamicContextBuilder
-sidebarTitle: DynamicContextBuilder
+title: GroundingContextFormatter
+sidebarTitle: GroundingContextFormatter
 ---
 
-# `mellea_contribs.reqlib.dynamic_context_builder`
+# `mellea_contribs.reqlib.grounding_context_formatter`
 
-A reusable component for building structured, LLM-friendly grounding context for Mellea agents.
+A reusable component for formatting LLM-friendly grounding context for Mellea agents.
 
 ## Overview
 
-`DynamicContextBuilder` helps agents construct clean, readable, multi-section grounding context blocks without manually writing formatting logic.
+`GroundingContextFormatter` helps agents format clean, readable, multi-section grounding context blocks without manually writing formatting logic.
 
 It automatically:
 
@@ -22,23 +22,41 @@ It automatically:
 
 This makes agent reasoning loops cleaner, more consistent, and easier to debug.
 
----
 
-## Class: `DynamicContextBuilder`
+## Class: `GroundingContextFormatter`
 
 ### Signature
 
 ```python
-DynamicContextBuilder(
+GroundingContextFormatter(
     return_template: bool = False,
     indent: int = 2,
     **context_fields: Any,
 )
-
-Constructs a dynamic grounding context block using any number of keyword fields.
+```
+Formats grounding context block using any number of keyword fields.
 
 | Name               | Type   | Description                                                                               |
 | ------------------ | ------ | ----------------------------------------------------------------------------------------- |
 | `return_template`  | `bool` | If `True`, returns a `TemplateRepresentation` instead of a string.                        |
 | `indent`           | `int`  | Number of spaces used when pretty-printing JSON structures.                               |
 | `**context_fields` | `Any`  | Arbitrary fields to include in the grounding context (e.g., `logs`, `events`, `metrics`). |
+
+
+## Using the TemplateRepresentation Output
+
+If return_template=True, the builder returns a TemplateRepresentation that can be passed directly to m.instruct.
+```python
+ctx = GroundingContextFormatter(
+    logs=["fail", "retry"],
+    metadata={"source": "db2"},
+    return_template=True
+)
+
+context_template = ctx.format_for_llm()
+
+response = m.instruct(
+    prompt="Analyze the system state.",
+    grounding_context=context_template,   # <— Just pass it in
+)
+```

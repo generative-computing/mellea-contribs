@@ -2,7 +2,7 @@
 Author: IBM Research – Mellea Agent Team
 Maintainer: Mellea Agent - IBM Research
 
-Purpose: DynamicContextBuilder is a reusable component for constructing grounding context blocks for Mellea agents. It organizes arbitrary
+Purpose: GroundingContextFormatter is a reusable component for constructing grounding context blocks for Mellea agents. It organizes arbitrary
 context fields into a structured, LLM-friendly format.
 
 What it Does:
@@ -23,7 +23,7 @@ from mellea.stdlib.base import Component, TemplateRepresentation
 import json
 
 
-class DynamicContextBuilder(Component):
+class GroundingContextFormatter(Component):
 
     def __init__(
         self,
@@ -43,7 +43,7 @@ class DynamicContextBuilder(Component):
         non_empty = {
             k: v for k, v in self.context_fields.items()
             if v not in (None, "", [], {}, ())
-        }
+        }   
 
         if not non_empty:
             if self.return_template:
@@ -61,10 +61,11 @@ class DynamicContextBuilder(Component):
 
         output = "\n\n".join(blocks)
 
-        if self.return_template:
+        if self.return_template and not non_empty:
             return TemplateRepresentation(
                 obj=self,
-                args={"text": output},
+                template="",
+                args={"context": ""},
             )
 
         return output
