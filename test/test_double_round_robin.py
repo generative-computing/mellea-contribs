@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from mellea_contribs.reqlib.double_round_robin import double_round_robin
+from mellea_contribs.tools.double_round_robin import double_round_robin
 from mellea import start_session
 from mellea.helpers.fancy_logger import FancyLogger
 
