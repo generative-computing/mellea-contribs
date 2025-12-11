@@ -46,11 +46,15 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "last_opened_file_path": "/Users/shubhiasthana/Desktop/sasthan/DataFiltering/mellea-contribs",
+    "git-widget-placeholder": "mellea__tap",
+    "last_opened_file_path": "/Users/shubhiasthana/Desktop/sasthan/DataFiltering/mellea-contribs/mellea_contribs/tools",
     "settings.editor.selected.configurable": "preferences.pluginManager"
   }
 }]]></component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/mellea_contribs/tools" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/mellea_contribs/tools" />
       <recent name="$PROJECT_DIR$/mellea_contribs/reqlib" />
