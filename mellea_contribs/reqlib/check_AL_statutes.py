@@ -1,9 +1,12 @@
-import mellea
+"""Alabama statute citation validation."""
+
 import re
-from mellea.stdlib.reqlib.statute_data import alabama
 
 from mellea.stdlib.base import Context
 from mellea.stdlib.requirement import Requirement, ValidationResult
+
+from .statute_data import alabama
+
 
 def parse_AL(file: str) -> list[str]:
     """Parse Alabama statute citations from the provided file content."""
@@ -11,12 +14,15 @@ def parse_AL(file: str) -> list[str]:
     pattern = r"Ala\. Code §"
     matches = [m.start() for m in re.finditer(pattern, file)]
     for match in matches:
-        end = re.search(r"\d{4}\)", file[match+1:])
+        end = re.search(r"\d{4}\)", file[match + 1 :])
         if end is not None:
-            citations.append(file[match:end.end()+match+1])
+            citations.append(file[match : end.end() + match + 1])
         else:
-            raise Exception(f"Could not find closing parenthesis for statute match: {file[match:]}")
+            raise Exception(
+                f"Could not find closing parenthesis for statute match: {file[match:]}"
+            )
     return citations
+
 
 def check_AL(citations: list[str]) -> list[bool]:
     """Check the existence of Alabama statutes from the provided citations."""
@@ -25,7 +31,7 @@ def check_AL(citations: list[str]) -> list[bool]:
         section_symbol = citation.find("§")
         start = re.search(r"[1-9]", citation[section_symbol:]).start() + section_symbol
         end = citation[start:].find(" ")
-        statute = citation[start:start+end]
+        statute = citation[start : start + end]
         title, section, rest = None, None, None
         try:
             title, section, rest = statute.split("-")
@@ -82,6 +88,7 @@ def check_AL(citations: list[str]) -> list[bool]:
                 continue
     return statute_exists
 
+
 def get_AL_statutes(ctx: Context) -> list[str]:
     """Extract Alabama statute citations from the provided file content."""
     if ctx is None:
@@ -92,8 +99,11 @@ def get_AL_statutes(ctx: Context) -> list[str]:
         raise ValueError("No text found in the last output of the context.")
     text = last_output.value
     if not text or not isinstance(text, str):
-        raise ValueError("The last output must be a string containing the file content.")
+        raise ValueError(
+            "The last output must be a string containing the file content."
+        )
     return parse_AL(text)
+
 
 def validate_AL_statutes(citations: list[str]) -> ValidationResult:
     """Validate the existence of cited Alabama statutes."""
@@ -106,11 +116,15 @@ def validate_AL_statutes(citations: list[str]) -> ValidationResult:
     if all_exist:
         return ValidationResult(True)
     else:
-        return ValidationResult(False, reason=f"These statutes do not exist: {[citations[i] for i, exists in enumerate(results) if not exists]}")
+        return ValidationResult(
+            False,
+            reason=f"These statutes do not exist: {[citations[i] for i, exists in enumerate(results) if not exists]}",
+        )
+
 
 class VerifyALStatutes(Requirement):
     def __init__(self):
         super().__init__(
             description="Verify the existence of Alabama statutes in the provided citations.",
-            validation_fn=lambda ctx: validate_AL_statutes(get_AL_statutes(ctx))
+            validation_fn=lambda ctx: validate_AL_statutes(get_AL_statutes(ctx)),
         )

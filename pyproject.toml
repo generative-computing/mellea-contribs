@@ -19,7 +19,8 @@ classifiers = [
 ]
 
 dependencies = [
-  "mellea"
+  "mellea",
+  "rapidfuzz>=3.14.3",
 ]
 
 [dependency-groups]
