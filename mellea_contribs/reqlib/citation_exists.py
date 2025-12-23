@@ -1,11 +1,11 @@
 from mellea.stdlib.requirement import Requirement, ValidationResult
-from mellea.stdlib.base import Context, CBlock
-from eyecite.models import FullCaseCitation, CitationBase
+from mellea.stdlib.base import Context
+from eyecite.models import FullCaseCitation
 from eyecite import get_citations
 from citeurl import Citator
 from typing import Any, Optional
 from playwright.sync_api import sync_playwright
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 
 import json
 import os
@@ -22,7 +22,6 @@ Process:
 1. Extract citations from LLM output using citeurl.
 2. Convert citation objects to URLs.
 3. For each cite.case.law URL:
-       - Use Playwright to extract metadata URL.
        - Fetch JSON metadata.
        - Compare its case ID against the known database.
 4. If any citation fails, return ValidationResult(False).
@@ -40,8 +39,8 @@ def text_to_urls(text: str) -> list[str]:
         A list of citation URLs.
 
     Behavior:
-        - If a citation does not have a URL attribute, we return a ValidationResult(False)
-          so that the parent validator can fail accordingly.
+        If a citation does not have a URL attribute, we return a ValidationResult(False)
+        so that the parent validator can fail accordingly.
     """
     citator = Citator()
     citations = citator.list_cites(text)
@@ -64,9 +63,9 @@ def text_to_urls(text: str) -> list[str]:
     return urls
 
 
-def extract_case_metadata_url(page_url: str) -> str:
+def extract_case_metadata_url(case_url: str) -> ValidationResult | str:
     """
-    Visits a cite.case.law page using Playwright and extracts the "Download case metadata" link.
+    Converts a case.law URL to the corresponding static JSON metadata URL.
 
     Args:
         page_url: A cite.case.law page
@@ -74,23 +73,39 @@ def extract_case_metadata_url(page_url: str) -> str:
     Returns:
         A URL to the JSON metadata for the case or a false ValidationResult if the link cannot be found
     """
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        page = browser.new_page()
-        page.goto(page_url)
+    # Take the full input IRL and split into structured components
+    parsed = urlparse(case_url)
+    # Turn the query part into a dictionary
+    params = parse_qs(parsed.query)
+
+    # Use None as a fallback if a value is missing
+    reporter = params.get("reporter", [None])[0]
+    volume = params.get("volume", [None])[0]
+    case = params.get("case", [None])[0]
+
+    if not reporter or not volume or not case:
+        # Use playwright if URL parsing doesn't work
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page()
+            page.goto(case_url)
+            
+            # Wait for the metadata link to appear
+            link = page.wait_for_selector("a:has-text('Download case metadata')")
+            browser.close()
+
+            if not link:
+                return ValidationResult(False, reason=f"No metadata link found on page: {case_url}")
+
+            # Extract relative href
+            href = link.get_attribute("href")
+            if not href:
+                return ValidationResult(False, reason=f"Metadata link missing href attribute on page: {case_url}")
+
+            # Build the absolute metadata URL
+            return urljoin(case_url, href)
         
-        # Wait for the metadata link to appear
-        link = page.wait_for_selector("a:has-text('Download case metadata')")
-        if not link:
-            return ValidationResult(False, reason=f"No metadata link found on page: {page_url}")
-
-        # Extract relative href
-        href = link.get_attribute("href")
-        if not href:
-            return ValidationResult(False, reason=f"Metadata link missing href attribute on page: {page_url}")
-
-        # Build the absolute metadata URL
-        return urljoin(page_url, href)
+    return f"https://static.case.law/{reporter}/{volume}/cases/{case}.json"
     
 
 def metadata_url_to_json(metadata_url: str) -> dict:
@@ -140,9 +155,6 @@ def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
 
     if last_output is None:
         return ValidationResult(False, reason="No last output found in contex.")
-    
-    if type(last_output) != str:
-        return ValidationResult(False, reason="Last output must be a string.")
     
     # List of urls of citations found in the LLM output
     output_citation_urls = text_to_urls(last_output)
