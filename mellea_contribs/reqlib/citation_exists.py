@@ -12,7 +12,7 @@ import os
 import re
 import requests
 
-# region: citation_exists function and helpers
+# region citation_exists function and helpers
 
 """
 Validator: Ensure that every case-law citation in an LLM output corresponds to a real case in the
@@ -197,7 +197,6 @@ class CaseNameExistsInDatabase(Requirement):
     Requirement wrapper for Mellea that ensures case citations in LLM output
     refer to real cases in the provided metadata database.
     """
-    # is this taking in the right parameters?
     def __init__(self, case_metadata: list[dict]):
         self._case_metadata = case_metadata
         super().__init__(
