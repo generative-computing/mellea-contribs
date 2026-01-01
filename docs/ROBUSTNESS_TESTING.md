@@ -7,11 +7,13 @@ Evaluate m-program consistency by testing against semantic variations of a basel
 ### Step 1: Install BenchDrift
 Install BenchDrift from source (required for robustness testing pipeline):
 ```bash
-git clone https://github.com/ritterinvest/BenchDrift.git
-cd BenchDrift
+git clone https://github.ibm.com/Granite-debug/BenchDrift.git BenchDrift-Pipeline
+cd BenchDrift-Pipeline
 pip install -e .
 cd ..
 ```
+
+**Important:** BenchDrift is currently hosted on IBM's internal GitHub. You need access to IBM's internal repositories to run these tests. The codebase is in the process of being approved for public placement. If you don't have access, please contact your IBM administrator or the BenchDrift maintainers.
 
 ### Step 2: Install mellea-contribs
 Install mellea-contribs in editable mode:
@@ -97,20 +99,20 @@ Test Results & Metrics
 
 **Primary toolkit for generating robustness test suites.**
 
-Uses [BenchDrift](https://github.com/ritterinvest/BenchDrift) for variation generation and evaluation orchestration.
+Uses [BenchDrift](https://github.ibm.com/Granite-debug/BenchDrift) for variation generation and evaluation orchestration.
 
 - `run_benchdrift_pipeline()`: Generate and execute complete test suite
   - Input: baseline problem + ground truth answer
   - Output: Complete test dataset with variations + m-program answers
   - Returns: All test cases with m-program responses and consistency metrics
-  - **New feature**: `variation_types` parameter to customize which variation types to use
+  - Supports `config_overrides` parameter to customize variation types, models, and all pipeline settings
 
 - `analyze_robustness_from_probes()`: Compute robustness metrics from test results
   - Measures m-program pass rate across all test variations
   - Reports consistency metrics (how stable is m-program?)
   - Identifies failure patterns (where does m-program break?)
 
-### 2. `mellea_model_client_adapter.py`
+### 2. `benchdrift_model_client_adapter.py`
 
 **Enables m-program to work within the BenchDrift test suite framework.**
 
@@ -128,7 +130,7 @@ Input: Baseline problem + Ground truth answer
   │
   ├─→ Initialize m-program: MelleaModelClientAdapter(m_program, m_session)
   │
-  ├─→ run_benchdrift_pipeline(..., variation_types={...})
+  ├─→ run_benchdrift_pipeline(..., config_overrides={...})
   │
   ├─→ Test Stage 1: Generate variations
   │   └─→ result.json: [baseline, variant1, variant2, ...]
@@ -158,16 +160,23 @@ from mellea_contribs.tools.benchdrift_runner import run_benchdrift_pipeline, ana
 m = start_session(backend_name="ollama", model_id="granite3.3:8b")
 
 # 2. Define m-program
+# Note: m_program should take a single string argument (the question/problem)
+# The type hint is Callable[[str, Dict[str, Any]], Any] to allow optional
+# future extensions, but current usage only requires the string parameter
 def m_program(question: str):
     response = m.instruct(description=question, grounding_context={...})
     return response.value if hasattr(response, 'value') else response
 
-# 3. Configure variation types (NEW FEATURE)
-variation_types = {
-    'generic': True,              # Generic semantic variations
-    'cluster_variations': True,   # Cluster-based variations
-    'persona': False,             # Persona-based variations
-    'long_context': False         # Long context variations
+# 3. Configure variation types and other settings
+# Use config_overrides to customize which semantic variations to generate
+# and control all aspects of the pipeline
+config = {
+    'use_generic': True,              # Generic semantic variations
+    'use_cluster_variations': True,   # Cluster-based variations
+    'use_persona': False,             # Persona-based variations
+    'use_long_context': False,        # Long context variations
+    'max_workers': 4,                 # Parallel processing
+    'semantic_threshold': 0.35,       # Semantic similarity threshold
 }
 
 # 4. Generate robustness test suite
@@ -176,8 +185,7 @@ test_suite = run_benchdrift_pipeline(
     ground_truth_answer="Expected answer",
     m_program_callable=m_program,
     mellea_session=m,
-    max_workers=4,
-    variation_types=variation_types
+    config_overrides=config  # Apply custom configuration
 )
 
 # 5. Analyze test results
@@ -186,39 +194,53 @@ print(f"M-program pass rate: {report['overall_pass_rate']:.1%}")
 print(f"Consistency: {report['drift_analysis']}")
 ```
 
-## Variation Types Configuration
+## Configuration Options
 
-The new `variation_types` parameter allows you to customize which semantic variations to generate:
+Customize the robustness testing pipeline using `config_overrides`. All available parameters are documented in `config/benchdrift_config.yaml`:
 
+**Variation Types:**
 ```python
-variation_types = {
-    'generic': True,              # Enable generic semantic variations
-    'cluster_variations': True,   # Enable cluster-based variations
-    'persona': False,             # Disable persona-based variations
-    'long_context': False         # Disable long context variations
+config = {
+    'use_generic': True,              # Generic semantic variations
+    'use_cluster_variations': True,   # Cluster-based variations
+    'use_persona': False,             # Persona-based variations
+    'use_long_context': False,        # Long context variations
 }
 ```
 
-You can enable/disable each variation type independently to focus your robustness testing on specific aspects.
+**Models:**
+```python
+config = {
+    'generation_model': 'phi-4',           # Model for generating variations
+    'judge_model': 'llama_3_3_70b',        # Model for evaluating answers
+    'response_model': 'granite-3-3-8b',    # Default response model
+}
+```
+
+**Processing:**
+```python
+config = {
+    'max_workers': 8,                 # Parallel workers
+    'batch_size': 4,                  # Batch processing size
+}
+```
+
+See `config/benchdrift_config.yaml` for complete documentation of all parameters.
 
 ## Test Example
 
-See `test/1_test_robustness_testing.py` for a complete robustness testing example.
+See `test/test_mprogram_robustness.py` for a complete robustness testing example.
 
-Run: `python test/1_test_robustness_testing.py` (requires `RITS_API_KEY`)
+**Why this test file name?** The test uses BenchDrift to evaluate m-program robustness, not to test BenchDrift itself. The name clarifies that the m-program is under test.
 
-## Test Suite Configuration
+Run: `python test/test_mprogram_robustness.py` (requires `RITS_API_KEY` and Ollama server running)
 
-Customize test generation via `config_overrides` in `run_benchdrift_pipeline()`:
-- Test models: `generation_model`, `response_model`, `judge_model`
-- Evaluation: `semantic_threshold`, `use_llm_judge`
-- Parallelization: `max_workers`
+## Advanced Configuration
 
-Example:
-```python
-config = {
-    'semantic_threshold': 0.4,
-    'max_workers': 8
-}
-test_suite = run_benchdrift_pipeline(..., config_overrides=config)
-```
+For complete control over the testing pipeline, see `config/benchdrift_config.yaml` which documents all available parameters including:
+- Variation types (generic, cluster, persona, long-context)
+- Model selection (generation, judge, response models)
+- Processing parameters (workers, batch size, thresholds)
+- Evaluation settings (LLM judge, semantic thresholds)
+
+All parameters can be overridden via `config_overrides` in `run_benchdrift_pipeline()`.

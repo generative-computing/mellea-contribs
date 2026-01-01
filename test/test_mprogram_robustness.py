@@ -10,6 +10,9 @@ from typing import Any
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+import yaml
+from pathlib import Path
+
 from mellea import start_session
 from mellea.backends.types import ModelOption
 from mellea_contribs.tools.benchdrift_runner import (
@@ -83,17 +86,33 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
 
         return answer
 
-    # --- 4. Generate Probes with BenchDrift + M-Program ---
+    # --- 4. Load BenchDrift Configuration ---
+    # Load config from YAML file
+    config_path = Path(__file__).parent.parent / 'config' / 'benchdrift_config.yaml'
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Extract parameter values (ignore comments)
+    benchdrift_config = {}
+    for key, value in config.items():
+        if isinstance(value, (str, int, float, bool)):
+            benchdrift_config[key] = value
+
+    # Modify config if needed (example - commented out)
+    # benchdrift_config['max_workers'] = 8
+    # benchdrift_config['use_persona'] = True
+
+    # --- 5. Generate Probes with BenchDrift + M-Program ---
     # This calls the full BenchDrift pipeline (3 stages) with m-program
     # Note: RITS_API_KEY environment variable must be set.
     # Now passing only the QUESTION - BenchDrift will generate variants of just the question
     try:
         probes = run_benchdrift_pipeline(
-            baseline_problem=baseline_question,  # Only the question, not full prompt
+            baseline_problem=baseline_question,
             ground_truth_answer=ground_truth_answer,
             m_program_callable=m_program,
             mellea_session=m,
-            max_workers=4
+            config_overrides=benchdrift_config
         )
     except Exception as e:
         print(f"BenchDrift pipeline failed: {e}")
@@ -105,10 +124,10 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
     assert probes is not None
     assert len(probes) > 1
 
-    # --- 5. Analyze Robustness from Probes ---
+    # --- 6. Analyze Robustness from Probes ---
     robustness = analyze_robustness_from_probes(probes)
 
-    # --- 6. Assert the Results ---
+    # --- 7. Assert the Results ---
     print("\n--- Robustness Testing Results ---")
     print(f"Overall pass rate: {robustness['overall_pass_rate']:.2%}")
     print(f"Total variants tested: {robustness['total_variants']}")

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import tempfile
 from typing import List, Dict, Any, Callable, Optional, Tuple
 
@@ -11,7 +12,7 @@ from mellea import MelleaSession
 from mellea.backends.types import ModelOption
 
 # Import the enhanced adapter
-from mellea_contribs.tools.mellea_model_client_adapter import MelleaModelClientAdapter
+from mellea_contribs.tools.benchdrift_model_client_adapter import MelleaModelClientAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +23,27 @@ def run_benchdrift_pipeline(
     ground_truth_answer: str,
     m_program_callable: Optional[Callable[[str, Dict[str, Any]], Any]] = None,
     mellea_session: Optional[MelleaSession] = None,
-    response_model: Optional[str] = None,
-    judge_model: Optional[str] = None,
-    generation_model: Optional[str] = None,
     answer_extractor: Optional[Callable[[Any], str]] = None,
-    max_workers: int = 4,
     config_overrides: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    """Execute 3-stage BenchDrift pipeline (variations → responses → evaluation)."""
+    """Execute 3-stage BenchDrift pipeline (variations → responses → evaluation).
+
+    Args:
+        baseline_problem: The problem/question to generate variations for
+        ground_truth_answer: The expected correct answer
+        m_program_callable: Optional m-program function to test
+        mellea_session: Optional Mellea session (required if m_program_callable provided)
+        answer_extractor: Optional function to extract answer from m-program response
+        config_overrides: Configuration parameters (load from config/benchdrift_config.yaml
+                         in your test script and pass here)
+
+    Returns:
+        List of probe results with variations, responses, and evaluation metrics
+
+    Note:
+        Load config in your test script from config/benchdrift_config.yaml, modify as needed,
+        and pass via config_overrides. This makes configuration transparent and customizable.
+    """
     # Validate m-program parameters
     if (m_program_callable is None) != (mellea_session is None):
         raise ValueError(
@@ -40,9 +54,12 @@ def run_benchdrift_pipeline(
     # Create input data
     input_problem_data = [{"problem": baseline_problem, "answer": ground_truth_answer}]
 
-    # Initialize config
+    # Validate config is provided
     if config_overrides is None:
-        config_overrides = {}
+        raise ValueError(
+            "config_overrides is required. Load config from config/benchdrift_config.yaml "
+            "in your test script and pass it here."
+        )
 
     # Prepare temporary files
     with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".json") as temp_input_file:
@@ -54,34 +71,12 @@ def run_benchdrift_pipeline(
     temp_output_filename = os.path.join(temp_dir, f"benchdrift_output_{os.getpid()}_{id(input_problem_data)}.json")
 
     try:
-        # Build pipeline config
+        # Build pipeline config from user-provided configuration
         config_semantic = {
             'unified_file': temp_output_filename,
             'input_problems': temp_input_filename,
-            'batch_size': 2,
-            'max_workers': 4,
-            'client_type': 'rits',
-            'model_name': generation_model or 'phi-4',
-            'judge_model': judge_model or 'llama_3_3_70b',
-            'response_model': response_model or 'granite-3-3-8b',
-            'response_client_type': 'rits',
-            'use_llm_judge': True,
-            'rectify_invalid': True,
-            'max_model_len': 5000,
-            'max_new_tokens': 1000,
-            'embedding_model': 'all-MiniLM-L6-v2',
-            'semantic_threshold': 0.35,
-            'use_cagrad_dependencies': False,
-            'use_generic': True,
-            'use_cluster_variations': True,
-            'use_persona': False,
-            'use_long_context': False,
-            'verbose': False,
+            **config_overrides,  # User config loaded from YAML in test script
         }
-
-        # Apply user overrides
-        if config_overrides:
-            config_semantic.update(config_overrides)
 
         # If m-program provided: create adapter and use it as response model
         if m_program_callable is not None:
@@ -90,7 +85,7 @@ def run_benchdrift_pipeline(
                 m_program_callable=m_program_callable,
                 mellea_session=mellea_session,
                 answer_extractor=answer_extractor,
-                max_workers=max_workers
+                max_workers=config_semantic.get('max_workers', 4)
             )
             # Override response_model to use the adapter
             config_semantic['response_model'] = adapter

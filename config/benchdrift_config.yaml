@@ -1,0 +1,131 @@
+# BenchDrift Pipeline Configuration
+# This file contains all configurable parameters for the BenchDrift robustness testing pipeline.
+# These parameters can be overridden at runtime using the config_overrides parameter in run_benchdrift_pipeline().
+
+# ====================
+# Pipeline Settings
+# ====================
+
+# Batch processing
+batch_size: 2
+  # Number of problems to process in each batch
+  # Smaller batches use less memory but may be slower
+  # Larger batches are faster but require more memory
+
+# Parallel processing
+max_workers: 4
+  # Maximum number of parallel worker threads for processing
+  # Increase for faster processing (if you have more CPU cores)
+  # Decrease if you experience memory issues or API rate limits
+
+# ====================
+# Model Configuration
+# ====================
+
+# Client type for model access
+client_type: "rits"
+  # Options: "rits", "vllm", "custom"
+  # Specifies which model client to use for variation generation
+
+response_client_type: "rits"
+  # Options: "rits", "vllm", "custom"
+  # Specifies which model client to use for response generation
+
+# Model names
+model_name: "phi-4"
+  # Model used for generating semantic variations
+  # This is the "generation model" that creates different phrasings of your problem
+
+judge_model: "llama_3_3_70b"
+  # Model used for evaluating whether responses are correct
+  # This is the "judge model" that compares m-program answers to ground truth
+
+response_model: "granite-3-3-8b"
+  # Model used for generating responses (if not using m-program)
+  # When testing m-programs, this is overridden by the m-program adapter
+
+# ====================
+# Model Parameters
+# ====================
+
+max_model_len: 5000
+  # Maximum context length for models (in tokens)
+  # Increase if you have long prompts or need more context
+  # Decrease to save memory and improve speed
+
+max_new_tokens: 1000
+  # Maximum number of tokens to generate in responses
+  # Increase for longer, more detailed answers
+  # Decrease for shorter, more concise answers
+
+# ====================
+# Variation Generation
+# ====================
+
+# Variation types to enable
+use_generic: true
+  # Enable generic semantic variations
+  # Creates general rephrasing of the problem
+  # Recommended: true (provides broad coverage)
+
+use_cluster_variations: false
+  # Enable cluster-based variations
+  # Groups similar problems and creates variations within clusters
+  # Recommended: true (provides targeted variations)
+
+use_persona: false
+  # Enable persona-based variations
+  # Creates variations as if different personas are asking the question
+  # Set to true if testing how m-program handles different user styles
+
+use_long_context: false
+  # Enable long-context variations
+  # Adds additional context and information to problems
+  # Set to true if testing m-program's ability to handle verbose inputs
+
+use_cagrad_dependencies: false
+  # Enable CAGRAD dependency analysis
+  # Advanced feature for analyzing problem dependencies
+  # Set to true only if you need CAGRAD fragment scoring
+
+# ====================
+# Evaluation Settings
+# ====================
+
+use_llm_judge: true
+  # Use LLM-based judging for answer evaluation
+  # true: Use LLM to compare answers semantically (more flexible, handles variations)
+  # false: Use exact string matching (strict, less flexible)
+  # Recommended: true (better for semantic equivalence)
+
+semantic_threshold: 0.35
+  # Threshold for semantic similarity detection (0.0 to 1.0)
+  # Lower values: More variations considered semantically similar (more strict filtering)
+  # Higher values: Fewer variations filtered out (more permissive)
+  # Recommended: 0.35 for balanced filtering
+
+rectify_invalid: true
+  # Attempt to fix invalid variations automatically
+  # true: Try to correct malformed variations
+  # false: Discard invalid variations
+  # Recommended: true (maximizes usable variations)
+
+# ====================
+# Embedding Model
+# ====================
+
+embedding_model: "all-MiniLM-L6-v2"
+  # Model used for computing semantic embeddings
+  # Used for detecting semantic similarity between variations
+  # Options: "all-MiniLM-L6-v2", "all-mpnet-base-v2", etc.
+  # Recommended: "all-MiniLM-L6-v2" (good balance of speed and quality)
+
+# ====================
+# Output Settings
+# ====================
+
+verbose: false
+  # Enable verbose logging
+  # true: Print detailed progress and debug information
+  # false: Minimal logging
+  # Set to true for debugging or detailed monitoring
