@@ -7,20 +7,20 @@ Quick setup guide for running robustness tests on Mellea m-programs.
 - **Python 3.10+**
 - **Git**
 - **Ollama** - Download from https://ollama.com/download
-- **IBM GitHub Access** - Required for BenchDrift repository
+- **GitHub Access** - For cloning BenchDrift repository
 
 ## Installation Steps
 
 ### 1. Clone and Install BenchDrift
 
 ```bash
-git clone https://github.ibm.com/Granite-debug/BenchDrift.git BenchDrift-Pipeline
+git clone https://github.com/IBM/BenchDrift.git BenchDrift-Pipeline
 cd BenchDrift-Pipeline
 pip install -e .
 cd ..
 ```
 
-**Note:** BenchDrift is currently IBM-internal. Contact your administrator if you don't have access.
+**Note:** BenchDrift is publicly available on GitHub.
 
 ### 2. Clone and Install Mellea
 
@@ -76,7 +76,6 @@ python test/test_mprogram_robustness.py
 ## Troubleshooting
 
 **BenchDrift import fails:**
-- Ensure you have access to IBM's internal GitHub
 - Try reinstalling: `cd BenchDrift-Pipeline && pip install -e .`
 
 **RITS_API_KEY not set:**

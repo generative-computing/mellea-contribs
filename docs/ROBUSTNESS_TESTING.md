@@ -7,13 +7,13 @@ Evaluate m-program consistency by testing against semantic variations of a basel
 ### Step 1: Install BenchDrift
 Install BenchDrift from source (required for robustness testing pipeline):
 ```bash
-git clone https://github.ibm.com/Granite-debug/BenchDrift.git BenchDrift-Pipeline
+git clone https://github.com/IBM/BenchDrift.git BenchDrift-Pipeline
 cd BenchDrift-Pipeline
 pip install -e .
 cd ..
 ```
 
-**Important:** BenchDrift is currently hosted on IBM's internal GitHub. You need access to IBM's internal repositories to run these tests. The codebase is in the process of being approved for public placement. If you don't have access, please contact your IBM administrator or the BenchDrift maintainers.
+**Note:** BenchDrift is now publicly available on GitHub.
 
 ### Step 2: Install mellea-contribs
 Install mellea-contribs in editable mode:
@@ -99,7 +99,7 @@ Test Results & Metrics
 
 **Primary toolkit for generating robustness test suites.**
 
-Uses [BenchDrift](https://github.ibm.com/Granite-debug/BenchDrift) for variation generation and evaluation orchestration.
+Uses [BenchDrift](https://github.com/IBM/BenchDrift) for variation generation and evaluation orchestration.
 
 - `run_benchdrift_pipeline()`: Generate and execute complete test suite
   - Input: baseline problem + ground truth answer
