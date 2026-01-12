@@ -21,7 +21,7 @@ def database():
     """
     Load the real metadata DB.
     """
-    db_path = "/Users/anooshkapendyal/mellea-contribs/test/citation_exists_database.json"
+    db_path = "./test/citation_exists_database.json"
     with open(db_path) as f:
         return json.load(f)
     
@@ -30,7 +30,7 @@ def small_database():
     """
     Load the real metadata DB (small version).
     """
-    small_db_path = "/Users/anooshkapendyal/mellea-contribs/test/small_citation_exists_database.json"
+    small_db_path = "./test/small_citation_exists_database.json"
     with open(small_db_path) as f:
         return json.load(f)
 
