@@ -1,13 +1,25 @@
-from mellea_contribs.reqlib.check_AL_statutes import (
-    parse_AL,
-    check_AL,
-    validate_AL_statutes,
-    get_AL_statutes,
-)
+import gc
+
+import pytest
 
 from mellea import start_session
 from mellea.stdlib.requirement import req
 from mellea.stdlib.sampling import RejectionSamplingStrategy
+from mellea_contribs.reqlib.check_AL_statutes import (
+    check_AL,
+    get_AL_statutes,
+    parse_AL,
+    validate_AL_statutes,
+)
+
+
+@pytest.fixture(scope="function")
+def m_session(gh_run):
+    """Session fixture for tests requiring LLM."""
+    m = start_session()
+    yield m
+    del m
+    gc.collect()
 
 
 def test_parse_AL():
@@ -23,8 +35,8 @@ def test_parse_AL():
     assert check_AL(parse_AL(text)) == [False, True]
 
 
-def test_validate_AL_statutes():
-    m = start_session()
+def test_validate_AL_statutes(m_session):
+    m = m_session
     generate_AL_statutes = m.instruct(
         "Generate a list of Alabama statute citations with a title number between 1 and 10A, inclusive, according to Bluebook format, namely 'Ala. Code §[title]-[section]-[rest] (year)'. Ensure that at all citations are valid and exist in the Alabama Code.",
         requirements=[

@@ -1,18 +1,28 @@
-import pytest
+import gc
 import os
 
-from mellea_contribs.reqlib.is_appellate_case import (
-    load_jsons_from_folder,
-    get_court_from_case,
-    is_appellate_court_fullname,
-    court_abbv_from_citation,
-    is_appellate_court_abbv,
-    is_appellate_case,
-)
+import pytest
 
 from mellea import start_session
 from mellea.stdlib.requirement import req
 from mellea.stdlib.sampling import RejectionSamplingStrategy
+from mellea_contribs.reqlib.is_appellate_case import (
+    court_abbv_from_citation,
+    get_court_from_case,
+    is_appellate_case,
+    is_appellate_court_abbv,
+    is_appellate_court_fullname,
+    load_jsons_from_folder,
+)
+
+
+@pytest.fixture(scope="function")
+def m_session(gh_run):
+    """Session fixture for tests requiring LLM."""
+    m = start_session()
+    yield m
+    del m
+    gc.collect()
 
 
 # ---------- #
@@ -140,9 +150,9 @@ def test_is_appellate_case():
         assert result.as_bool() == expected_appellate, f"Failed for input: {input}"
 
 
-def test_appellate_case_session():
+def test_appellate_case_session(m_session):
     case_name = "ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT"
-    m = start_session()
+    m = m_session
     appellate_case = m.instruct(
         f"Return the following string (only return the characters after the colon, no other words): {case_name}",
         requirements=[
