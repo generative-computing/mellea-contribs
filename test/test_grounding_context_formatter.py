@@ -58,7 +58,7 @@ def test_returns_template_representation():
     print("PASS?", isinstance(result, TemplateRepresentation) and "ok!" in content)
 
 
-def test_long_user_prompt_and_context(user_prompt, grounding_context, example_name):
+def _test_long_user_prompt_and_context(user_prompt, grounding_context, example_name):
     print_header(f"TEST: Long user_prompt and grounding_context ({example_name})")
 
     comp = GroundingContextFormatter(
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         }
     }
 
-    test_long_user_prompt_and_context(
+    _test_long_user_prompt_and_context(
         tap_user_prompt, tap_grounding_context, "TaP / SRE Example"
     )
 
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         }
     }
 
-    test_long_user_prompt_and_context(
+    _test_long_user_prompt_and_context(
         weather_user_prompt, weather_grounding_context, "Weather Agent Example"
     )
 

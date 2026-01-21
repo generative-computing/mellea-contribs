@@ -150,6 +150,7 @@ def test_is_appellate_case():
         assert result.as_bool() == expected_appellate, f"Failed for input: {input}"
 
 
+@pytest.mark.qualitative
 def test_appellate_case_session(m_session):
     case_name = "ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT"
     m = m_session
