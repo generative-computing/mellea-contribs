@@ -1,0 +1,33 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.5
+    hooks:
+      - id: ruff-format
+        name: "Ruff formatter"
+        args: [--config=pyproject.toml]
+        files: '^(mellea_contribs|test).*\.(py|ipynb)$'
+      - id: ruff
+        name: "Ruff linter"
+        args: [--exit-non-zero-on-fix, --fix, --config=pyproject.toml]
+        files: '^(mellea_contribs).*\.(py|ipynb)$'
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: MyPy
+        entry: uv run --no-sync mypy mellea_contribs
+        pass_filenames: false
+        language: system
+        files: '^(mellea_contribs|test).*\.(py|ipynb)$'
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.7.8
+    hooks:
+      - id: uv-lock
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli
