@@ -1,5 +1,4 @@
-"""
-Author: IBM Research – Mellea Agent Team
+"""Author: IBM Research – Mellea Agent Team
 Maintainer: Mellea Agent - IBM Research
 
 Purpose: Generic Double Round Robin (DRR) engine for Mellea agents.DRR performs pairwise comparisons between multiple items, using LLM judgment.
@@ -18,48 +17,50 @@ When should an agent use it?
 """
 
 import json
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
 from mellea.backends.types import ModelOption
+from mellea.helpers.fancy_logger import FancyLogger
 from mellea.stdlib.requirement import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
-from mellea.helpers.fancy_logger import FancyLogger
 
 logger = FancyLogger.get_logger()
 
-DRR_CACHE: Dict[str, Any] = {}
+DRR_CACHE: dict[str, Any] = {}
 
-def cache_key(items: List[Any], context: Any, prompt: str) -> str:
+
+def cache_key(items: list[Any], context: Any, prompt: str) -> str:
     return f"{hash(str(items))}::{hash(str(context))}::{hash(prompt)}"
+
 
 def cached(fn):
     def wrapper(*args, **kwargs):
         key = cache_key(
             kwargs.get("items") or args[0],
             kwargs.get("context") or args[3] if len(args) > 3 else None,
-            kwargs.get("comparison_prompt") or args[1]
+            kwargs.get("comparison_prompt") or args[1],
         )
         if key in DRR_CACHE:
             return DRR_CACHE[key]
         result = fn(*args, **kwargs)
         DRR_CACHE[key] = result
         return result
+
     return wrapper
 
 
 def extract_choice(raw: str) -> str:
-    cleaned = raw.strip().strip('\'" .!?\n\r\t').upper()
+    cleaned = raw.strip().strip("'\" .!?\n\r\t").upper()
     if cleaned.startswith("A"):
         return "A"
     if cleaned.startswith("B"):
         return "B"
     return None
 
-def compare_pair(item_a: Any,
-                 item_b: Any,
-                 comparison_prompt: str,
-                 m,
-                 context: Optional[Any] = None) -> Optional[str]:
 
+def compare_pair(
+    item_a: Any, item_b: Any, comparison_prompt: str, m, context: Any | None = None
+) -> str | None:
     try:
         prompt = f"""
         Option A:
@@ -77,7 +78,9 @@ def compare_pair(item_a: Any,
         logger.warning(f"Failed to construct prompt: {e}")
         return None
 
-    system_prompt = "You are a terse pairwise selector. Output exactly one token: A or B."
+    system_prompt = (
+        "You are a terse pairwise selector. Output exactly one token: A or B."
+    )
 
     validator = lambda s: extract_choice(s) in ["A", "B"]
 
@@ -85,7 +88,9 @@ def compare_pair(item_a: Any,
         prompt,
         grounding_context=context if context else None,
         model_options={ModelOption.SYSTEM_PROMPT: system_prompt},
-        requirements=[req("Response must be 'A' or 'B'", validation_fn=simple_validate(validator))],
+        requirements=[
+            req("Response must be 'A' or 'B'", validation_fn=simple_validate(validator))
+        ],
         strategy=RejectionSamplingStrategy(loop_budget=2),
     )
 
@@ -93,14 +98,13 @@ def compare_pair(item_a: Any,
     winner = extract_choice(raw)
     return winner  # can be None if model output is invalid
 
-@cached
-def double_round_robin(items: List[Any],
-                       comparison_prompt: str,
-                       m,
-                       context: Optional[Any] = None) -> List[Tuple[Any, int]]:
 
+@cached
+def double_round_robin(
+    items: list[Any], comparison_prompt: str, m, context: Any | None = None
+) -> list[tuple[Any, int]]:
     n = len(items)
-    scores = {i: 0 for i in range(n)}  # index → score
+    scores = dict.fromkeys(range(n), 0)  # index → score
 
     for i in range(n):
         for j in range(i + 1, n):
