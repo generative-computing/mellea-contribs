@@ -38,6 +38,3 @@ def test_validate_AL_statutes():
     )
     print("Generated Alabama Statutes:", generate_AL_statutes.value)
     assert generate_AL_statutes.success
-
-
-test_validate_AL_statutes()

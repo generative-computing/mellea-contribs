@@ -9,6 +9,7 @@ concurrency:
 
 env:
   CICD: 1
+  OLLAMA_HOST: "127.0.0.1:5000"
 
 jobs:
   quality:
@@ -42,6 +43,12 @@ jobs:
       # - name: Send failure message pre-commit
       #   if: failure()
       #   run: echo "The quality verification failed. Please run precommit "
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama
+        run: nohup ollama serve &
+      - name: Pull model granite4:micro
+        run: ollama pull granite4:micro
       - name: Run Tests
         run: uv run -m pytest -v test
       - name: Send failure message tests
