@@ -12,22 +12,22 @@ ITEMS = [
         "latency": "500",
         "severity": "3",
         "logs": ["error connecting to database", "timeout on API call"],
-        "severe_signal": "True"
+        "severe_signal": "True",
     },
     {
         "name": "adService",
         "latency": "50",
         "severity": "1",
         "logs": ["all systems normal"],
-        "severe_signal": "False"
+        "severe_signal": "False",
     },
     {
         "name": "payment-svc",
         "latency": "900",
         "severity": "4",
         "logs": ["authorization timeout", "spike in errors"],
-        "severe_signal": "True"
-    }
+        "severe_signal": "True",
+    },
 ]
 
 

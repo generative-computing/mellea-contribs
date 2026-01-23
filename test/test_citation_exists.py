@@ -5,17 +5,20 @@ from unittest.mock import patch, MagicMock
 from mellea.stdlib.base import Context
 from mellea_contribs.reqlib.citation_exists import *
 
+
 class MockContext:
     """
     Minimal mock of Mellea Context API.
     """
+
     def __init__(self, value):
         self._value = value
 
     def last_output(self):
         # last_output() should return a string, not an object
         return self._value
-    
+
+
 @pytest.fixture
 def database():
     """
@@ -24,7 +27,8 @@ def database():
     db_path = "./test/citation_exists_database.json"
     with open(db_path) as f:
         return json.load(f)
-    
+
+
 @pytest.fixture
 def small_database():
     """
@@ -36,6 +40,7 @@ def small_database():
 
 
 # region text_to_urls tests
+
 
 def test_text_to_urls_basic_extraction():
     """
@@ -79,10 +84,12 @@ def test_text_to_urls_empty_text():
 
     assert urls == {}
 
+
 # endregion
 
 
 # region extract_case_metadata_url test
+
 
 def test_extract_case_metadata_url_nonstandard():
     """
@@ -106,7 +113,9 @@ def test_extract_case_metadata_url_bad():
         mock_page = MagicMock()
 
         # Configure playwright mock chain
-        mock_pw.return_value.__enter__.return_value.chromium.launch.return_value = mock_browser
+        mock_pw.return_value.__enter__.return_value.chromium.launch.return_value = (
+            mock_browser
+        )
         mock_browser.new_page.return_value = mock_page
 
         # Simulate "Download case metadata" link NOT found
@@ -117,9 +126,11 @@ def test_extract_case_metadata_url_bad():
     assert result.as_bool() is False
     assert "no metadata link found on page" in result.reason.lower()
 
+
 # endregion
 
 # region collect_ids test
+
 
 def test_collect_ids_in_database(small_database):
     """
@@ -127,11 +138,13 @@ def test_collect_ids_in_database(small_database):
     """
     result = collect_ids_in_database(small_database)
     assert result == {6714178, 6714194}
-    
+
+
 # endregion
 
 
 # region parse_db_cite tests
+
 
 @pytest.mark.parametrize(
     "cite,expected",
@@ -145,7 +158,6 @@ def test_collect_ids_in_database(small_database):
         ("7 Va. 418", ("7", "va", "418")),
     ],
 )
-
 def test_parse_db_cite_valid_cases(cite, expected):
     """
     Verifies that parse_db_cite correctly parses volume, normalized reporter,
@@ -175,6 +187,7 @@ def test_parse_db_cite_extra_whitespace():
 
 
 # region build_citation_index tests
+
 
 def test_build_citation_index_small_database(small_database):
     """
@@ -206,18 +219,16 @@ def test_build_citation_index_ignores_unparseable_citations():
 
     assert result == {("1", "va", "1")}
 
+
 # endregion
 
 
 # region non_caselaw_citation_exists tests
 
+
 class MockEyeciteCitation:
     def __init__(self, volume, reporter, page):
-        self.groups = {
-            "volume": volume,
-            "reporter": reporter,
-            "page": page,
-        }
+        self.groups = {"volume": volume, "reporter": reporter, "page": page}
 
 
 def test_non_caselaw_citation_exists_match_found(small_database):
@@ -252,16 +263,21 @@ def test_non_caselaw_citation_exists_no_citations(small_database):
     """
     with patch("mellea_contribs.reqlib.citation_exists.get_citations") as mock_get:
         mock_get.return_value = []
-        result = non_caselaw_citation_exists("quoting Theatre Enterprises, Inc. v. Paramount Film Distributing Corp., 346 U. S. 537, 541 (1954)", small_database)
+        result = non_caselaw_citation_exists(
+            "quoting Theatre Enterprises, Inc. v. Paramount Film Distributing Corp., 346 U. S. 537, 541 (1954)",
+            small_database,
+        )
 
     assert isinstance(result, ValidationResult)
     assert result.as_bool() is False
     assert "parsing citations" in result.reason.lower()
 
+
 # endregion
 
 
 # region citation_exists tests (context failures)
+
 
 def test_citation_exists_no_context(database):
     """
@@ -291,10 +307,12 @@ def test_citation_exists_last_output_not_string(database):
     with pytest.raises(TypeError):
         citation_exists(ctx, database)
 
+
 # endregion
 
 
 # region citation_exists tests (no citations)
+
 
 def test_citation_exists_no_citations(database):
     """
@@ -309,12 +327,14 @@ def test_citation_exists_no_citations(database):
     assert result.as_bool() is True
     assert "no citations found" in result.reason.lower()
 
+
 # endregion
 
 
 # region citation_exists tests (main validation logic)
 
 # subregion citations with case.law URL
+
 
 def test_citation_exists_case_found(database):
     """
@@ -323,12 +343,19 @@ def test_citation_exists_case_found(database):
     """
     ctx = MockContext("Some citation")
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.extract_case_metadata_url") as extracted_metadata_url, \
-         patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta:
-
-        text_to_url.return_value = {"https://cite.case.law/us/111/222": "Some citation text"}
-        extracted_metadata_url.return_value = "https://cite.case.law/us/111/222/metadata.json"
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.extract_case_metadata_url"
+        ) as extracted_metadata_url,
+        patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta,
+    ):
+        text_to_url.return_value = {
+            "https://cite.case.law/us/111/222": "Some citation text"
+        }
+        extracted_metadata_url.return_value = (
+            "https://cite.case.law/us/111/222/metadata.json"
+        )
 
         # Pick a real ID from the database
         real_id = next(iter({d["id"] for d in database}))
@@ -346,12 +373,19 @@ def test_citation_exists_case_missing_from_db(database):
     """
     ctx = MockContext("Some citation")
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.extract_case_metadata_url") as extracted_metadata_url, \
-         patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta:
-
-        text_to_url.return_value = {"https://cite.case.law/us/333/444": "Some citation text"}
-        extracted_metadata_url.return_value = "https://cite.case.law/us/333/444/metadata.json"
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.extract_case_metadata_url"
+        ) as extracted_metadata_url,
+        patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta,
+    ):
+        text_to_url.return_value = {
+            "https://cite.case.law/us/333/444": "Some citation text"
+        }
+        extracted_metadata_url.return_value = (
+            "https://cite.case.law/us/333/444/metadata.json"
+        )
         meta.return_value = {"id": "NON_EXISTENT_CASE_ID"}
 
         result = citation_exists(ctx, database)
@@ -364,13 +398,9 @@ def test_citation_exists_real_case_law_case(database):
     """
     Tests using a real case.law URL.
     """
-    ctx = MockContext(
-        "See Smith v. State, 154 Ala. 1 (1907)."
-    )
+    ctx = MockContext("See Smith v. State, 154 Ala. 1 (1907).")
 
-    real_case_url = (
-        "https://case.law/caselaw/?reporter=ala&volume=154&case=0001-01"
-    )
+    real_case_url = "https://case.law/caselaw/?reporter=ala&volume=154&case=0001-01"
 
     real_metadata = {
         "id": 5668189,
@@ -378,9 +408,10 @@ def test_citation_exists_real_case_law_case(database):
         "citations": ["154 Ala. 1"],
     }
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.requests.get") as mock_get:
-
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch("mellea_contribs.reqlib.citation_exists.requests.get") as mock_get,
+    ):
         text_to_url.return_value = {real_case_url: "Smith v. State, 154 Ala. 1 (1907)"}
 
         mock_resp = MagicMock()
@@ -392,9 +423,11 @@ def test_citation_exists_real_case_law_case(database):
 
     assert result.as_bool() is True
 
+
 # endsubregion
 
 # subregion citations without case.law URL
+
 
 def test_citation_exists_non_caselaw_hard_failure(database):
     """
@@ -406,12 +439,13 @@ def test_citation_exists_non_caselaw_hard_failure(database):
 
     failure = ValidationResult(False, reason="Eyecite parsing failed")
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists") as non_case:
-
-        text_to_url.return_value = {
-            "https://shmeegus.com/non-caselaw": "bad citation"
-        }
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists"
+        ) as non_case,
+    ):
+        text_to_url.return_value = {"https://shmeegus.com/non-caselaw": "bad citation"}
         non_case.return_value = failure
 
         result = citation_exists(ctx, database)
@@ -423,16 +457,17 @@ def test_citation_exists_non_caselaw_hard_failure(database):
 def test_citation_exists_non_caselaw_deterministic_match(database):
     """
     Tests that if non_caselaw_citation_exists returns True, citation_exists should pass.
-    Tests Case 2: deterministic match found 
+    Tests Case 2: deterministic match found
     """
     ctx = MockContext("Some citation")
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists") as non_case:
-
-        text_to_url.return_value = {
-            "https://shmeegus.com/non-caselaw": "1 Wash. 1"
-        }
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists"
+        ) as non_case,
+    ):
+        text_to_url.return_value = {"https://shmeegus.com/non-caselaw": "1 Wash. 1"}
         non_case.return_value = True
 
         result = citation_exists(ctx, database)
@@ -447,9 +482,12 @@ def test_citation_exists_non_caselaw_inconclusive_allowed(database):
     """
     ctx = MockContext("Some citation")
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists") as non_case:
-
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists"
+        ) as non_case,
+    ):
         text_to_url.return_value = {
             "https://shmeegus.com/non-caselaw": "67 Shmeegus. 999"
         }
@@ -460,9 +498,11 @@ def test_citation_exists_non_caselaw_inconclusive_allowed(database):
     assert result.as_bool() is True
     assert "non-case.law citations did not fail" in result.reason.lower()
 
+
 # endsubregion
 
 # subregion mixed case.law and non-case.law test
+
 
 def test_citation_exists_mixed_case_and_non_case(database):
     """
@@ -473,11 +513,16 @@ def test_citation_exists_mixed_case_and_non_case(database):
 
     real_id = next(iter({d["id"] for d in database}))
 
-    with patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url, \
-         patch("mellea_contribs.reqlib.citation_exists.extract_case_metadata_url") as extract, \
-         patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta, \
-         patch("mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists") as non_case:
-
+    with (
+        patch("mellea_contribs.reqlib.citation_exists.text_to_urls") as text_to_url,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.extract_case_metadata_url"
+        ) as extract,
+        patch("mellea_contribs.reqlib.citation_exists.metadata_url_to_json") as meta,
+        patch(
+            "mellea_contribs.reqlib.citation_exists.non_caselaw_citation_exists"
+        ) as non_case,
+    ):
         text_to_url.return_value = {
             "https://cite.case.law/us/111/222": "Real case",
             "https://shmeegus.com/non-caselaw": "Ambiguous citation",
@@ -490,6 +535,7 @@ def test_citation_exists_mixed_case_and_non_case(database):
         result = citation_exists(ctx, database)
 
     assert result.as_bool() is True
+
 
 # endsubregion
 

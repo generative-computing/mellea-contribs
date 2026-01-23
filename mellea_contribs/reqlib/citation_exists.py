@@ -1,13 +1,13 @@
-from mellea.stdlib.requirement import Requirement, ValidationResult
-from mellea.stdlib.base import Context
-from eyecite import get_citations
-from citeurl import Citator
-from typing import Any, Optional
-from playwright.sync_api import sync_playwright
-from urllib.parse import urljoin, urlparse, parse_qs
-
 import json
+from typing import Any, Optional
+from urllib.parse import parse_qs, urljoin, urlparse
+
 import requests
+from citeurl import Citator
+from eyecite import get_citations
+from mellea.stdlib.base import Context
+from mellea.stdlib.requirement import Requirement, ValidationResult
+from playwright.sync_api import sync_playwright
 
 # region citation_exists helpers
 
@@ -28,9 +28,9 @@ Process:
 5. If all succeed, return ValidationResult(True).
 """
 
+
 def text_to_urls(text: str) -> dict[str, str] | ValidationResult:
-    """
-    Extracts all citation URLs from the given text using citeurl.
+    """Extracts all citation URLs from the given text using citeurl.
 
     Args:
         text: An LLM output
@@ -54,7 +54,7 @@ def text_to_urls(text: str) -> dict[str, str] | ValidationResult:
             urls[citation.URL] = citation.text
         else:
             # Record a descriptive error about the invalid citation object
-            errors.append(f"Citation has no URL attribute: {repr(citation)}")
+            errors.append(f"Citation has no URL attribute: {citation!r}")
 
     if errors:
         # Raise one combined error
@@ -65,8 +65,7 @@ def text_to_urls(text: str) -> dict[str, str] | ValidationResult:
 
 
 def extract_case_metadata_url(case_url: str) -> ValidationResult | str:
-    """
-    Converts a case.law URL to the corresponding static JSON metadata URL.
+    """Converts a case.law URL to the corresponding static JSON metadata URL.
 
     Args:
         case_url: A cite.case.law page
@@ -90,28 +89,32 @@ def extract_case_metadata_url(case_url: str) -> ValidationResult | str:
             browser = pw.chromium.launch()
             page = browser.new_page()
             page.goto(case_url)
-            
+
             # Wait for the metadata link to appear
             link = page.wait_for_selector("a:has-text('Download case metadata')")
             browser.close()
 
             if not link:
-                return ValidationResult(False, reason=f"No metadata link found on page: {case_url}")
+                return ValidationResult(
+                    False, reason=f"No metadata link found on page: {case_url}"
+                )
 
             # Extract relative href
             href = link.get_attribute("href")
             if not href:
-                return ValidationResult(False, reason=f"Metadata link missing href attribute on page: {case_url}")
+                return ValidationResult(
+                    False,
+                    reason=f"Metadata link missing href attribute on page: {case_url}",
+                )
 
             # Build the absolute metadata URL
             return urljoin(case_url, href)
-        
+
     return f"https://static.case.law/{reporter}/{volume}/cases/{case}.json"
-    
+
 
 def metadata_url_to_json(metadata_url: str) -> dict:
-    """
-    Fetches JSON metadata for a case.
+    """Fetches JSON metadata for a case.
 
     Args:
         metadata_url: Fully-qualified URL to metadata.json
@@ -125,8 +128,7 @@ def metadata_url_to_json(metadata_url: str) -> dict:
 
 
 def collect_ids_in_database(database: list[dict]) -> set:
-    """
-    Collects all case IDs from the provided caselaw metadata.
+    """Collects all case IDs from the provided caselaw metadata.
 
     Args:
         database: A list of case dictionaries loaded from a caselaw JSON dataset.
@@ -138,8 +140,7 @@ def collect_ids_in_database(database: list[dict]) -> set:
 
 
 def parse_db_cite(cite: str) -> tuple:
-    """
-    Given a citation in the form of a string, return a normalized tuple breaking the
+    """Given a citation in the form of a string, return a normalized tuple breaking the
     volume, reporter, and page into distinct parts.
 
     Args:
@@ -164,8 +165,7 @@ def parse_db_cite(cite: str) -> tuple:
 
 
 def build_citation_index(database: list[dict]) -> set[tuple]:
-    """
-    Extract all of the citations in the database for easy comparison.
+    """Extract all of the citations in the database for easy comparison.
 
     Args:
         database: A list of case dictionaries loaded from a caselaw JSON dataset.
@@ -185,20 +185,21 @@ def build_citation_index(database: list[dict]) -> set[tuple]:
     return index
 
 
-def non_caselaw_citation_exists(text: str, database: list[dict]) -> bool | ValidationResult:
-    """
-    Given the text corresponding to a citation, check whether that citation can matched to
+def non_caselaw_citation_exists(
+    text: str, database: list[dict]
+) -> bool | ValidationResult:
+    """Given the text corresponding to a citation, check whether that citation can matched to
     the cases in the database.
 
     We first use a deterministic approach, like by matching against citations in the database.
     Then, we fuzzy match across features like case name, volume, and year.
     Finally, we resort to using LLM-as-a-judge to determine if a match exists.
 
-    Args: 
+    Args:
         text: A string containing a citation.
         database: A list of case dictionaries loaded from a caselaw JSON dataset.
 
-    Returns: 
+    Returns:
         Boolean indicating whether a match was found or ValidationResult if there was an error.
     """
     # The citations field in the original database represents how each case can be cited,
@@ -211,16 +212,19 @@ def non_caselaw_citation_exists(text: str, database: list[dict]) -> bool | Valid
 
     # Return False ValidationResult if multiple or no citations have been found in the text.
     if len(citations) != 1:
-        return ValidationResult(False, reason="Error from parsing citations with eyecite.")
-    
+        return ValidationResult(
+            False, reason="Error from parsing citations with eyecite."
+        )
+
     try:
         groups = citations[0].groups
         vol = groups["volume"]
         reporter = groups["reporter"]
         page = groups["page"]
     except (KeyError, TypeError, IndexError):
-        return ValidationResult(False, 
-                                reason="Error from parsing citations with eyecite.")
+        return ValidationResult(
+            False, reason="Error from parsing citations with eyecite."
+        )
 
     normalized_reporter = reporter.lower().replace(".", "")
 
@@ -229,14 +233,15 @@ def non_caselaw_citation_exists(text: str, database: list[dict]) -> bool | Valid
 
     return (vol, normalized_reporter, page) in citation_index
 
+
 # endregion
 
 
 # region citation_exists function
 
+
 def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
-    """
-    Validator:
+    """Validator:
     Ensures that every cite.case.law URL in the LLM output corresponds to a real case in the provided case metadata database.
 
     Args:
@@ -248,21 +253,21 @@ def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
     """
     if ctx is None:
         return ValidationResult(False, reason="No context provided in output.")
-    
-    last_output = ctx.last_output() 
+
+    last_output = ctx.last_output()
 
     if last_output is None:
         return ValidationResult(False, reason="No last output found in context.")
-    
+
     urls_or_error = text_to_urls(last_output)
 
     # text_to_urls may return a ValidationResult (error condition)
     if isinstance(urls_or_error, ValidationResult):
         return urls_or_error
-    
+
     # List of urls of citations found in the LLM output
     output_citation_urls = list(urls_or_error.keys())
-    
+
     if output_citation_urls is None or output_citation_urls == []:
         # No citations, so trivially valid
         return ValidationResult(True, reason="No citations found.")
@@ -278,16 +283,20 @@ def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
                 # Check if extract_case_metadata_url returns a ValidationResult and propagate it
                 if isinstance(metadata_url, ValidationResult):
                     return metadata_url
-                
+
                 metadata = metadata_url_to_json(metadata_url)
                 case_id = metadata["id"]
 
             except Exception as e:
-                return ValidationResult(False, reason=f"Failed to retrieve metadata for {url}: {e}")
-            
+                return ValidationResult(
+                    False, reason=f"Failed to retrieve metadata for {url}: {e}"
+                )
+
             if case_id not in database_ids:
-                return ValidationResult(False, reason=f"Case {case_id} not found in database")
-        
+                return ValidationResult(
+                    False, reason=f"Case {case_id} not found in database"
+                )
+
         # Non-case.law citations: pass into Eyecite and see if citations match
         else:
             # TODO: This logic might need some reworking because for cases where a match
@@ -309,19 +318,23 @@ def citation_exists(ctx: Context, database: list[dict]) -> ValidationResult:
             # Explicitly allow this to pass for now
             continue
 
-    return ValidationResult(True, reason="All case.law citations verified; non-case.law citations did not fail verification.")
-    
+    return ValidationResult(
+        True,
+        reason="All case.law citations verified; non-case.law citations did not fail verification.",
+    )
+
 
 class CaseNameExistsInDatabase(Requirement):
-    """
-    Requirement wrapper for Mellea that ensures case citations in LLM output
+    """Requirement wrapper for Mellea that ensures case citations in LLM output
     refer to real cases in the provided metadata database.
     """
+
     def __init__(self, case_metadata: list[dict]):
         self._case_metadata = case_metadata
         super().__init__(
             description="The case name should exist in the provided case metadata database.",
             validation_fn=lambda ctx: citation_exists(ctx, self._case_metadata),
         )
+
 
 # endregion

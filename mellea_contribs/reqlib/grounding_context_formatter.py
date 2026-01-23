@@ -1,5 +1,4 @@
-"""
-Author: IBM Research – Mellea Agent Team
+"""Author: IBM Research – Mellea Agent Team
 Maintainer: Mellea Agent - IBM Research
 
 Purpose: GroundingContextFormatter is a reusable component for constructing grounding context blocks for Mellea agents. It organizes arbitrary
@@ -17,19 +16,15 @@ When should an agent use it?
 - When the agent requires clean, human-readable formatting for debugging or interpretability.
 """
 
-
-from typing import Any
-from mellea.stdlib.base import Component, TemplateRepresentation
 import json
+from typing import Any
+
+from mellea.stdlib.base import Component, TemplateRepresentation
 
 
 class GroundingContextFormatter(Component):
-
     def __init__(
-        self,
-        return_template: bool = False,
-        indent: int = 2,
-        **context_fields: Any,
+        self, return_template: bool = False, indent: int = 2, **context_fields: Any
     ):
         super().__init__()
         self.context_fields = context_fields
@@ -41,16 +36,14 @@ class GroundingContextFormatter(Component):
 
     def format_for_llm(self):
         non_empty = {
-            k: v for k, v in self.context_fields.items()
+            k: v
+            for k, v in self.context_fields.items()
             if v not in (None, "", [], {}, ())
-        }   
+        }
 
         if not non_empty:
             if self.return_template:
-                return TemplateRepresentation(
-                    obj=self,
-                    args={},
-                )
+                return TemplateRepresentation(obj=self, args={})
             return ""
 
         blocks = []
@@ -62,11 +55,7 @@ class GroundingContextFormatter(Component):
         output = "\n\n".join(blocks)
 
         if self.return_template and not non_empty:
-            return TemplateRepresentation(
-                obj=self,
-                template="",
-                args={"context": ""},
-            )
+            return TemplateRepresentation(obj=self, template="", args={"context": ""})
 
         return output
 

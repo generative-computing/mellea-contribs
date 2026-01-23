@@ -1,44 +1,81 @@
-import pytest
+import gc
 import os
 
-from mellea_contribs.reqlib.is_appellate_case import (
-    load_jsons_from_folder, 
-    get_court_from_case, 
-    is_appellate_court_fullname,
-    court_abbv_from_citation,
-    is_appellate_court_abbv,
-    is_appellate_case
-)
+import pytest
 
 from mellea import start_session
 from mellea.stdlib.requirement import req
 from mellea.stdlib.sampling import RejectionSamplingStrategy
+from mellea_contribs.reqlib.is_appellate_case import (
+    court_abbv_from_citation,
+    get_court_from_case,
+    is_appellate_case,
+    is_appellate_court_abbv,
+    is_appellate_court_fullname,
+    load_jsons_from_folder,
+)
+
+
+@pytest.fixture(scope="function")
+def m_session(gh_run):
+    """Session fixture for tests requiring LLM."""
+    m = start_session()
+    yield m
+    del m
+    gc.collect()
 
 
 # ---------- #
 # UNIT TESTS #
 # ---------- #
 
+
 def test_is_appellate_court_fullname():
     assert is_appellate_court_fullname("Supreme Court of New Jersey").as_bool()
     assert not is_appellate_court_fullname("Tax Court of New Jersey").as_bool()
     assert is_appellate_court_fullname("Pennsylvania Commonwealth Court").as_bool()
-    assert is_appellate_court_fullname("U.S. Court of Appeals for the First Circuit").as_bool()
+    assert is_appellate_court_fullname(
+        "U.S. Court of Appeals for the First Circuit"
+    ).as_bool()
     assert is_appellate_court_fullname("Maryland Appellate Court").as_bool()
     assert not is_appellate_court_fullname("District Court of Maryland").as_bool()
 
 
 def test_court_abbv_from_citation():
     # case 1 in function
-    assert court_abbv_from_citation("Smith v. Jones, 123 F.3d 456 (9th Cir. 2000)") == "9th Cir."
-    assert court_abbv_from_citation("United States v. Smith, 789 F.Supp.2d 123 (S.D.N.Y. 2011)") == "S.D.N.Y."
-    assert court_abbv_from_citation("State v. Williams, 234 P.3d 567 (Wash. Ct. App. 2015)") == "Wash. Ct. App."
-    assert court_abbv_from_citation("Johnson v. State, 456 So.2d 789 (Fla. Dist. Ct. App. 2010)") == "Fla. Dist. Ct. App."
+    assert (
+        court_abbv_from_citation("Smith v. Jones, 123 F.3d 456 (9th Cir. 2000)")
+        == "9th Cir."
+    )
+    assert (
+        court_abbv_from_citation(
+            "United States v. Smith, 789 F.Supp.2d 123 (S.D.N.Y. 2011)"
+        )
+        == "S.D.N.Y."
+    )
+    assert (
+        court_abbv_from_citation(
+            "State v. Williams, 234 P.3d 567 (Wash. Ct. App. 2015)"
+        )
+        == "Wash. Ct. App."
+    )
+    assert (
+        court_abbv_from_citation(
+            "Johnson v. State, 456 So.2d 789 (Fla. Dist. Ct. App. 2010)"
+        )
+        == "Fla. Dist. Ct. App."
+    )
 
     # case 2 in function
     assert court_abbv_from_citation("Roe v. Wade, 410 U.S. 113 (1973)") == "U.S."
-    assert court_abbv_from_citation("Brown v. Board of Education, 347 U.S. 483 (1954)") == "U.S."
-    assert court_abbv_from_citation("People v. Johnson, 45 Cal.App.4th 789 (2020)") == "Cal.App.4th"
+    assert (
+        court_abbv_from_citation("Brown v. Board of Education, 347 U.S. 483 (1954)")
+        == "U.S."
+    )
+    assert (
+        court_abbv_from_citation("People v. Johnson, 45 Cal.App.4th 789 (2020)")
+        == "Cal.App.4th"
+    )
 
     # invalid citation
     with pytest.raises(ValueError):
@@ -82,8 +119,11 @@ def test_is_appellate_court_abbv():
 # INTEGRATION TESTS #
 # ----------------- #
 
-folder_path = os.path.join(os.path.dirname(__file__), "data", "legal", "nj_case_metadata")
+folder_path = os.path.join(
+    os.path.dirname(__file__), "data", "legal", "nj_case_metadata"
+)
 folder_path = os.path.normpath(folder_path)
+
 
 class MockContext:
     def __init__(self, input):
@@ -99,7 +139,10 @@ def test_is_appellate_case():
         ("Roe v. Wade, 410 U.S. 113 (1973)", True),
         ("United States v. Smith, 789 F.Supp.2d 123 (S.D.N.Y. 2011)", False),
         ("People v. Johnson, 45 Cal.App.4th 789 (2020)", True),
-        ("ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT", True)
+        (
+            "ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT",
+            True,
+        ),
     ]
     for input, expected_appellate in test_cases:
         ctx = MockContext(input)
@@ -107,12 +150,18 @@ def test_is_appellate_case():
         assert result.as_bool() == expected_appellate, f"Failed for input: {input}"
 
 
-def test_appellate_case_session():
+@pytest.mark.qualitative
+def test_appellate_case_session(m_session):
     case_name = "ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT"
-    m = start_session()
+    m = m_session
     appellate_case = m.instruct(
         f"Return the following string (only return the characters after the colon, no other words): {case_name}",
-        requirements=[req("The result should be an appellate court case name or citation", validation_fn=lambda ctx: is_appellate_case(ctx, folder_path))],
+        requirements=[
+            req(
+                "The result should be an appellate court case name or citation",
+                validation_fn=lambda ctx: is_appellate_case(ctx, folder_path),
+            )
+        ],
         strategy=RejectionSamplingStrategy(loop_budget=5),
         return_sampling_results=True,
     )
