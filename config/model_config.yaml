@@ -1,0 +1,51 @@
+client_settings:
+  rits:
+    default_max_tokens: 1000
+    default_temperature: 0.1
+    max_retries: 3
+    max_workers: 50
+    timeout: 30
+  vllm:
+    default_max_tokens: 1000
+    default_temperature: 0.1
+    gpu_memory_utilization: 0.9
+    max_model_len: 8192
+    tensor_parallel_size: 1
+    trust_remote_code: true
+default_client_preference:
+- rits
+- vllm
+- gemini
+evaluation:
+  default_client: rits
+  default_model: phi-4-reasoning
+  fallback_models:
+  - granite-3-1-8b
+  - franconia
+judge_model:
+  default_client: rits
+  default_model: phi-4-reasoning
+  fallback_models:
+  - granite-3-1-8b
+model_client_mapping:
+  franconia: rits
+  gemini-1.5-flash: gemini
+  gpt_oss_20b: rits
+  granite-3-0-8b: rits
+  granite-3-1-8b: rits
+  granite-3-3-8b: rits
+  granite-4-small: rits
+  llama_3_3_70b: rits
+  microsoft/Phi-4-reasoning: rits
+  microsoft/phi-4: vllm
+  mistral_small_3_2_instruct: rits
+  openoss: rits
+  phi-4: rits
+  phi-4-reasoning: rits
+  qwen-3-8b: rits
+variation_generation:
+  default_client: rits
+  default_model: granite-3-1-8b
+  fallback_models:
+  - phi-4-reasoning
+  - franconia
