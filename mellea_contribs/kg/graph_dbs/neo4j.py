@@ -9,18 +9,23 @@ if TYPE_CHECKING:
     from mellea_contribs.kg.components.query import GraphQuery
     from mellea_contribs.kg.components.result import GraphResult
 
+NEO4J_AVAILABLE = False
+neo4j: Any = None
+GraphDatabase: Any = None
+AsyncGraphDatabase: Any = None
+
 try:
-    import neo4j  # type: ignore[import-not-found]
+    import neo4j as _neo4j_module  # type: ignore[import-not-found]
     from neo4j import (  # type: ignore[import-not-found]
-        AsyncGraphDatabase,
-        GraphDatabase,
+        AsyncGraphDatabase as _AsyncGraphDatabase,
+        GraphDatabase as _GraphDatabase,
     )
+    neo4j = _neo4j_module
+    GraphDatabase = _GraphDatabase
+    AsyncGraphDatabase = _AsyncGraphDatabase
     NEO4J_AVAILABLE = True
 except ImportError:
-    NEO4J_AVAILABLE = False
-    neo4j = None  # type: ignore[assignment]
-    GraphDatabase = None  # type: ignore[assignment]
-    AsyncGraphDatabase = None  # type: ignore[assignment]
+    pass
 
 
 class Neo4jBackend(GraphBackend):

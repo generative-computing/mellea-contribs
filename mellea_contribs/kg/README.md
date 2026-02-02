@@ -203,4 +203,4 @@ docker stop neo4j-test && docker rm neo4j-test
 ## See Also
 
 - [Design Documentation](../../docs/kg_overview.mdx) - Detailed architecture and design
-- [Mellea Framework](https://github.com/ydzhu98/mellea) - Parent framework
+- [Mellea Framework](https://github.com/generative-computing/mellea) - Parent framework
