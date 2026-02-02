@@ -54,6 +54,10 @@ docs = [
     "sphinx_mdinclude",
 ]
 
+kg = [
+    "neo4j>=5.0.0",
+]
+
 [tool.ruff]
 target-version = "py310"
 respect-gitignore = true
@@ -123,7 +127,8 @@ python_version = "3.10"
 
 [tool.pytest.ini_options]
 markers = [
-    "qualitative: Marks the test as needing an exact output from an LLM; set by an ENV variable for CICD. All tests marked with this will xfail in CI/CD"
+    "qualitative: Marks the test as needing an exact output from an LLM; set by an ENV variable for CICD. All tests marked with this will xfail in CI/CD",
+    "neo4j: Marks tests requiring a running Neo4j instance (skipped in CI unless NEO4J_URI is set)",
 ]
 asyncio_mode = "auto"  # Don't require explicitly marking async tests.
 
