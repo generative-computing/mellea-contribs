@@ -5,3 +5,7 @@
 
 The `mellea-contribs` repository is an incubation point for contributions to
 the Mellea ecosystem.
+
+## Tools
+
+- **[Robustness Testing](docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
