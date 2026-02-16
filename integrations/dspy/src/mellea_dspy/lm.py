@@ -18,6 +18,10 @@ class MelleaLM(dspy.BaseLM):
     capabilities, including requirements validation, sampling strategies,
     and multi-model support through the standard DSPy interface.
 
+    Note: The 'model' parameter in the constructor is used only for metadata
+    in response objects. The actual model used for generation is determined
+    by the mellea_session configuration.
+
     Example:
         ```python
         from mellea import start_session
@@ -57,7 +61,9 @@ class MelleaLM(dspy.BaseLM):
 
         Args:
             mellea_session: Configured Mellea session
-            model: Model identifier
+            model: Model identifier (NOTE: This is only used for metadata in responses.
+                   The actual model used for generation is determined by the mellea_session
+                   configuration, not this parameter.)
             temperature: Temperature for generation
             max_tokens: Maximum tokens to generate
             **kwargs: Additional parameters
