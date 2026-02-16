@@ -146,6 +146,31 @@ uv run examples/06_optimization.py
 
 ---
 
+### 07. Ollama with Granite (`07_ollama_granite.py`)
+**Using Mellea DSPy with Ollama backend and specific models**
+
+Demonstrates how to configure Mellea with Ollama backend using a specific model:
+- Proper OllamaBackend creation
+- MelleaSession configuration with custom backend
+- Understanding model parameter vs backend configuration
+- Basic DSPy operations with custom model
+
+**Run it:**
+```bash
+uv run examples/07_ollama_granite.py
+```
+
+**Key Concepts:**
+- OllamaModelBackend initialization
+- Backend configuration
+- Model selection (backend vs constructor parameter)
+- Custom model usage
+
+**Important Note:**
+The `model` parameter in `MelleaLM` constructor is only used for metadata in response objects. The actual model used for generation is determined by the backend configuration in the MelleaSession.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -172,6 +197,7 @@ uv run examples/03_sampling_strategies.py
 uv run examples/04_async_operations.py
 uv run examples/05_dspy_modules.py
 uv run examples/06_optimization.py
+uv run examples/07_ollama_granite.py
 ```
 
 Or run the original comprehensive example:
