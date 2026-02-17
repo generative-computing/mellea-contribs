@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any
 
+from mellea_integration import BaseToolConverter
+
 if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
     from mellea.backends.tools import MelleaTool
@@ -21,42 +23,68 @@ except ImportError:
     pass
 
 
+class LangChainToolConverter(BaseToolConverter):
+    """Convert between LangChain and Mellea tool formats.
+
+    Extends BaseToolConverter to provide LangChain-specific conversion logic.
+    """
+
+    def to_mellea(self, tools: list[Any]) -> list[Any]:
+        """Convert LangChain tools to Mellea tool format.
+
+        Args:
+            tools: List of LangChain tools or Mellea tools
+
+        Returns:
+            List of Mellea-compatible tool objects
+
+        Note:
+            This function uses Mellea's built-in MelleaTool.from_langchain()
+            method to convert LangChain tools. If a tool is already a Mellea
+            tool, it is passed through unchanged.
+        """
+        if not LANGCHAIN_AVAILABLE:
+            raise ImportError(
+                "LangChain is not installed. Please install it with: pip install langchain-core"
+            )
+
+        mellea_tools = []
+
+        for tool in tools:
+            # Check if it's a LangChain tool by checking for the class name
+            if (
+                hasattr(tool, "__class__")
+                and tool.__class__.__name__ == "BaseTool"
+                or (
+                    hasattr(tool.__class__, "__mro__")
+                    and any(c.__name__ == "BaseTool" for c in tool.__class__.__mro__)
+                )
+            ):
+                # Convert LangChain tool to Mellea format using built-in converter
+                mellea_tool = MelleaTool.from_langchain(tool)  # type: ignore
+                mellea_tools.append(mellea_tool)
+            else:
+                # Assume it's already a Mellea tool or compatible format
+                mellea_tools.append(tool)
+
+        return mellea_tools
+
+
+# Backward compatibility: Keep old function name as alias
 def langchain_to_mellea_tools(tools: list[Any]) -> list[Any]:
     """Convert LangChain tools to Mellea tool format.
+
+    Deprecated: Use LangChainToolConverter().to_mellea() instead.
+    This function is kept for backward compatibility.
 
     Args:
         tools: List of LangChain tools or Mellea tools
 
     Returns:
         List of Mellea-compatible tool objects
-
-    Note:
-        This function uses Mellea's built-in MelleaTool.from_langchain()
-        method to convert LangChain tools. If a tool is already a Mellea
-        tool, it is passed through unchanged.
     """
-    if not LANGCHAIN_AVAILABLE:
-        raise ImportError(
-            "LangChain is not installed. Please install it with: pip install langchain-core"
-        )
+    converter = LangChainToolConverter()
+    return converter.to_mellea(tools)
 
-    mellea_tools = []
 
-    for tool in tools:
-        # Check if it's a LangChain tool by checking for the class name
-        if (
-            hasattr(tool, "__class__")
-            and tool.__class__.__name__ == "BaseTool"
-            or (
-                hasattr(tool.__class__, "__mro__")
-                and any(c.__name__ == "BaseTool" for c in tool.__class__.__mro__)
-            )
-        ):
-            # Convert LangChain tool to Mellea format using built-in converter
-            mellea_tool = MelleaTool.from_langchain(tool)  # type: ignore
-            mellea_tools.append(mellea_tool)
-        else:
-            # Assume it's already a Mellea tool or compatible format
-            mellea_tools.append(tool)
-
-    return mellea_tools
+# Made with Bob
