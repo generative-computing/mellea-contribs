@@ -1,7 +1,7 @@
 """Base integration class for Mellea framework adapters."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 try:
     from mellea import MelleaSession
@@ -11,7 +11,7 @@ except ImportError:
     MelleaSession = Any  # type: ignore
     ModelOption = Any  # type: ignore
 
-from .types import MessageConverter, ModelOptions, ToolConverter
+from .types import MessageConverter, ToolConverter
 
 
 class MelleaIntegrationBase(ABC):
@@ -40,9 +40,9 @@ class MelleaIntegrationBase(ABC):
         self,
         mellea_session: Any,
         message_converter: MessageConverter,
-        tool_converter: Optional[ToolConverter] = None,
-        requirements: Optional[list[Any]] = None,
-        strategy: Optional[Any] = None,
+        tool_converter: ToolConverter | None = None,
+        requirements: list[Any] | None = None,
+        strategy: Any | None = None,
         **kwargs: Any,
     ):
         """Initialize the Mellea integration base.
@@ -65,7 +65,7 @@ class MelleaIntegrationBase(ABC):
     def _prepare_generation(
         self,
         messages: Any,
-        tools: Optional[list[Any]] = None,
+        tools: list[Any] | None = None,
         **kwargs: Any,
     ) -> tuple[str, dict[str, Any], bool]:
         """Prepare inputs for Mellea generation.
@@ -114,8 +114,8 @@ class MelleaIntegrationBase(ABC):
         prompt: str,
         model_options: dict[str, Any],
         tool_calls_enabled: bool,
-        requirements: Optional[list[Any]] = None,
-        strategy: Optional[Any] = None,
+        requirements: list[Any] | None = None,
+        strategy: Any | None = None,
         return_sampling_results: bool = False,
     ) -> Any:
         """Generate using appropriate Mellea method (sync).
@@ -140,12 +140,13 @@ class MelleaIntegrationBase(ABC):
 
         # Use instruct method when requirements or strategy are provided
         if reqs is not None or strat is not None:
+            # Note: instruct() doesn't have tool_calls parameter
+            # Tools should be in model_options already
             return self.mellea_session.instruct(
                 prompt,
                 requirements=reqs,
                 strategy=strat,
                 model_options=model_options,
-                tool_calls=tool_calls_enabled,
                 return_sampling_results=return_sampling_results,
             )
         else:
@@ -161,8 +162,8 @@ class MelleaIntegrationBase(ABC):
         prompt: str,
         model_options: dict[str, Any],
         tool_calls_enabled: bool,
-        requirements: Optional[list[Any]] = None,
-        strategy: Optional[Any] = None,
+        requirements: list[Any] | None = None,
+        strategy: Any | None = None,
         return_sampling_results: bool = False,
     ) -> Any:
         """Generate using appropriate Mellea method (async).
@@ -187,12 +188,13 @@ class MelleaIntegrationBase(ABC):
 
         # Use ainstruct method when requirements or strategy are provided
         if reqs is not None or strat is not None:
+            # Note: ainstruct() doesn't have tool_calls parameter
+            # Tools should be in model_options already
             return await self.mellea_session.ainstruct(
                 prompt,
                 requirements=reqs,
                 strategy=strat,
                 model_options=model_options,
-                tool_calls=tool_calls_enabled,
                 return_sampling_results=return_sampling_results,
             )
         else:
@@ -265,4 +267,4 @@ class MelleaIntegrationBase(ABC):
         """
         pass
 
-# Made with Bob
+
