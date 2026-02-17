@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from crewai.events.types.llm_events import LLMCallType
 from crewai.llms.base_llm import BaseLLM
+from mellea_integration import MelleaIntegrationBase
 from pydantic import BaseModel
 
-from .message_conversion import crewai_to_mellea_messages, mellea_to_crewai_response
-from .tool_conversion import crewai_to_mellea_tools
+from .message_conversion import CrewAIMessageConverter
+from .tool_conversion import CrewAIToolConverter
 
 
 @contextmanager
@@ -41,7 +42,7 @@ except ImportError:
     _SamplingStrategy = Any  # type: ignore
 
 
-class MelleaLLM(BaseLLM):
+class MelleaLLM(BaseLLM, MelleaIntegrationBase):
     """CrewAI LLM implementation using Mellea as the backend.
 
     This allows CrewAI applications to use Mellea's generative programming
@@ -120,10 +121,20 @@ class MelleaLLM(BaseLLM):
             return_sampling_results: Whether to return detailed validation info
             **kwargs: Additional parameters passed to BaseLLM
         """
-        super().__init__(model=model, temperature=temperature, **kwargs)
-        self.mellea_session = mellea_session
-        self._requirements = requirements
-        self._strategy = strategy
+        # Initialize CrewAI BaseLLM
+        BaseLLM.__init__(self, model=model, temperature=temperature, **kwargs)
+
+        # Initialize MelleaIntegrationBase
+        MelleaIntegrationBase.__init__(
+            self,
+            mellea_session=mellea_session,
+            message_converter=CrewAIMessageConverter(),
+            tool_converter=CrewAIToolConverter(),
+            requirements=requirements,
+            strategy=strategy,
+            **kwargs,
+        )
+
         self._return_sampling_results = return_sampling_results
 
     def call(
@@ -162,71 +173,39 @@ class MelleaLLM(BaseLLM):
             )
 
             try:
-                # Convert messages to Mellea format
-                mellea_messages = crewai_to_mellea_messages(messages)
+                # WORKAROUND: Extract tools from from_task or from_agent if tools parameter is None
+                # This is a temporary solution until we understand CrewAI's tool passing mechanism better
+                if not tools:
+                    if from_task and hasattr(from_task, "tools") and from_task.tools:
+                        tools = from_task.tools
+                    elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
+                        tools = from_agent.tools
 
-                # Extract last message content for generation
-                if not mellea_messages:
-                    raise ValueError("No messages provided for generation")
-
-                last_message_content = mellea_messages[-1].content
-
-                # Prepare model options
-                model_options = {}
+                # Prepare generation using base class (handles message/tool conversion)
+                prompt, model_options, tool_calls_enabled = self._prepare_generation(
+                    messages, tools, model_options={}
+                )
 
                 # Add temperature if set
                 if self.temperature is not None:
                     model_options[ModelOption.TEMPERATURE] = self.temperature
 
-                # Add tools if provided
-                tool_calls_enabled = False
-                if tools:
-                    mellea_tools = crewai_to_mellea_tools(tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
-                # WORKAROUND: Extract tools from from_task or from_agent if tools parameter is None
-                # This is a temporary solution until we understand CrewAI's tool passing mechanism better
-                elif from_task and hasattr(from_task, "tools") and from_task.tools:
-                    mellea_tools = crewai_to_mellea_tools(from_task.tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
-                elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
-                    mellea_tools = crewai_to_mellea_tools(from_agent.tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
+                # Generate with Mellea using base class method
+                response = self._generate_with_mellea(
+                    prompt,
+                    model_options,
+                    tool_calls_enabled,
+                    requirements=self._requirements,
+                    strategy=self._strategy,
+                    return_sampling_results=self._return_sampling_results,
+                )
 
-                # Choose method based on requirements/strategy
-                if self._requirements or self._strategy:
-                    # Use instruct for validation
-                    response = self.mellea_session.instruct(
-                        last_message_content,
-                        requirements=self._requirements,
-                        strategy=self._strategy,
-                        model_options=model_options,
-                        return_sampling_results=self._return_sampling_results,
-                        tool_calls=tool_calls_enabled,
-                    )
+                # Handle sampling results if needed
+                if self._return_sampling_results:
+                    response = self._handle_sampling_results(response)
 
-                    # Handle sampling results
-                    if self._return_sampling_results:
-                        if response.success:
-                            result = mellea_to_crewai_response(response.result)
-                        else:
-                            # Use first sample if validation failed
-                            if response.sample_generations:
-                                result = mellea_to_crewai_response(response.sample_generations[0])
-                            else:
-                                raise ValueError("No samples generated during validation")
-                    else:
-                        result = mellea_to_crewai_response(response)
-                else:
-                    # Standard chat
-                    response = self.mellea_session.chat(
-                        last_message_content,
-                        model_options=model_options,
-                        tool_calls=tool_calls_enabled,
-                    )
-                    result = mellea_to_crewai_response(response)
+                # Convert response using message converter
+                result = self.message_converter.from_mellea(response)
 
                 # Check if result contains tool calls (after conversion)
                 # mellea_to_crewai_response should have parsed the tool calls
@@ -376,71 +355,39 @@ class MelleaLLM(BaseLLM):
             )
 
             try:
-                # Convert messages to Mellea format
-                mellea_messages = crewai_to_mellea_messages(messages)
+                # WORKAROUND: Extract tools from from_task or from_agent if tools parameter is None
+                # This is a temporary solution until we understand CrewAI's tool passing mechanism better
+                if not tools:
+                    if from_task and hasattr(from_task, "tools") and from_task.tools:
+                        tools = from_task.tools
+                    elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
+                        tools = from_agent.tools
 
-                # Extract last message content for generation
-                if not mellea_messages:
-                    raise ValueError("No messages provided for generation")
-
-                last_message_content = mellea_messages[-1].content
-
-                # Prepare model options
-                model_options = {}
+                # Prepare generation using base class (handles message/tool conversion)
+                prompt, model_options, tool_calls_enabled = self._prepare_generation(
+                    messages, tools, model_options={}
+                )
 
                 # Add temperature if set
                 if self.temperature is not None:
                     model_options[ModelOption.TEMPERATURE] = self.temperature
 
-                # Add tools if provided
-                tool_calls_enabled = False
-                if tools:
-                    mellea_tools = crewai_to_mellea_tools(tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
-                # WORKAROUND: Extract tools from from_task or from_agent if tools parameter is None
-                # This is a temporary solution until we understand CrewAI's tool passing mechanism better
-                elif from_task and hasattr(from_task, "tools") and from_task.tools:
-                    mellea_tools = crewai_to_mellea_tools(from_task.tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
-                elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
-                    mellea_tools = crewai_to_mellea_tools(from_agent.tools)
-                    model_options[ModelOption.TOOLS] = mellea_tools
-                    tool_calls_enabled = True
+                # Generate with Mellea using base class async method
+                response = await self._agenerate_with_mellea(
+                    prompt,
+                    model_options,
+                    tool_calls_enabled,
+                    requirements=self._requirements,
+                    strategy=self._strategy,
+                    return_sampling_results=self._return_sampling_results,
+                )
 
-                # Choose method based on requirements/strategy
-                if self._requirements or self._strategy:
-                    # Use ainstruct for validation
-                    response = await self.mellea_session.ainstruct(
-                        last_message_content,
-                        requirements=self._requirements,
-                        strategy=self._strategy,
-                        model_options=model_options,
-                        return_sampling_results=self._return_sampling_results,
-                        tool_calls=tool_calls_enabled,
-                    )
+                # Handle sampling results if needed
+                if self._return_sampling_results:
+                    response = self._handle_sampling_results(response)
 
-                    # Handle sampling results
-                    if self._return_sampling_results:
-                        if response.success:
-                            result = mellea_to_crewai_response(response.result)
-                        else:
-                            # Use first sample if validation failed
-                            if response.sample_generations:
-                                result = mellea_to_crewai_response(response.sample_generations[0])
-                            else:
-                                raise ValueError("No samples generated during validation")
-                    else:
-                        result = mellea_to_crewai_response(response)
-                else:
-                    # Standard async chat
-                    response = await self.mellea_session.achat(
-                        last_message_content,
-                        model_options=model_options,
-                        tool_calls=tool_calls_enabled,
-                    )
-                    result = mellea_to_crewai_response(response)
+                # Convert response using message converter
+                result = self.message_converter.from_mellea(response)
 
                 # Check if result contains tool calls
                 tool_calls = None
@@ -550,6 +497,22 @@ class MelleaLLM(BaseLLM):
                 # Emit call failed event
                 self._emit_call_failed_event(str(e), from_task, from_agent)
                 raise
+
+    def generate(self, messages: Any, **kwargs: Any) -> Any:
+        """Framework-specific synchronous generation method.
+
+        This is required by MelleaIntegrationBase but not used directly.
+        CrewAI uses call() instead.
+        """
+        return self.call(messages, **kwargs)
+
+    async def agenerate(self, messages: Any, **kwargs: Any) -> Any:
+        """Framework-specific asynchronous generation method.
+
+        This is required by MelleaIntegrationBase but not used directly.
+        CrewAI uses acall() instead.
+        """
+        return await self.acall(messages, **kwargs)
 
     def supports_stop_words(self) -> bool:
         """Check if the LLM supports stop words.

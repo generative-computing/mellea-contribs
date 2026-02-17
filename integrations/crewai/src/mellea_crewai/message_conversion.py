@@ -4,6 +4,8 @@ import ast
 import re
 from typing import Any
 
+from mellea_integration import BaseMessageConverter
+
 try:
     from mellea.stdlib.components import Message
 except ImportError:
@@ -59,90 +61,106 @@ def parse_tool_calls_from_text(text: str) -> list[Any] | None:
         return None
 
 
-def crewai_to_mellea_messages(messages: str | list[dict[str, Any]]) -> list[Message]:
+class CrewAIMessageConverter(BaseMessageConverter):
+    """Convert between CrewAI and Mellea message formats."""
+
+    def to_mellea(self, messages: str | list[dict[str, Any]]) -> list[Any]:
+        """Convert CrewAI messages to Mellea format.
+
+        Args:
+            messages: CrewAI message format (string or list of message dicts)
+                     Each dict should have 'role' and 'content' keys.
+
+        Returns:
+            List of Mellea Message objects
+
+        Example:
+            >>> # String input
+            >>> converter.to_mellea("Hello, world!")
+            [Message(role="user", content="Hello, world!")]
+
+            >>> # List of dicts
+            >>> converter.to_mellea([
+            ...     {"role": "system", "content": "You are helpful"},
+            ...     {"role": "user", "content": "Hello"}
+            ... ])
+            [Message(role="system", content="You are helpful"),
+             Message(role="user", content="Hello")]
+        """
+        if isinstance(messages, str):
+            return [self.create_mellea_message("user", messages)]
+
+        mellea_messages = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = self.normalize_content(msg.get("content", ""))
+
+            # Handle different message types
+            if role in ["system", "user", "assistant", "tool"]:
+                mellea_messages.append(self.create_mellea_message(role, content))
+            else:
+                # Fallback to user message for unknown roles
+                mellea_messages.append(self.create_mellea_message("user", content))
+
+        return mellea_messages
+
+    def from_mellea(self, response: Any) -> str | list[Any]:
+        """Convert Mellea response to CrewAI format.
+
+        Args:
+            response: Mellea ModelOutputThunk or similar response object
+
+        Returns:
+            String content from the response, or list of tool calls if present
+
+        Example:
+            >>> response = session.chat("Hello")
+            >>> converter.from_mellea(response)
+            "Hello! How can I help you today?"
+        """
+        # Extract content from Mellea response
+        if hasattr(response, "content"):
+            content = response.content
+            # Check if content is a list (likely tool calls)
+            if isinstance(content, list):
+                return content
+            # WORKAROUND: Try to parse tool calls from text
+            # Some models generate text that looks like tool calls
+            if isinstance(content, str):
+                parsed_tool_calls = parse_tool_calls_from_text(content)
+                if parsed_tool_calls:
+                    return parsed_tool_calls
+            return str(content) if content is not None else ""
+        elif hasattr(response, "value"):
+            value = response.value
+            # Check if value is a list (likely tool calls)
+            if isinstance(value, list):
+                return value
+            # WORKAROUND: Try to parse tool calls from text
+            if isinstance(value, str):
+                parsed_tool_calls = parse_tool_calls_from_text(value)
+                if parsed_tool_calls:
+                    return parsed_tool_calls
+            return str(value) if value is not None else ""
+        else:
+            # Fallback: convert to string
+            return str(response)
+
+
+# Backward compatibility: keep old function names
+def crewai_to_mellea_messages(messages: str | list[dict[str, Any]]) -> list[Any]:
     """Convert CrewAI messages to Mellea format.
 
-    Args:
-        messages: CrewAI message format (string or list of message dicts)
-                 Each dict should have 'role' and 'content' keys.
-
-    Returns:
-        List of Mellea Message objects
-
-    Example:
-        >>> # String input
-        >>> crewai_to_mellea_messages("Hello, world!")
-        [Message(role="user", content="Hello, world!")]
-
-        >>> # List of dicts
-        >>> crewai_to_mellea_messages([
-        ...     {"role": "system", "content": "You are helpful"},
-        ...     {"role": "user", "content": "Hello"}
-        ... ])
-        [Message(role="system", content="You are helpful"),
-         Message(role="user", content="Hello")]
+    Deprecated: Use CrewAIMessageConverter.to_mellea() instead.
     """
-    if isinstance(messages, str):
-        return [Message(role="user", content=messages)]
-
-    mellea_messages = []
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-
-        # Handle different message types
-        if role in ["system", "user", "assistant"]:
-            mellea_messages.append(Message(role=role, content=str(content)))
-        elif role == "tool":
-            # Handle tool messages
-            # Note: CrewAI may include tool_call_id, but Mellea's Message
-            # may not support it yet. We preserve the content.
-            mellea_messages.append(Message(role="tool", content=str(content)))
-        else:
-            # Fallback to user message for unknown roles
-            mellea_messages.append(Message(role="user", content=str(content)))
-
-    return mellea_messages
+    converter = CrewAIMessageConverter()
+    return converter.to_mellea(messages)
 
 
 def mellea_to_crewai_response(response: Any) -> str | list[Any]:
     """Convert Mellea response to CrewAI format.
 
-    Args:
-        response: Mellea ModelOutputThunk or similar response object
-
-    Returns:
-        String content from the response, or list of tool calls if present
-
-    Example:
-        >>> response = session.chat("Hello")
-        >>> mellea_to_crewai_response(response)
-        "Hello! How can I help you today?"
+    Deprecated: Use CrewAIMessageConverter.from_mellea() instead.
     """
-    # Extract content from Mellea response
-    if hasattr(response, "content"):
-        content = response.content
-        # Check if content is a list (likely tool calls)
-        if isinstance(content, list):
-            return content
-        # WORKAROUND: Try to parse tool calls from text
-        # Some models generate text that looks like tool calls
-        if isinstance(content, str):
-            parsed_tool_calls = parse_tool_calls_from_text(content)
-            if parsed_tool_calls:
-                return parsed_tool_calls
-        return str(content) if content is not None else ""
-    elif hasattr(response, "value"):
-        value = response.value
-        # Check if value is a list (likely tool calls)
-        if isinstance(value, list):
-            return value
-        # WORKAROUND: Try to parse tool calls from text
-        if isinstance(value, str):
-            parsed_tool_calls = parse_tool_calls_from_text(value)
-            if parsed_tool_calls:
-                return parsed_tool_calls
-        return str(value) if value is not None else ""
-    else:
-        # Fallback: convert to string
-        return str(response)
+    converter = CrewAIMessageConverter()
+    return converter.from_mellea(response)

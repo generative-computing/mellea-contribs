@@ -129,6 +129,8 @@ llm = MelleaLLM(
 
 ## Architecture
 
+This integration uses the **mellea-integration-core** package for clean, maintainable code with ~60% less duplication compared to standalone implementations.
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │              CrewAI Application                          │
@@ -137,12 +139,19 @@ llm = MelleaLLM(
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────┐
-│              MelleaLLM (BaseLLM)                        │
-│  • Message conversion (CrewAI ↔ Mellea)                │
-│  • Tool call handling                                   │
-│  • Event emission                                       │
-│  • Requirements & validation                            │
-│  • Sampling strategies                                  │
+│         MelleaLLM (BaseLLM + MelleaIntegrationBase)     │
+│  • CrewAI-specific event handling                       │
+│  • Tool execution logic                                 │
+│  • CrewAI message/tool converters                       │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│           MelleaIntegrationBase (Core Package)          │
+│  • Message preparation & conversion                     │
+│  • Tool handling & conversion                           │
+│  • Session management (chat vs instruct)                │
+│  • Requirements & sampling strategy support             │
 └─────────────────────┬───────────────────────────────────┘
                       │
                       ▼
@@ -157,6 +166,12 @@ llm = MelleaLLM(
 │  Ollama | OpenAI | WatsonX | HuggingFace | ...         │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### Core Components
+
+- **CrewAIMessageConverter**: Converts between CrewAI and Mellea message formats
+- **CrewAIToolConverter**: Converts between CrewAI and Mellea tool formats
+- **MelleaIntegrationBase**: Provides common integration patterns (from mellea-integration-core)
 
 ## Features
 
@@ -223,9 +238,9 @@ integrations/crewai/
 ├── src/
 │   └── mellea_crewai/
 │       ├── __init__.py               # Package exports
-│       ├── llm.py                    # MelleaLLM class
-│       ├── message_conversion.py     # Message format conversion
-│       └── tool_conversion.py        # Tool calling utilities
+│       ├── llm.py                    # MelleaLLM class (uses MelleaIntegrationBase)
+│       ├── message_conversion.py     # CrewAIMessageConverter
+│       └── tool_conversion.py        # CrewAIToolConverter
 ├── tests/
 │   ├── test_llm.py                   # Core LLM tests
 │   ├── test_message_conversion.py    # Message conversion tests
@@ -238,6 +253,8 @@ integrations/crewai/
     ├── requirements_example.py       # Requirements validation
     └── multi_agent_crew.py           # Multi-agent crew example
 ```
+
+**Note**: This integration has been refactored to use [mellea-integration-core](../mellea-integration-core/) for cleaner, more maintainable code with reduced duplication.
 
 ## Development
 
@@ -286,6 +303,7 @@ mypy src/mellea_crewai
 
 - Python >= 3.10
 - mellea >= 0.3.0
+- mellea-integration-core >= 0.1.0
 - crewai >= 0.1.0
 - pydantic >= 2.0.0
 
