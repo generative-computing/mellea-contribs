@@ -10,9 +10,11 @@ from langchain_core.callbacks import (
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGenerationChunk, ChatResult
+from mellea_integration import MelleaIntegrationBase
 from pydantic import Field
 
-from .message_conversion import langchain_to_mellea_messages, mellea_to_langchain_result
+from .message_conversion import LangChainMessageConverter
+from .tool_conversion import LangChainToolConverter
 
 try:
     from mellea import MelleaSession
@@ -30,7 +32,7 @@ except ImportError:
     RejectionSamplingStrategy = None  # type: ignore
 
 
-class MelleaChatModel(BaseChatModel):
+class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
     """LangChain chat model that uses Mellea as the backend.
 
     This allows LangChain applications to use Mellea's generative
@@ -61,12 +63,15 @@ class MelleaChatModel(BaseChatModel):
         """Pydantic configuration."""
 
         arbitrary_types_allowed = True
+        extra = "allow"  # Allow extra attributes for integration base
 
     def __init__(
         self,
         mellea_session: Any,
         model_name: str = "mellea",
         streaming: bool = False,
+        requirements: list[Any] | None = None,
+        strategy: Any | None = None,
         **kwargs: Any,
     ):
         """Initialize the Mellea chat model.
@@ -75,14 +80,26 @@ class MelleaChatModel(BaseChatModel):
             mellea_session: Configured Mellea session
             model_name: Name to identify this model
             streaming: Whether to stream by default
+            requirements: Optional list of requirements for validation
+            strategy: Optional sampling strategy for validation
             **kwargs: Additional LangChain model parameters
         """
-        super().__init__(
+        # Initialize BaseChatModel first (Pydantic model)
+        BaseChatModel.__init__(
+            self,
             mellea_session=mellea_session,
             model_name=model_name,
             streaming=streaming,
             **kwargs,
         )
+
+        # Then initialize MelleaIntegrationBase attributes manually
+        # (avoid calling __init__ which conflicts with Pydantic)
+        self.message_converter = LangChainMessageConverter()
+        self.tool_converter = LangChainToolConverter()
+        self._requirements = requirements
+        self._strategy = strategy
+        self._kwargs = kwargs
 
     def bind_tools(self, tools: list[Any], **kwargs: Any) -> "MelleaChatModel":
         """Bind tools to this chat model.
@@ -122,6 +139,8 @@ class MelleaChatModel(BaseChatModel):
             mellea_session=self.mellea_session,
             model_name=self.model_name,
             streaming=self.streaming,
+            requirements=self._requirements,
+            strategy=self._strategy,
         )
 
         # Store tools and tool choice for later use
@@ -207,70 +226,38 @@ class MelleaChatModel(BaseChatModel):
         Returns:
             ChatResult with generated message
         """
-        # Convert LangChain messages to Mellea format
-        mellea_messages = langchain_to_mellea_messages(messages)
+        # Get bound tools if available
+        tools = getattr(self, "_bound_tools", None) or kwargs.get("tools")
 
-        # Extract the last message content for generation
-        if not mellea_messages:
-            raise ValueError("No messages provided for generation")
+        # Prepare generation using base class
+        prompt, model_options, tool_calls_enabled = self._prepare_generation(
+            messages, tools, **kwargs
+        )
 
-        last_message_content = mellea_messages[-1].content
-
-        # Extract model options and special parameters from kwargs
-        model_options = kwargs.get("model_options", {}).copy()
-
-        # Extract requirements/strategy parameters (can be passed directly or in model_options)
+        # Extract requirements/strategy from kwargs or model_options
+        # (can be passed directly or in model_options dict)
         requirements = kwargs.get("requirements") or model_options.pop("requirements", None)
         strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
         return_sampling_results = kwargs.get("return_sampling_results", False) or model_options.pop(
             "return_sampling_results", False
         )
 
-        # Add tools to model_options if bound via bind_tools()
-        tool_calls_enabled = False
-        if hasattr(self, "_bound_tools") and self._bound_tools:
-            from mellea.backends import ModelOption
+        # Generate with Mellea using base class method
+        response = self._generate_with_mellea(
+            prompt,
+            model_options,
+            tool_calls_enabled,
+            requirements,
+            strategy,
+            return_sampling_results,
+        )
 
-            from .tool_conversion import langchain_to_mellea_tools
+        # Handle sampling results if needed
+        if return_sampling_results:
+            response = self._handle_sampling_results(response)
 
-            mellea_tools = langchain_to_mellea_tools(self._bound_tools)
-            model_options[ModelOption.TOOLS] = mellea_tools
-            tool_calls_enabled = True
-
-        # Use instruct method when requirements or strategy are provided for validation
-        if requirements is not None or strategy is not None:
-            # Use synchronous instruct method for requirements and strategy support
-            response = self.mellea_session.instruct(
-                last_message_content,
-                requirements=requirements,
-                strategy=strategy,
-                model_options=model_options,
-                return_sampling_results=return_sampling_results,
-            )
-
-            # Handle sampling results if requested
-            if return_sampling_results:
-                # response is a SamplingResult object
-                if response.success:
-                    # Use the successful result
-                    result = mellea_to_langchain_result(response.result)
-                else:
-                    # Use the first sample if validation failed
-                    if response.sample_generations:
-                        result = mellea_to_langchain_result(response.sample_generations[0])
-                    else:
-                        raise ValueError("No samples generated during validation")
-            else:
-                # Standard response
-                result = mellea_to_langchain_result(response)
-        else:
-            # Use standard synchronous chat method
-            response = self.mellea_session.chat(
-                last_message_content,
-                model_options=model_options,
-                tool_calls=tool_calls_enabled,  # Enable tool calling if tools are bound
-            )
-            result = mellea_to_langchain_result(response)
+        # Convert response using message converter
+        result = self.message_converter.from_mellea(response)
 
         # Execute tool calls if present
         if tool_calls_enabled and result.generations:
@@ -279,10 +266,10 @@ class MelleaChatModel(BaseChatModel):
                 # Execute the tools
                 tool_results = self._execute_tool_calls(ai_message.tool_calls)
 
-                # Store tool execution results in the AIMessage's additional_kwargs
+                # Store tool execution results in the AIMessage
                 if tool_results:
-                    # Update the message with tool execution results
                     from langchain_core.messages import AIMessage
+                    from langchain_core.outputs import ChatGeneration
 
                     updated_message = AIMessage(
                         content=ai_message.content,
@@ -297,9 +284,6 @@ class MelleaChatModel(BaseChatModel):
                         },
                         id=ai_message.id,
                     )
-
-                    # Update the result with the new message
-                    from langchain_core.outputs import ChatGeneration
 
                     result.generations[0] = ChatGeneration(
                         message=updated_message,
@@ -338,70 +322,38 @@ class MelleaChatModel(BaseChatModel):
         Returns:
             ChatResult with generated message
         """
-        # Convert LangChain messages to Mellea format
-        mellea_messages = langchain_to_mellea_messages(messages)
+        # Get bound tools if available
+        tools = getattr(self, "_bound_tools", None) or kwargs.get("tools")
 
-        # Extract the last message content for generation
-        if not mellea_messages:
-            raise ValueError("No messages provided for generation")
+        # Prepare generation using base class
+        prompt, model_options, tool_calls_enabled = self._prepare_generation(
+            messages, tools, **kwargs
+        )
 
-        last_message_content = mellea_messages[-1].content
-
-        # Extract model options and special parameters from kwargs
-        model_options = kwargs.get("model_options", {}).copy()
-
-        # Extract requirements/strategy parameters (can be passed directly or in model_options)
+        # Extract requirements/strategy from kwargs or model_options
+        # (can be passed directly or in model_options dict)
         requirements = kwargs.get("requirements") or model_options.pop("requirements", None)
         strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
         return_sampling_results = kwargs.get("return_sampling_results", False) or model_options.pop(
             "return_sampling_results", False
         )
 
-        # Add tools to model_options if bound via bind_tools()
-        tool_calls_enabled = False
-        if hasattr(self, "_bound_tools") and self._bound_tools:
-            from mellea.backends import ModelOption
+        # Generate with Mellea using base class async method
+        response = await self._agenerate_with_mellea(
+            prompt,
+            model_options,
+            tool_calls_enabled,
+            requirements,
+            strategy,
+            return_sampling_results,
+        )
 
-            from .tool_conversion import langchain_to_mellea_tools
+        # Handle sampling results if needed
+        if return_sampling_results:
+            response = self._handle_sampling_results(response)
 
-            mellea_tools = langchain_to_mellea_tools(self._bound_tools)
-            model_options[ModelOption.TOOLS] = mellea_tools
-            tool_calls_enabled = True
-
-        # Use ainstruct method when requirements or strategy are provided for validation
-        if requirements is not None or strategy is not None:
-            # Use instruct method for requirements and strategy support
-            response = await self.mellea_session.ainstruct(
-                last_message_content,
-                requirements=requirements,
-                strategy=strategy,
-                model_options=model_options,
-                return_sampling_results=return_sampling_results,
-            )
-
-            # Handle sampling results if requested
-            if return_sampling_results:
-                # response is a SamplingResult object
-                if response.success:
-                    # Use the successful result
-                    result = mellea_to_langchain_result(response.result)
-                else:
-                    # Use the first sample if validation failed
-                    if response.sample_generations:
-                        result = mellea_to_langchain_result(response.sample_generations[0])
-                    else:
-                        raise ValueError("No samples generated during validation")
-            else:
-                # Standard response
-                result = mellea_to_langchain_result(response)
-        else:
-            # Use standard chat method
-            response = await self.mellea_session.achat(
-                last_message_content,
-                model_options=model_options,
-                tool_calls=tool_calls_enabled,  # Enable tool calling if tools are bound
-            )
-            result = mellea_to_langchain_result(response)
+        # Convert response using message converter
+        result = self.message_converter.from_mellea(response)
 
         # Execute tool calls if present
         if tool_calls_enabled and result.generations:
@@ -410,9 +362,8 @@ class MelleaChatModel(BaseChatModel):
                 # Execute the tools
                 tool_results = self._execute_tool_calls(ai_message.tool_calls)
 
-                # Store tool execution results in the AIMessage's additional_kwargs and response_metadata
+                # Store tool execution results in the AIMessage
                 if tool_results:
-                    # Update the message with tool execution results
                     from langchain_core.messages import AIMessage
                     from langchain_core.outputs import ChatGeneration
 
@@ -430,7 +381,6 @@ class MelleaChatModel(BaseChatModel):
                         id=ai_message.id,
                     )
 
-                    # Update the result with the new message
                     result.generations[0] = ChatGeneration(
                         message=updated_message,
                         generation_info=result.generations[0].generation_info,
@@ -509,3 +459,6 @@ class MelleaChatModel(BaseChatModel):
             await run_manager.on_llm_new_token(content)
 
         yield chunk
+
+
+# Made with Bob
