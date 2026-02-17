@@ -1,7 +1,9 @@
 """Tests for message conversion utilities."""
 
-import pytest
 from unittest.mock import Mock
+
+import pytest
+
 from mellea_integration import BaseMessageConverter
 
 
@@ -10,10 +12,7 @@ class TestMessageConverter(BaseMessageConverter):
 
     def to_mellea(self, messages):
         """Simple test implementation."""
-        return [
-            self.create_mellea_message("user", msg["content"])
-            for msg in messages
-        ]
+        return [self.create_mellea_message("user", msg["content"]) for msg in messages]
 
     def from_mellea(self, response):
         """Simple test implementation."""
@@ -161,4 +160,4 @@ def test_full_conversion_flow(converter):
     result = converter.from_mellea(response)
     assert result["content"] == "Response text"
 
-# Made with Bob
+
