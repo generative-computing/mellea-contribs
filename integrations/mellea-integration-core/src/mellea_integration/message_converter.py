@@ -124,6 +124,8 @@ class BaseMessageConverter:
                 return value
             return str(value) if value is not None else ""
         else:
-            return str(response)
+            # If response has no content or value attribute, return empty string
+            # rather than string representation of the object
+            return ""
 
-# Made with Bob
+
