@@ -2,7 +2,7 @@
 
 import pytest
 
-from mellea_langchain.tool_conversion import langchain_to_mellea_tools
+from mellea_langchain.tool_conversion import LangChainToolConverter
 
 
 class MockLangChainTool:
@@ -36,8 +36,9 @@ class TestToolConversion:
 
     def test_empty_tools_list(self):
         """Test conversion of empty tools list."""
+        converter = LangChainToolConverter()
         tools = []
-        result = langchain_to_mellea_tools(tools)
+        result = converter.to_mellea(tools)
 
         assert result == []
         assert isinstance(result, list)
@@ -46,9 +47,10 @@ class TestToolConversion:
         """Test conversion logic with LangChain-like tool."""
         # Since the actual conversion relies on Mellea's from_langchain method,
         # we test that non-BaseTool objects are passed through unchanged
+        converter = LangChainToolConverter()
         tool = MockLangChainTool(name="search", description="Search the web")
 
-        result = langchain_to_mellea_tools([tool])
+        result = converter.to_mellea([tool])
 
         # Without actual LangChain BaseTool, tool is passed through
         assert len(result) == 1
@@ -57,11 +59,12 @@ class TestToolConversion:
     def test_multiple_langchain_tools_conversion(self):
         """Test conversion of multiple tools."""
         # Test that multiple tools are processed
+        converter = LangChainToolConverter()
         tool1 = MockLangChainTool(name="search", description="Search")
         tool2 = MockLangChainTool(name="calculator", description="Calculate")
         tool3 = MockLangChainTool(name="weather", description="Get weather")
 
-        result = langchain_to_mellea_tools([tool1, tool2, tool3])
+        result = converter.to_mellea([tool1, tool2, tool3])
 
         # All tools should be in result
         assert len(result) == 3
@@ -71,9 +74,10 @@ class TestToolConversion:
 
     def test_mellea_tool_passthrough(self):
         """Test that Mellea tools are passed through unchanged."""
+        converter = LangChainToolConverter()
         mellea_tool = MockMelleaTool(name="native_mellea_tool")
 
-        result = langchain_to_mellea_tools([mellea_tool])
+        result = converter.to_mellea([mellea_tool])
 
         assert len(result) == 1
         assert result[0] is mellea_tool
@@ -82,10 +86,11 @@ class TestToolConversion:
     def test_mixed_tools_conversion(self):
         """Test conversion of mixed tool types."""
         # Create tools
+        converter = LangChainToolConverter()
         lc_tool = MockLangChainTool(name="langchain_tool")
         mellea_tool = MockMelleaTool(name="mellea_tool")
 
-        result = langchain_to_mellea_tools([lc_tool, mellea_tool])
+        result = converter.to_mellea([lc_tool, mellea_tool])
 
         # Both tools should be in result (passed through without conversion)
         assert len(result) == 2
@@ -101,6 +106,7 @@ class TestToolConversion:
                 super().__init__(name, description)
                 self.args_schema = args_schema
 
+        converter = LangChainToolConverter()
         tool = ComplexMockTool(
             name="complex_tool",
             args_schema={
@@ -112,7 +118,7 @@ class TestToolConversion:
             },
         )
 
-        result = langchain_to_mellea_tools([tool])
+        result = converter.to_mellea([tool])
 
         # Tool with schema should be passed through
         assert len(result) == 1
@@ -121,14 +127,29 @@ class TestToolConversion:
 
     def test_none_in_tools_list(self):
         """Test handling of None values in tools list."""
+        converter = LangChainToolConverter()
         mellea_tool = MockMelleaTool(name="valid_tool")
 
         # Should handle None gracefully by passing it through
-        result = langchain_to_mellea_tools([mellea_tool, None])
+        result = converter.to_mellea([mellea_tool, None])
 
         assert len(result) == 2
         assert result[0] is mellea_tool
         assert result[1] is None
+
+    def test_converter_is_reusable(self):
+        """Test that a single converter instance can be reused for multiple conversions."""
+        converter = LangChainToolConverter()
+        tool1 = MockMelleaTool(name="tool_a")
+        tool2 = MockMelleaTool(name="tool_b")
+
+        result1 = converter.to_mellea([tool1])
+        result2 = converter.to_mellea([tool2])
+
+        assert len(result1) == 1
+        assert result1[0].name == "tool_a"
+        assert len(result2) == 1
+        assert result2[0].name == "tool_b"
 
 
 if __name__ == "__main__":
