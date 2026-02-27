@@ -6,12 +6,8 @@ capabilities through the standard LangChain interface.
 """
 
 from .chat_model import MelleaChatModel
-from .message_conversion import (
-    LangChainMessageConverter,
-    langchain_to_mellea_messages,
-    mellea_to_langchain_result,
-)
-from .tool_conversion import LangChainToolConverter, langchain_to_mellea_tools
+from .message_conversion import LangChainMessageConverter
+from .tool_conversion import LangChainToolConverter
 
 __version__ = "0.1.0"
 
@@ -19,9 +15,4 @@ __all__ = [
     "MelleaChatModel",
     "LangChainMessageConverter",
     "LangChainToolConverter",
-    "langchain_to_mellea_messages",
-    "langchain_to_mellea_tools",
-    "mellea_to_langchain_result",
 ]
-
-# Made with Bob

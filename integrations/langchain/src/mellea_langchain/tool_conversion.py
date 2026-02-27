@@ -68,23 +68,3 @@ class LangChainToolConverter(BaseToolConverter):
                 mellea_tools.append(tool)
 
         return mellea_tools
-
-
-# Backward compatibility: Keep old function name as alias
-def langchain_to_mellea_tools(tools: list[Any]) -> list[Any]:
-    """Convert LangChain tools to Mellea tool format.
-
-    Deprecated: Use LangChainToolConverter().to_mellea() instead.
-    This function is kept for backward compatibility.
-
-    Args:
-        tools: List of LangChain tools or Mellea tools
-
-    Returns:
-        List of Mellea-compatible tool objects
-    """
-    converter = LangChainToolConverter()
-    return converter.to_mellea(tools)
-
-
-# Made with Bob

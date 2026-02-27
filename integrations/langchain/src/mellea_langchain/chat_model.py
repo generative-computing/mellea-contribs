@@ -459,6 +459,3 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
             await run_manager.on_llm_new_token(content)
 
         yield chunk
-
-
-# Made with Bob

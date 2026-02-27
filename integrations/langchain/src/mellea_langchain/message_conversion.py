@@ -191,27 +191,3 @@ class LangChainMessageConverter(BaseMessageConverter):
                 continue
 
         return tool_calls
-
-
-# Backward compatibility: Keep old function names as aliases
-def langchain_to_mellea_messages(messages: list[BaseMessage]) -> list[Message]:
-    """Convert LangChain messages to Mellea format.
-
-    Deprecated: Use LangChainMessageConverter().to_mellea() instead.
-    This function is kept for backward compatibility.
-    """
-    converter = LangChainMessageConverter()
-    return converter.to_mellea(messages)
-
-
-def mellea_to_langchain_result(response: Any, **kwargs: Any) -> ChatResult:
-    """Convert Mellea response to LangChain ChatResult.
-
-    Deprecated: Use LangChainMessageConverter().from_mellea() instead.
-    This function is kept for backward compatibility.
-    """
-    converter = LangChainMessageConverter()
-    return converter.from_mellea(response, **kwargs)
-
-
-# Made with Bob
