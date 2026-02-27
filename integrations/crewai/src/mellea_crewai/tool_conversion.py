@@ -86,13 +86,3 @@ class CrewAIToolConverter(BaseToolConverter):
                 mellea_tools.append(tool)
 
         return mellea_tools
-
-
-# Backward compatibility: keep old function name
-def crewai_to_mellea_tools(tools: list[Any]) -> list[Any]:
-    """Convert CrewAI tools to Mellea tool format.
-
-    Deprecated: Use CrewAIToolConverter.to_mellea() instead.
-    """
-    converter = CrewAIToolConverter()
-    return converter.to_mellea(tools)

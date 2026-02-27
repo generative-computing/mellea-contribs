@@ -6,15 +6,16 @@ class TestCrewAIToMelleaConversion:
 
     def test_import_message_conversion(self):
         """Test that message conversion module can be imported."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
-        assert crewai_to_mellea_messages is not None
+        assert CrewAIMessageConverter is not None
 
     def test_convert_string_message(self):
         """Test converting a simple string message."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
-        result = crewai_to_mellea_messages("Hello, world!")
+        converter = CrewAIMessageConverter()
+        result = converter.to_mellea("Hello, world!")
 
         assert len(result) == 1
         assert result[0].role == "user"
@@ -22,10 +23,11 @@ class TestCrewAIToMelleaConversion:
 
     def test_convert_single_user_message(self):
         """Test converting a single user message dict."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         messages = [{"role": "user", "content": "Test message"}]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert len(result) == 1
         assert result[0].role == "user"
@@ -33,10 +35,11 @@ class TestCrewAIToMelleaConversion:
 
     def test_convert_system_message(self):
         """Test converting a system message."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         messages = [{"role": "system", "content": "You are a helpful assistant"}]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert len(result) == 1
         assert result[0].role == "system"
@@ -44,10 +47,11 @@ class TestCrewAIToMelleaConversion:
 
     def test_convert_assistant_message(self):
         """Test converting an assistant message."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         messages = [{"role": "assistant", "content": "I can help you with that"}]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert len(result) == 1
         assert result[0].role == "assistant"
@@ -55,15 +59,16 @@ class TestCrewAIToMelleaConversion:
 
     def test_convert_multiple_messages(self):
         """Test converting multiple messages."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         messages = [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there!"},
             {"role": "user", "content": "How are you?"},
         ]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert len(result) == 4
         assert result[0].role == "system"
@@ -73,31 +78,34 @@ class TestCrewAIToMelleaConversion:
 
     def test_convert_empty_list(self):
         """Test converting empty message list."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
-        result = crewai_to_mellea_messages([])
+        converter = CrewAIMessageConverter()
+        result = converter.to_mellea([])
 
         assert len(result) == 0
 
     def test_message_content_preserved(self):
         """Test that message content is preserved exactly."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         content = "This is a test message with special chars: !@#$%^&*()"
         messages = [{"role": "user", "content": content}]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert result[0].content == content
 
     def test_multiline_message_content(self):
         """Test converting messages with multiline content."""
-        from mellea_crewai.message_conversion import crewai_to_mellea_messages
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         content = """This is a multiline message.
 It has multiple lines.
 And should be preserved."""
         messages = [{"role": "user", "content": content}]
-        result = crewai_to_mellea_messages(messages)
+        result = converter.to_mellea(messages)
 
         assert result[0].content == content
 
@@ -107,20 +115,21 @@ class TestMelleaToCrewAIConversion:
 
     def test_import_response_conversion(self):
         """Test that response conversion can be imported."""
-        from mellea_crewai.message_conversion import mellea_to_crewai_response
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
-        assert mellea_to_crewai_response is not None
+        assert CrewAIMessageConverter is not None
 
     def test_convert_simple_response(self):
         """Test converting a simple Mellea response."""
         from unittest.mock import Mock
 
-        from mellea_crewai.message_conversion import mellea_to_crewai_response
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         mock_response = Mock()
         mock_response.content = "This is a response"
 
-        result = mellea_to_crewai_response(mock_response)
+        result = converter.from_mellea(mock_response)
 
         assert result == "This is a response"
 
@@ -128,12 +137,13 @@ class TestMelleaToCrewAIConversion:
         """Test converting response with special characters."""
         from unittest.mock import Mock
 
-        from mellea_crewai.message_conversion import mellea_to_crewai_response
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         mock_response = Mock()
         mock_response.content = "Response with special chars: !@#$%^&*()"
 
-        result = mellea_to_crewai_response(mock_response)
+        result = converter.from_mellea(mock_response)
 
         assert result == "Response with special chars: !@#$%^&*()"
 
@@ -141,15 +151,16 @@ class TestMelleaToCrewAIConversion:
         """Test converting multiline response."""
         from unittest.mock import Mock
 
-        from mellea_crewai.message_conversion import mellea_to_crewai_response
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         content = """This is a multiline response.
 It has multiple lines.
 All should be preserved."""
         mock_response = Mock()
         mock_response.content = content
 
-        result = mellea_to_crewai_response(mock_response)
+        result = converter.from_mellea(mock_response)
 
         assert result == content
 
@@ -157,12 +168,13 @@ All should be preserved."""
         """Test converting empty response."""
         from unittest.mock import Mock
 
-        from mellea_crewai.message_conversion import mellea_to_crewai_response
+        from mellea_crewai.message_conversion import CrewAIMessageConverter
 
+        converter = CrewAIMessageConverter()
         mock_response = Mock()
         mock_response.content = ""
 
-        result = mellea_to_crewai_response(mock_response)
+        result = converter.from_mellea(mock_response)
 
         assert result == ""
 
@@ -253,6 +265,3 @@ class TestMessageConversionIntegration:
 
         assert result == "I'm doing well, thank you!"
         mock_session.chat.assert_called_once()
-
-
-# Made with Bob

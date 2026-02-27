@@ -10,15 +10,15 @@ class TestToolConversion:
 
     def test_import_tool_conversion(self):
         """Test that tool conversion module can be imported."""
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
-        assert crewai_to_mellea_tools is not None
+        assert CrewAIToolConverter is not None
 
     def test_convert_single_tool(self):
         """Test converting a single CrewAI tool to Mellea format."""
         from crewai.tools import tool
 
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
         @tool("test_tool")
         def test_tool(message: str) -> str:
@@ -33,7 +33,8 @@ class TestToolConversion:
             return f"Tool: {message}"
 
         # Convert tool
-        mellea_tools = crewai_to_mellea_tools([test_tool])
+        converter = CrewAIToolConverter()
+        mellea_tools = converter.to_mellea([test_tool])
 
         # Verify conversion
         assert len(mellea_tools) == 1
@@ -46,7 +47,7 @@ class TestToolConversion:
         """Test converting multiple CrewAI tools."""
         from crewai.tools import tool
 
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
         @tool("tool_one")
         def tool_one(x: int) -> int:
@@ -59,7 +60,8 @@ class TestToolConversion:
             return y.upper()
 
         # Convert tools
-        mellea_tools = crewai_to_mellea_tools([tool_one, tool_two])
+        converter = CrewAIToolConverter()
+        mellea_tools = converter.to_mellea([tool_one, tool_two])
 
         # Verify conversion
         assert len(mellea_tools) == 2
@@ -70,7 +72,7 @@ class TestToolConversion:
         """Test that converted tool has correct JSON schema."""
         from crewai.tools import tool
 
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
         @tool("schema_test")
         def schema_test(param1: str, param2: int) -> str:
@@ -86,7 +88,8 @@ class TestToolConversion:
             return f"{param1}-{param2}"
 
         # Convert tool
-        mellea_tools = crewai_to_mellea_tools([schema_test])
+        converter = CrewAIToolConverter()
+        mellea_tools = converter.to_mellea([schema_test])
         tool_json = mellea_tools[0].as_json_tool
 
         # Verify JSON schema structure
@@ -100,7 +103,7 @@ class TestToolConversion:
         """Test that converted tool can be executed."""
         from crewai.tools import tool
 
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
         @tool("executable_tool")
         def executable_tool(value: str) -> str:
@@ -108,16 +111,18 @@ class TestToolConversion:
             return f"Result: {value}"
 
         # Convert and execute
-        mellea_tools = crewai_to_mellea_tools([executable_tool])
+        converter = CrewAIToolConverter()
+        mellea_tools = converter.to_mellea([executable_tool])
         result = mellea_tools[0].run(value="test")
 
         assert result == "Result: test"
 
     def test_empty_tool_list(self):
         """Test converting empty tool list."""
-        from mellea_crewai.tool_conversion import crewai_to_mellea_tools
+        from mellea_crewai.tool_conversion import CrewAIToolConverter
 
-        mellea_tools = crewai_to_mellea_tools([])
+        converter = CrewAIToolConverter()
+        mellea_tools = converter.to_mellea([])
         assert len(mellea_tools) == 0
 
 
@@ -263,12 +268,9 @@ class TestToolCallingRealIntegration:
         # Make call with tool
         result = llm.call("What is 5 plus 3?", tools=[add_numbers])
 
-        # Note: This test is skipped by default as it requires a model
-        # with function calling support. The test verifies that:
+        # Note: This test requires a model with function calling support.
+        # The test verifies that:
         # 1. Tools are properly passed to the backend
-        # 2. The model can invoke tools
-        # 3. Tool results are integrated into the response
-        assert isinstance(result, str)
-
-
-# Made with Bob
+        # 2. The model can invoke tools or return a text response
+        # 3. Result is either a string answer or a list of tool calls
+        assert isinstance(result, (str, list))

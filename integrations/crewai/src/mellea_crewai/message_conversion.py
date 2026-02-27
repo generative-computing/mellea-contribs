@@ -145,22 +145,3 @@ class CrewAIMessageConverter(BaseMessageConverter):
         else:
             # Fallback: convert to string
             return str(response)
-
-
-# Backward compatibility: keep old function names
-def crewai_to_mellea_messages(messages: str | list[dict[str, Any]]) -> list[Any]:
-    """Convert CrewAI messages to Mellea format.
-
-    Deprecated: Use CrewAIMessageConverter.to_mellea() instead.
-    """
-    converter = CrewAIMessageConverter()
-    return converter.to_mellea(messages)
-
-
-def mellea_to_crewai_response(response: Any) -> str | list[Any]:
-    """Convert Mellea response to CrewAI format.
-
-    Deprecated: Use CrewAIMessageConverter.from_mellea() instead.
-    """
-    converter = CrewAIMessageConverter()
-    return converter.from_mellea(response)

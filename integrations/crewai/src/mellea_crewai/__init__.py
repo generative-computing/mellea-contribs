@@ -6,12 +6,8 @@ capabilities including requirements, validation, and sampling strategies.
 """
 
 from .llm import MelleaLLM
-from .message_conversion import (
-    CrewAIMessageConverter,
-    crewai_to_mellea_messages,
-    mellea_to_crewai_response,
-)
-from .tool_conversion import CrewAIToolConverter, crewai_to_mellea_tools
+from .message_conversion import CrewAIMessageConverter
+from .tool_conversion import CrewAIToolConverter
 
 __version__ = "0.1.0"
 
@@ -19,7 +15,4 @@ __all__ = [
     "MelleaLLM",
     "CrewAIMessageConverter",
     "CrewAIToolConverter",
-    "crewai_to_mellea_messages",
-    "mellea_to_crewai_response",
-    "crewai_to_mellea_tools",
 ]
