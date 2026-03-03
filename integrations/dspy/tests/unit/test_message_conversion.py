@@ -3,7 +3,6 @@
 from unittest.mock import Mock
 
 import pytest
-
 from mellea_dspy.message_conversion import DSPyMessageConverter
 
 
@@ -68,7 +67,9 @@ class TestToMellea:
 class TestFromMellea:
     """Tests for DSPyMessageConverter.from_mellea."""
 
-    def test_from_mellea_produces_openai_compatible_response(self, converter, mock_mellea_response):
+    def test_from_mellea_produces_openai_compatible_response(
+        self, converter, mock_mellea_response
+    ):
         """Test response has OpenAI-compatible structure."""
         response = converter.from_mellea(mock_mellea_response)
 
@@ -79,7 +80,9 @@ class TestFromMellea:
         assert response.choices[0].finish_reason == "stop"
         assert response.choices[0].index == 0
 
-    def test_from_mellea_usage_is_dict_convertible(self, converter, mock_mellea_response):
+    def test_from_mellea_usage_is_dict_convertible(
+        self, converter, mock_mellea_response
+    ):
         """Test usage object can be converted to dict."""
         response = converter.from_mellea(mock_mellea_response)
 
