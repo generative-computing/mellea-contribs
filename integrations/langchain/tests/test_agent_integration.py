@@ -9,7 +9,6 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from mellea_langchain import MelleaChatModel
 
-
 # Try to import LangChain tool decorator
 try:
     from langchain_core.tools import tool
@@ -97,11 +96,13 @@ class FakeAgentMelleaSession:
     ):
         """Mock sync instruct for requirements/strategy."""
         self.call_count += 1
-        self.call_history.append({
-            "message": message,
-            "requirements": requirements,
-            "strategy": strategy,
-        })
+        self.call_history.append(
+            {
+                "message": message,
+                "requirements": requirements,
+                "strategy": strategy,
+            }
+        )
 
         class MockResponse:
             def __init__(self, content):
@@ -120,12 +121,14 @@ class FakeAgentMelleaSession:
     ):
         """Mock async instruct for requirements/strategy."""
         self.call_count += 1
-        self.call_history.append({
-            "message": message,
-            "requirements": requirements,
-            "strategy": strategy,
-            "async": True,
-        })
+        self.call_history.append(
+            {
+                "message": message,
+                "requirements": requirements,
+                "strategy": strategy,
+                "async": True,
+            }
+        )
 
         class MockResponse:
             def __init__(self, content):
