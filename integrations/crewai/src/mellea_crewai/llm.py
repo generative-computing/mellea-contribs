@@ -293,7 +293,7 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         if tool_result is not None:
                             return tool_result
 
-                # Track token usage
+                # Track token usage if available
                 if hasattr(response, "usage") and response.usage:
                     # Convert usage object to dict if needed
                     usage_dict = (
@@ -306,6 +306,10 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         }
                     )
                     self._track_token_usage_internal(usage_dict)
+                else:
+                    # Track request even if usage info is not available
+                    # This allows counting successful requests from backends that don't provide usage
+                    self._track_token_usage_internal({"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0})
 
                 # Emit call completed event
                 self._emit_call_completed_event(
@@ -472,7 +476,7 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         if tool_result is not None:
                             return tool_result
 
-                # Track token usage
+                # Track token usage if available
                 if hasattr(response, "usage") and response.usage:
                     # Convert usage object to dict if needed
                     usage_dict = (
@@ -485,6 +489,10 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         }
                     )
                     self._track_token_usage_internal(usage_dict)
+                else:
+                    # Track request even if usage info is not available
+                    # This allows counting successful requests from backends that don't provide usage
+                    self._track_token_usage_internal({"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0})
 
                 # Emit call completed event
                 self._emit_call_completed_event(
