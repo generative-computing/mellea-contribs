@@ -22,22 +22,6 @@ def basic_requirements():
     dspy.configure(lm=lm)
     print("   ✓ Setup complete")
 
-    # Define a signature for generating summaries
-    print("\n2. Defining signature for summary generation...")
-
-    class GenerateSummary(dspy.Signature):
-        """Generate a summary with specific requirements."""
-
-        text = dspy.InputField(desc="The text to summarize")
-        summary = dspy.OutputField(desc="A concise summary")
-
-    print("   ✓ Signature defined")
-
-    # Create predictor
-    print("\n3. Creating predictor...")
-    summarizer = dspy.Predict(GenerateSummary)
-    print("   ✓ Predictor created")
-
     # Example text
     text = """
     Artificial intelligence has made remarkable progress in recent years.
@@ -48,20 +32,33 @@ def basic_requirements():
     generation and validation.
     """
 
-    # Generate with requirements
-    print("\n4. Generating summary with requirements...")
+    # Generate with requirements using forward method
+    print("\n2. Generating summary with requirements...")
     print("   Requirements:")
-    print("   - Must be under 50 words")
+    print("   - Must be concise")
     print("   - Must mention 'AI' or 'artificial intelligence'")
     print("   - Must be a single paragraph")
 
-    # Note: Requirements are passed through the LM's forward method
-    # In practice, you would use Mellea's instruct method directly
-    # or extend the DSPy module to support requirements
-    response = summarizer(text=text)
+    requirements = [
+        "be concise and under 50 words",
+        "mention 'AI' or 'artificial intelligence'",
+        "write as a single paragraph",
+    ]
+
+    response = lm.forward(
+        prompt=f"Summarize the following text:\n\n{text}",
+        requirements=requirements,
+    )
+
+    summary = response.choices[0].message.content
     print("\n   Generated Summary:")
-    print(f"   {response.summary}")
-    print(f"   Word count: {len(response.summary.split())}")
+    print(f"   {summary}")
+    print(f"   Word count: {len(summary.split())}")
+
+    # Validate requirements were met
+    print("\n   Validation:")
+    print(f"   ✓ Word count under 50: {len(summary.split()) <= 50}")
+    print(f"   ✓ Mentions AI: {'ai' in summary.lower() or 'artificial intelligence' in summary.lower()}")
 
     print("\n" + "=" * 70)
 
@@ -79,33 +76,27 @@ def length_constraints():
     dspy.configure(lm=lm)
     print("   ✓ Setup complete")
 
-    # Define signature
-    print("\n2. Defining signature...")
-
-    class GenerateDescription(dspy.Signature):
-        """Generate a product description."""
-
-        product = dspy.InputField(desc="The product name")
-        description = dspy.OutputField(desc="A product description")
-
-    predictor = dspy.Predict(GenerateDescription)
-    print("   ✓ Predictor created")
-
     # Generate descriptions with different length requirements
-    print("\n3. Generating descriptions with length constraints...")
+    print("\n2. Generating descriptions with length constraints...")
 
     products = [
-        ("Smartphone", "short (20-30 words)"),
-        ("Laptop", "medium (40-60 words)"),
-        ("Smart Watch", "long (80-100 words)"),
+        ("Smartphone", "20-30 words", ["keep response between 20-30 words", "be descriptive"]),
+        ("Laptop", "40-60 words", ["keep response between 40-60 words", "mention key features"]),
+        ("Smart Watch", "80-100 words", ["keep response between 80-100 words", "be comprehensive"]),
     ]
 
-    for product, length_req in products:
+    for product, length_desc, requirements in products:
         print(f"\n   Product: {product}")
-        print(f"   Length requirement: {length_req}")
-        response = predictor(product=product)
-        word_count = len(response.description.split())
-        print(f"   Description ({word_count} words): {response.description}")
+        print(f"   Length requirement: {length_desc}")
+        
+        response = lm.forward(
+            prompt=f"Write a product description for: {product}",
+            requirements=requirements,
+        )
+        
+        description = response.choices[0].message.content
+        word_count = len(description.split())
+        print(f"   Description ({word_count} words): {description}")
 
     print("\n" + "=" * 70)
 
@@ -123,31 +114,25 @@ def format_requirements():
     dspy.configure(lm=lm)
     print("   ✓ Setup complete")
 
-    # Define signature for structured output
-    print("\n2. Defining signature for structured output...")
-
-    class GenerateStructuredResponse(dspy.Signature):
-        """Generate a structured response."""
-
-        topic = dspy.InputField(desc="The topic to write about")
-        response = dspy.OutputField(desc="A structured response")
-
-    predictor = dspy.Predict(GenerateStructuredResponse)
-    print("   ✓ Predictor created")
-
     # Generate with format requirements
-    print("\n3. Generating with format requirements...")
+    print("\n2. Generating with format requirements...")
     topics = [
-        ("Python programming", "bullet points"),
-        ("Machine learning", "numbered list"),
-        ("Data science", "paragraph format"),
+        ("Python programming", "bullet points", ["use bullet points", "list 3-5 key points"]),
+        ("Machine learning", "numbered list", ["use numbered list", "include 4 items"]),
+        ("Data science", "paragraph format", ["write as a single paragraph", "be concise"]),
     ]
 
-    for topic, format_type in topics:
+    for topic, format_desc, requirements in topics:
         print(f"\n   Topic: {topic}")
-        print(f"   Required format: {format_type}")
-        response = predictor(topic=topic)
-        print(f"   Response:\n{response.response}")
+        print(f"   Required format: {format_desc}")
+        
+        response = lm.forward(
+            prompt=f"Write about {topic}",
+            requirements=requirements,
+        )
+        
+        content = response.choices[0].message.content
+        print(f"   Response:\n{content}")
 
     print("\n" + "=" * 70)
 
@@ -165,20 +150,8 @@ def content_requirements():
     dspy.configure(lm=lm)
     print("   ✓ Setup complete")
 
-    # Define signature
-    print("\n2. Defining signature...")
-
-    class GenerateArticle(dspy.Signature):
-        """Generate an article with specific content requirements."""
-
-        topic = dspy.InputField(desc="The article topic")
-        article = dspy.OutputField(desc="The article content")
-
-    predictor = dspy.Predict(GenerateArticle)
-    print("   ✓ Predictor created")
-
     # Generate with content requirements
-    print("\n3. Generating article with content requirements...")
+    print("\n2. Generating article with content requirements...")
     print("   Topic: Benefits of Generative Programming")
     print("   Requirements:")
     print("   - Must mention 'reliability'")
@@ -186,13 +159,25 @@ def content_requirements():
     print("   - Must include at least one example")
     print("   - Must be technical but accessible")
 
-    response = predictor(topic="Benefits of Generative Programming")
+    requirements = [
+        "mention 'reliability' in the response",
+        "mention 'maintainability' in the response",
+        "include at least one concrete example",
+        "be technical but accessible to developers",
+    ]
+
+    response = lm.forward(
+        prompt="Write an article about the benefits of generative programming",
+        requirements=requirements,
+    )
+
+    article = response.choices[0].message.content
     print("\n   Generated Article:")
-    print(f"   {response.article}")
+    print(f"   {article}")
 
     # Check if requirements are met
     print("\n   Validation:")
-    article_lower = response.article.lower()
+    article_lower = article.lower()
     print(f"   ✓ Contains 'reliability': {'reliability' in article_lower}")
     print(f"   ✓ Contains 'maintainability': {'maintainability' in article_lower}")
 
@@ -212,21 +197,8 @@ def combined_requirements():
     dspy.configure(lm=lm)
     print("   ✓ Setup complete")
 
-    # Define signature
-    print("\n2. Defining signature...")
-
-    class GenerateEmail(dspy.Signature):
-        """Generate a professional email."""
-
-        purpose = dspy.InputField(desc="The purpose of the email")
-        recipient = dspy.InputField(desc="The recipient's role")
-        email = dspy.OutputField(desc="The email content")
-
-    predictor = dspy.Predict(GenerateEmail)
-    print("   ✓ Predictor created")
-
     # Generate with combined requirements
-    print("\n3. Generating email with combined requirements...")
+    print("\n2. Generating email with combined requirements...")
     print("   Purpose: Request for project update")
     print("   Recipient: Project Manager")
     print("\n   Combined Requirements:")
@@ -235,13 +207,66 @@ def combined_requirements():
     print("   - Content: Must include greeting and closing")
     print("   - Tone: Polite and professional")
 
-    response = predictor(
-        purpose="Request for project update", recipient="Project Manager"
+    requirements = [
+        "keep response between 100-150 words",
+        "use professional email format with greeting and closing",
+        "include a polite greeting",
+        "include a professional closing",
+        "maintain a polite and professional tone throughout",
+    ]
+
+    response = lm.forward(
+        prompt="Write a professional email to a Project Manager requesting a project update",
+        requirements=requirements,
     )
 
-    word_count = len(response.email.split())
+    email = response.choices[0].message.content
+    word_count = len(email.split())
     print(f"\n   Generated Email ({word_count} words):")
-    print(f"   {response.email}")
+    print(f"   {email}")
+
+    print("\n" + "=" * 70)
+
+
+def requirements_with_lm_instance():
+    """Demonstrate setting requirements on LM instance."""
+    print("\n" + "=" * 70)
+    print("Example 6: Requirements on LM Instance")
+    print("=" * 70)
+
+    # Setup with requirements on LM
+    print("\n1. Setting up LM with default requirements...")
+    m = start_session()
+    
+    # Set requirements at LM level - these apply to all generations
+    default_requirements = [
+        "be concise",
+        "use clear language",
+        "be helpful",
+    ]
+    
+    lm = MelleaLM(
+        mellea_session=m,
+        model="mellea-ollama",
+        requirements=default_requirements,
+    )
+    dspy.configure(lm=lm)
+    print("   ✓ LM configured with default requirements")
+
+    # Use with DSPy - requirements automatically applied
+    print("\n2. Using DSPy with LM-level requirements...")
+    qa = dspy.Predict("question -> answer")
+    
+    questions = [
+        "What is Python?",
+        "Explain machine learning",
+    ]
+    
+    for question in questions:
+        print(f"\n   Question: {question}")
+        response = qa(question=question)
+        print(f"   Answer: {response.answer}")
+        print(f"   (Requirements automatically applied: {default_requirements})")
 
     print("\n" + "=" * 70)
 
@@ -259,6 +284,7 @@ def main():
         format_requirements()
         content_requirements()
         combined_requirements()
+        requirements_with_lm_instance()
 
         # Summary
         print("\n" + "=" * 70)
@@ -266,12 +292,16 @@ def main():
         print("=" * 70)
         print("\nKey Takeaways:")
         print("  • Requirements ensure output quality and consistency")
+        print("  • Pass requirements via forward() method for per-call control")
+        print("  • Set requirements on LM instance for default behavior")
         print("  • Length constraints control verbosity")
         print("  • Format requirements structure the output")
         print("  • Content requirements ensure key information")
         print("  • Multiple requirements can be combined")
-        print("\nNote: For full requirements validation, use Mellea's")
-        print("      instruct() method with requirements parameter.")
+        print("\nUsage Patterns:")
+        print("  1. Per-call: lm.forward(prompt=..., requirements=[...])")
+        print("  2. LM-level: MelleaLM(mellea_session=m, requirements=[...])")
+        print("  3. Override: Call-level requirements override LM-level")
         print("=" * 70)
 
     except Exception as e:
