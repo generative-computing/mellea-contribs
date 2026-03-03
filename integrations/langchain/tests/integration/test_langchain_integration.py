@@ -6,11 +6,10 @@ Uses realistic fake Mellea session stubs instead of mocks to ensure full interfa
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from mellea_langchain import MelleaChatModel
-
 
 # ==============================================================================
 # Shared Fixtures and Fake Implementations
@@ -139,7 +138,10 @@ class TestBasicChatIntegration:
         # Session should receive both messages converted
         assert result.content == "Response"
         # Message extraction should identify the last human message
-        assert "How can you help?" in str(fake_session.last_message) or fake_session.last_message == "How can you help?"
+        assert (
+            "How can you help?" in str(fake_session.last_message)
+            or fake_session.last_message == "How can you help?"
+        )
 
     def test_invoke_multi_turn_conversation(self):
         """Human/AI alternating history → last human is the prompt."""
@@ -336,7 +338,9 @@ class TestToolCallingIntegration:
 
     def test_tool_response_parsed_to_ai_message(self):
         """Session returns [ToolCall...] string → AIMessage has .tool_calls."""
-        tool_call_string = "[ToolCall(function=Function(name='get_weather', arguments={'location': 'NYC'}))]"
+        tool_call_string = (
+            "[ToolCall(function=Function(name='get_weather', arguments={'location': 'NYC'}))]"
+        )
         fake_session = FakeMelleaSession(response_content=tool_call_string)
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
@@ -478,7 +482,9 @@ class TestRequirementsAndStrategyIntegration:
                 return_sampling_results=False,
             ):
                 if return_sampling_results:
-                    sample_obj = type("obj", (), {"content": "Fallback sample", "value": "Fallback sample"})()
+                    sample_obj = type(
+                        "obj", (), {"content": "Fallback sample", "value": "Fallback sample"}
+                    )()
                     return FakeSamplingResult(
                         success=False,
                         result_content=None,
@@ -560,9 +566,7 @@ class TestLangChainChainIntegration:
         fake_session = FakeMelleaSession(response_content="Plain text response")
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
-        prompt = ChatPromptTemplate.from_messages(
-            [("human", "{text}")]
-        )
+        prompt = ChatPromptTemplate.from_messages([("human", "{text}")])
 
         chain = prompt | chat_model | StrOutputParser()
         result = chain.invoke({"text": "Test"})

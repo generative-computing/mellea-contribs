@@ -34,7 +34,9 @@ class ThreadSafeMelleaSession:
             self.concurrent_calls += 1
             self.max_concurrent_calls = max(self.max_concurrent_calls, self.concurrent_calls)
             call_id = self.call_count
-            self.call_history.append({"id": call_id, "message": message, "thread": threading.current_thread().name})
+            self.call_history.append(
+                {"id": call_id, "message": message, "thread": threading.current_thread().name}
+            )
 
         # Simulate processing time
         time.sleep(self.delay)
@@ -236,7 +238,9 @@ class TestConcurrentAsyncRequests:
         chat_model = MelleaChatModel(mellea_session=session)
 
         async def make_request(req_id):
-            message_text = f"error request {req_id}" if req_id % 3 == 0 else f"good request {req_id}"
+            message_text = (
+                f"error request {req_id}" if req_id % 3 == 0 else f"good request {req_id}"
+            )
             messages = [HumanMessage(content=message_text)]
             try:
                 result = await chat_model.ainvoke(messages)

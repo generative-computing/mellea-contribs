@@ -8,7 +8,6 @@ import pytest
 
 from mellea_langchain.tool_conversion import LangChainToolConverter
 
-
 # Try to import LangChain tools for real conversion tests
 try:
     from langchain_core.tools import BaseTool, StructuredTool, tool
