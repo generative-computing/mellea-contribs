@@ -34,7 +34,7 @@ class MultiStepReasoning(dspy.Module):
         """Analyze text and synthesize conclusion."""
         analysis = self.analyze(text=text)
         result = self.synthesize(analysis=analysis.analysis)
-        return dspy.ChainOfThought("analysis -> result")(analysis=analysis.analysis)
+        return dspy.ChainOfThought("analysis -> answer")(analysis=analysis.analysis)
 
 
 class Extractor(dspy.Module):
@@ -76,7 +76,7 @@ class Pipeline(dspy.Module):
         """Process text through pipeline."""
         extracted = self.extractor(text=text)
         summarized = self.summarizer(key_points=extracted.key_points)
-        return dspy.ChainOfThought("key_points summary -> result")(
+        return dspy.ChainOfThought("key_points, summary -> answer")(
             key_points=extracted.key_points, summary=summarized.summary
         )
 
@@ -88,7 +88,7 @@ class ConversationalQA(dspy.Module):
         """Initialize with empty context."""
         super().__init__()
         self.context = ""
-        self.predict = dspy.ChainOfThought("context question -> answer")
+        self.predict = dspy.ChainOfThought("context, question -> answer")
 
     def forward(self, question):
         """Answer question with accumulated context."""
@@ -117,11 +117,11 @@ class AdaptiveQA(dspy.Module):
         strategy = strategy_result.strategy.lower()
 
         if "simple" in strategy or "short" in strategy:
-            return dspy.ChainOfThought("question strategy -> answer result")(
+            return dspy.ChainOfThought("question, strategy -> answer")(
                 question=question, strategy=strategy
             )
         else:
-            return dspy.ChainOfThought("question strategy -> answer result")(
+            return dspy.ChainOfThought("question, strategy -> answer")(
                 question=question, strategy=strategy
             )
 
