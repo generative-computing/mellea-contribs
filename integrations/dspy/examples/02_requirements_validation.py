@@ -46,8 +46,7 @@ def basic_requirements():
     ]
 
     response = lm.forward(
-        prompt=f"Summarize the following text:\n\n{text}",
-        requirements=requirements,
+        prompt=f"Summarize the following text:\n\n{text}", requirements=requirements
     )
 
     summary = response.choices[0].message.content
@@ -58,7 +57,9 @@ def basic_requirements():
     # Validate requirements were met
     print("\n   Validation:")
     print(f"   ✓ Word count under 50: {len(summary.split()) <= 50}")
-    print(f"   ✓ Mentions AI: {'ai' in summary.lower() or 'artificial intelligence' in summary.lower()}")
+    print(
+        f"   ✓ Mentions AI: {'ai' in summary.lower() or 'artificial intelligence' in summary.lower()}"
+    )
 
     print("\n" + "=" * 70)
 
@@ -80,20 +81,32 @@ def length_constraints():
     print("\n2. Generating descriptions with length constraints...")
 
     products = [
-        ("Smartphone", "20-30 words", ["keep response between 20-30 words", "be descriptive"]),
-        ("Laptop", "40-60 words", ["keep response between 40-60 words", "mention key features"]),
-        ("Smart Watch", "80-100 words", ["keep response between 80-100 words", "be comprehensive"]),
+        (
+            "Smartphone",
+            "20-30 words",
+            ["keep response between 20-30 words", "be descriptive"],
+        ),
+        (
+            "Laptop",
+            "40-60 words",
+            ["keep response between 40-60 words", "mention key features"],
+        ),
+        (
+            "Smart Watch",
+            "80-100 words",
+            ["keep response between 80-100 words", "be comprehensive"],
+        ),
     ]
 
     for product, length_desc, requirements in products:
         print(f"\n   Product: {product}")
         print(f"   Length requirement: {length_desc}")
-        
+
         response = lm.forward(
             prompt=f"Write a product description for: {product}",
             requirements=requirements,
         )
-        
+
         description = response.choices[0].message.content
         word_count = len(description.split())
         print(f"   Description ({word_count} words): {description}")
@@ -117,20 +130,25 @@ def format_requirements():
     # Generate with format requirements
     print("\n2. Generating with format requirements...")
     topics = [
-        ("Python programming", "bullet points", ["use bullet points", "list 3-5 key points"]),
+        (
+            "Python programming",
+            "bullet points",
+            ["use bullet points", "list 3-5 key points"],
+        ),
         ("Machine learning", "numbered list", ["use numbered list", "include 4 items"]),
-        ("Data science", "paragraph format", ["write as a single paragraph", "be concise"]),
+        (
+            "Data science",
+            "paragraph format",
+            ["write as a single paragraph", "be concise"],
+        ),
     ]
 
     for topic, format_desc, requirements in topics:
         print(f"\n   Topic: {topic}")
         print(f"   Required format: {format_desc}")
-        
-        response = lm.forward(
-            prompt=f"Write about {topic}",
-            requirements=requirements,
-        )
-        
+
+        response = lm.forward(prompt=f"Write about {topic}", requirements=requirements)
+
         content = response.choices[0].message.content
         print(f"   Response:\n{content}")
 
@@ -237,18 +255,12 @@ def requirements_with_lm_instance():
     # Setup with requirements on LM
     print("\n1. Setting up LM with default requirements...")
     m = start_session()
-    
+
     # Set requirements at LM level - these apply to all generations
-    default_requirements = [
-        "be concise",
-        "use clear language",
-        "be helpful",
-    ]
-    
+    default_requirements = ["be concise", "use clear language", "be helpful"]
+
     lm = MelleaLM(
-        mellea_session=m,
-        model="mellea-ollama",
-        requirements=default_requirements,
+        mellea_session=m, model="mellea-ollama", requirements=default_requirements
     )
     dspy.configure(lm=lm)
     print("   ✓ LM configured with default requirements")
@@ -256,12 +268,9 @@ def requirements_with_lm_instance():
     # Use with DSPy - requirements automatically applied
     print("\n2. Using DSPy with LM-level requirements...")
     qa = dspy.Predict("question -> answer")
-    
-    questions = [
-        "What is Python?",
-        "Explain machine learning",
-    ]
-    
+
+    questions = ["What is Python?", "Explain machine learning"]
+
     for question in questions:
         print(f"\n   Question: {question}")
         response = qa(question=question)

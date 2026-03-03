@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from mellea_dspy import MelleaLM
 
 
@@ -55,7 +54,7 @@ class TestRequirementsInForward:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["be concise", "use bullet points"]
-            
+
             lm.forward(prompt="Test", requirements=requirements)
 
             # Verify requirements were passed to generation
@@ -71,7 +70,7 @@ class TestRequirementsInForward:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             forward_reqs = ["forward requirement"]
-            
+
             lm.forward(prompt="Test", requirements=forward_reqs)
 
             # Forward requirements should take precedence
@@ -85,13 +84,13 @@ class TestRequirementsInForward:
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test")
 
             # Should use instance requirements
-            call_kwargs = mock_gen.call_args[1]
             # Note: The actual behavior depends on _prepare_generation implementation
             # This test verifies the requirements are accessible
+            assert mock_gen.called
 
     def test_forward_with_multiple_requirements(self, lm):
         """Test forward with multiple requirements."""
@@ -103,7 +102,7 @@ class TestRequirementsInForward:
                 "be technical",
                 "include code snippets",
             ]
-            
+
             lm.forward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -114,7 +113,7 @@ class TestRequirementsInForward:
         """Test forward with empty requirements list."""
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", requirements=[])
 
             call_kwargs = mock_gen.call_args[1]
@@ -130,7 +129,7 @@ class TestRequirementsInAforward:
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["be concise", "use bullet points"]
-            
+
             await lm.aforward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -138,7 +137,9 @@ class TestRequirementsInAforward:
             assert call_kwargs["requirements"] == requirements
 
     @pytest.mark.asyncio
-    async def test_aforward_requirements_override_instance_requirements(self, mock_session):
+    async def test_aforward_requirements_override_instance_requirements(
+        self, mock_session
+    ):
         """Test aforward requirements override instance requirements."""
         instance_reqs = ["instance requirement"]
         lm = MelleaLM(mellea_session=mock_session, requirements=instance_reqs)
@@ -146,7 +147,7 @@ class TestRequirementsInAforward:
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             forward_reqs = ["forward requirement"]
-            
+
             await lm.aforward(prompt="Test", requirements=forward_reqs)
 
             call_kwargs = mock_gen.call_args[1]
@@ -157,12 +158,8 @@ class TestRequirementsInAforward:
         """Test aforward with multiple requirements."""
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            requirements = [
-                "be concise",
-                "use examples",
-                "be technical",
-            ]
-            
+            requirements = ["be concise", "use examples", "be technical"]
+
             await lm.aforward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -178,7 +175,7 @@ class TestRequirementsWithMessages:
             mock_gen.return_value = Mock(content="response")
             messages = [{"role": "user", "content": "Hello"}]
             requirements = ["be polite", "be brief"]
-            
+
             lm.forward(messages=messages, requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -192,7 +189,7 @@ class TestRequirementsWithMessages:
             mock_gen.return_value = Mock(content="response")
             messages = [{"role": "user", "content": "Hello"}]
             requirements = ["be polite", "be brief"]
-            
+
             await lm.aforward(messages=messages, requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -208,7 +205,7 @@ class TestRequirementsTypes:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["requirement 1", "requirement 2"]
-            
+
             lm.forward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -224,7 +221,7 @@ class TestRequirementsTypes:
                 'use "double quotes"',
                 "use numbers: 123",
             ]
-            
+
             lm.forward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -239,10 +236,11 @@ class TestRequirementsTypes:
                 "of all key concepts, with examples where appropriate.",
                 "Use a professional tone suitable for technical documentation.",
             ]
-            
+
             lm.forward(prompt="Test", requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["requirements"] == requirements
+
 
 # Made with Bob

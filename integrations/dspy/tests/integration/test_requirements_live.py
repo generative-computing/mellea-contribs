@@ -1,10 +1,8 @@
 """Integration tests for requirements with live Mellea session."""
 
-import pytest
-
 import dspy
+import pytest
 from mellea_dspy import MelleaLM
-
 
 pytestmark = pytest.mark.integration
 
@@ -16,8 +14,7 @@ class TestRequirementsBasic:
         """Test forward with requirements list."""
         requirements = ["be concise", "use simple language"]
         response = lm.forward(
-            prompt="Explain what Python is",
-            requirements=requirements,
+            prompt="Explain what Python is", requirements=requirements
         )
 
         assert response is not None
@@ -27,10 +24,7 @@ class TestRequirementsBasic:
 
     def test_forward_with_single_requirement(self, lm):
         """Test forward with single requirement."""
-        response = lm.forward(
-            prompt="Write a greeting",
-            requirements=["be friendly"],
-        )
+        response = lm.forward(prompt="Write a greeting", requirements=["be friendly"])
 
         assert response is not None
         assert response.choices[0].message.content
@@ -44,8 +38,7 @@ class TestRequirementsBasic:
             "be technical",
         ]
         response = lm.forward(
-            prompt="Explain generative programming",
-            requirements=requirements,
+            prompt="Explain generative programming", requirements=requirements
         )
 
         assert response is not None
@@ -57,10 +50,7 @@ class TestRequirementsBasic:
     async def test_aforward_with_requirements(self, lm):
         """Test async forward with requirements."""
         requirements = ["be brief", "be clear"]
-        response = await lm.aforward(
-            prompt="What is AI?",
-            requirements=requirements,
-        )
+        response = await lm.aforward(prompt="What is AI?", requirements=requirements)
 
         assert response is not None
         assert response.choices[0].message.content
@@ -110,8 +100,7 @@ class TestRequirementsTypes:
         """Test length-based requirements."""
         requirements = ["keep response under 50 words"]
         response = lm.forward(
-            prompt="Describe machine learning",
-            requirements=requirements,
+            prompt="Describe machine learning", requirements=requirements
         )
 
         assert response is not None
@@ -124,8 +113,7 @@ class TestRequirementsTypes:
         """Test format-based requirements."""
         requirements = ["use bullet points", "list 3 items"]
         response = lm.forward(
-            prompt="List benefits of Python",
-            requirements=requirements,
+            prompt="List benefits of Python", requirements=requirements
         )
 
         assert response is not None
@@ -141,8 +129,7 @@ class TestRequirementsTypes:
             "include technical terms",
         ]
         response = lm.forward(
-            prompt="Explain software quality",
-            requirements=requirements,
+            prompt="Explain software quality", requirements=requirements
         )
 
         assert response is not None
@@ -154,8 +141,7 @@ class TestRequirementsTypes:
         """Test tone-based requirements."""
         requirements = ["be professional", "be formal", "avoid slang"]
         response = lm.forward(
-            prompt="Write a business email greeting",
-            requirements=requirements,
+            prompt="Write a business email greeting", requirements=requirements
         )
 
         assert response is not None
@@ -167,10 +153,7 @@ class TestRequirementsEdgeCases:
 
     def test_empty_requirements_list(self, lm):
         """Test with empty requirements list."""
-        response = lm.forward(
-            prompt="Say hello",
-            requirements=[],
-        )
+        response = lm.forward(prompt="Say hello", requirements=[])
 
         assert response is not None
         assert response.choices[0].message.content
@@ -182,10 +165,7 @@ class TestRequirementsEdgeCases:
             "include 'quotes'",
             'use "double quotes"',
         ]
-        response = lm.forward(
-            prompt="Format some text",
-            requirements=requirements,
-        )
+        response = lm.forward(prompt="Format some text", requirements=requirements)
 
         assert response is not None
         assert response.choices[0].message.content
@@ -196,11 +176,10 @@ class TestRequirementsEdgeCases:
             "Provide a comprehensive explanation that covers all major aspects "
             "of the topic, including historical context, current applications, "
             "and future implications. Use clear, accessible language suitable "
-            "for a general technical audience.",
+            "for a general technical audience."
         ]
         response = lm.forward(
-            prompt="Explain artificial intelligence",
-            requirements=requirements,
+            prompt="Explain artificial intelligence", requirements=requirements
         )
 
         assert response is not None
@@ -255,5 +234,6 @@ class TestRequirementsCombinations:
 
         assert response is not None
         assert response.choices[0].message.content
+
 
 # Made with Bob

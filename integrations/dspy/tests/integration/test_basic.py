@@ -2,10 +2,8 @@
 
 import asyncio
 
-import pytest
-
 import dspy
-
+import pytest
 
 pytestmark = pytest.mark.integration
 

@@ -1,9 +1,7 @@
 """Tests for DSPy modules with live Mellea session."""
 
-import pytest
-
 import dspy
-
+import pytest
 
 pytestmark = pytest.mark.integration
 
@@ -33,7 +31,7 @@ class MultiStepReasoning(dspy.Module):
     def forward(self, text):
         """Analyze text and synthesize conclusion."""
         analysis = self.analyze(text=text)
-        result = self.synthesize(analysis=analysis.analysis)
+        self.synthesize(analysis=analysis.analysis)
         return dspy.ChainOfThought("analysis -> answer")(analysis=analysis.analysis)
 
 
