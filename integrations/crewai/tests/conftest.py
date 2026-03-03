@@ -1,7 +1,6 @@
 """Shared test fixtures for mellea-crewai integration tests."""
 
 import os
-from typing import Any
 from unittest.mock import Mock
 
 import pytest

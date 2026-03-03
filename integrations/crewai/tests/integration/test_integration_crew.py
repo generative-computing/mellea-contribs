@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -211,9 +211,7 @@ class TestAgentWithTools:
         # Tool should have been executed and result should be 10
         assert "10" in str(result.raw)
 
-    def test_full_crew_kickoff_with_tool_agent(
-        self, mock_mellea_session, simple_crewai_tool
-    ):
+    def test_full_crew_kickoff_with_tool_agent(self, mock_mellea_session, simple_crewai_tool):
         """Test end-to-end crew.kickoff() with tool-equipped agent."""
         from crewai import Agent, Crew, Task
 
@@ -587,8 +585,8 @@ class TestAsyncCallDirect:
             requirements=requirements,
         )
 
-        with patch.object(mock_mellea_session, "ainstruct", side_effect=async_instruct) as mock_ainstruct:
-            with patch.object(mock_mellea_session, "achat") as mock_achat:
+        with patch.object(mock_mellea_session, "ainstruct", side_effect=async_instruct):
+            with patch.object(mock_mellea_session, "achat"):
                 result = await llm.acall("Test message")
 
                 # Verify instruct was called
@@ -721,8 +719,8 @@ class TestRealCrewAIIntegration:
 
         # Token tracking is optional - some backends (like Ollama) may not provide it
         # Just verify the structure is there
-        assert hasattr(summary, 'total_tokens')
-        assert hasattr(summary, 'successful_requests')
+        assert hasattr(summary, "total_tokens")
+        assert hasattr(summary, "successful_requests")
 
     @pytest.mark.integration
     @pytest.mark.ollama

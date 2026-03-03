@@ -33,14 +33,14 @@ def main():
 
     # Create different LLM configurations for different agents
     print("\n2. Creating LLM configurations...")
-    
+
     # Researcher LLM - focused on accuracy and detail
     researcher_llm = MelleaLLM(
         mellea_session=m,
         temperature=0.3,  # Lower temperature for more focused research
     )
     print("   ✓ Researcher LLM created (temperature=0.3)")
-    
+
     # Analyst LLM - with requirements for structured output
     analyst_llm = MelleaLLM(
         mellea_session=m,
@@ -53,7 +53,7 @@ def main():
         strategy=RejectionSamplingStrategy(loop_budget=3),
     )
     print("   ✓ Analyst LLM created (temperature=0.5, with requirements)")
-    
+
     # Writer LLM - creative but professional
     writer_llm = MelleaLLM(
         mellea_session=m,
@@ -66,7 +66,7 @@ def main():
         strategy=RejectionSamplingStrategy(loop_budget=3),
     )
     print("   ✓ Writer LLM created (temperature=0.7, with requirements)")
-    
+
     # Editor LLM - strict quality control
     editor_llm = MelleaLLM(
         mellea_session=m,
@@ -82,7 +82,7 @@ def main():
 
     # Create specialized agents
     print("\n3. Creating specialized agents...")
-    
+
     researcher = Agent(
         role="Senior AI Researcher",
         goal="Conduct thorough research on AI topics and gather accurate information",
@@ -96,7 +96,7 @@ def main():
         verbose=True,
     )
     print("   ✓ Senior AI Researcher created")
-    
+
     analyst = Agent(
         role="Data Analyst",
         goal="Analyze research findings and extract key insights",
@@ -109,7 +109,7 @@ def main():
         verbose=True,
     )
     print("   ✓ Data Analyst created")
-    
+
     writer = Agent(
         role="Technical Content Writer",
         goal="Transform research and analysis into clear, engaging content",
@@ -123,7 +123,7 @@ def main():
         verbose=True,
     )
     print("   ✓ Technical Content Writer created")
-    
+
     editor = Agent(
         role="Senior Editor",
         goal="Review and refine content for quality and consistency",
@@ -139,7 +139,7 @@ def main():
 
     # Create collaborative tasks with dependencies
     print("\n4. Creating collaborative tasks...")
-    
+
     research_task = Task(
         description=(
             "Research the topic: 'Recent advances in retrieval-augmented generation (RAG)'\n"
@@ -153,7 +153,7 @@ def main():
         expected_output="Comprehensive research summary on RAG advances",
     )
     print("   ✓ Research task created")
-    
+
     analysis_task = Task(
         description=(
             "Analyze the research findings on RAG advances.\n"
@@ -168,7 +168,7 @@ def main():
         context=[research_task],  # Depends on research task
     )
     print("   ✓ Analysis task created (depends on research)")
-    
+
     writing_task = Task(
         description=(
             "Write a blog post based on the research and analysis.\n"
@@ -185,7 +185,7 @@ def main():
         context=[research_task, analysis_task],  # Depends on both previous tasks
     )
     print("   ✓ Writing task created (depends on research and analysis)")
-    
+
     editing_task = Task(
         description=(
             "Review and edit the blog post for:\n"
@@ -234,12 +234,12 @@ def main():
     print(f"   Analyst: {analyst_llm.get_token_usage_summary().total_tokens} tokens")
     print(f"   Writer: {writer_llm.get_token_usage_summary().total_tokens} tokens")
     print(f"   Editor: {editor_llm.get_token_usage_summary().total_tokens} tokens")
-    
+
     total_tokens = (
-        researcher_llm.get_token_usage_summary().total_tokens +
-        analyst_llm.get_token_usage_summary().total_tokens +
-        writer_llm.get_token_usage_summary().total_tokens +
-        editor_llm.get_token_usage_summary().total_tokens
+        researcher_llm.get_token_usage_summary().total_tokens
+        + analyst_llm.get_token_usage_summary().total_tokens
+        + writer_llm.get_token_usage_summary().total_tokens
+        + editor_llm.get_token_usage_summary().total_tokens
     )
     print(f"   Total: {total_tokens} tokens")
 

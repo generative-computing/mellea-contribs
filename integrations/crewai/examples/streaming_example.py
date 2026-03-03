@@ -17,8 +17,6 @@ Run:
     python examples/streaming_example.py
 """
 
-import sys
-
 from crewai import Agent, Crew, Task
 from mellea import start_session
 
@@ -27,7 +25,7 @@ from mellea_crewai import MelleaLLM
 
 def print_streaming_chunk(chunk: str, end: str = "") -> None:
     """Print a streaming chunk with immediate flush.
-    
+
     Args:
         chunk: Text chunk to print
         end: String to append after chunk (default: no newline)
@@ -50,11 +48,11 @@ def main():
     print("\n2. Checking streaming support...")
     backend_name = type(m.backend).__name__ if hasattr(m, "backend") else "Unknown"
     print(f"   Backend: {backend_name}")
-    
+
     supports_streaming = False
     if hasattr(m.backend, "supports_streaming"):
         supports_streaming = m.backend.supports_streaming()
-    
+
     if supports_streaming:
         print("   ✓ Backend supports streaming")
     else:
@@ -139,7 +137,7 @@ def main():
     print("  • Backend must support streaming for this feature")
     print("  • CrewAI's current API buffers output at the crew level")
     print("  • For true streaming, use MelleaLLM.call() directly")
-    
+
     print("\nNote on Streaming:")
     print("  CrewAI's kickoff() method currently buffers the complete output")
     print("  before returning. For true streaming behavior, you would need to:")
@@ -152,26 +150,26 @@ def main():
         print("\n" + "=" * 60)
         print("Direct LLM Call with Streaming (Alternative Approach)")
         print("=" * 60 + "\n")
-        
+
         print("Generating a haiku (streaming):")
         print("-" * 60)
-        
+
         # Direct call to demonstrate streaming at LLM level
         # Note: This bypasses CrewAI's agent/task framework
         try:
             # Create a simple prompt
             messages = [
                 {"role": "system", "content": "You are a haiku poet."},
-                {"role": "user", "content": "Write a haiku about artificial intelligence."}
+                {"role": "user", "content": "Write a haiku about artificial intelligence."},
             ]
-            
+
             # Call LLM directly (streaming happens here if supported)
             haiku_result = llm.call(messages)
             print(haiku_result)
-            
+
         except Exception as e:
             print(f"Note: Direct streaming call not fully supported: {e}")
-        
+
         print("-" * 60)
 
 

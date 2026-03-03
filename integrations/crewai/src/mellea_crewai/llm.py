@@ -309,7 +309,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 else:
                     # Track request even if usage info is not available
                     # This allows counting successful requests from backends that don't provide usage
-                    self._track_token_usage_internal({"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0})
+                    self._track_token_usage_internal(
+                        {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+                    )
 
                 # Emit call completed event
                 self._emit_call_completed_event(
@@ -492,7 +494,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 else:
                     # Track request even if usage info is not available
                     # This allows counting successful requests from backends that don't provide usage
-                    self._track_token_usage_internal({"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0})
+                    self._track_token_usage_internal(
+                        {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+                    )
 
                 # Emit call completed event
                 self._emit_call_completed_event(
