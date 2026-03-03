@@ -249,9 +249,11 @@ integrations/crewai/
 │   └── test_sampling.py              # Sampling strategy tests
 └── examples/
     ├── basic_usage.py                # Simple agent example
-    ├── agent_with_tools.py           # Tool calling example
+    ├── tool_usage_example.py         # Tool calling example
     ├── requirements_example.py       # Requirements validation
-    └── multi_agent_crew.py           # Multi-agent crew example
+    ├── async_usage_example.py        # Async/concurrent execution
+    ├── multi_agent_crew_example.py   # Multi-agent crew collaboration
+    └── streaming_example.py          # Streaming responses
 ```
 
 **Note**: This integration has been refactored to use [mellea-integration-core](../mellea-integration-core/) for cleaner, more maintainable code with reduced duplication.
@@ -375,9 +377,11 @@ crew = Crew(agents=[researcher, writer], tasks=[...])
 See the `examples/` directory for complete examples:
 
 - [`basic_usage.py`](examples/basic_usage.py): Simple agent with Mellea
-- [`agent_with_tools.py`](examples/agent_with_tools.py): Tool calling
+- [`tool_usage_example.py`](examples/tool_usage_example.py): Tool calling with custom tools
 - [`requirements_example.py`](examples/requirements_example.py): Requirements validation
-- [`multi_agent_crew.py`](examples/multi_agent_crew.py): Multi-agent crew
+- [`async_usage_example.py`](examples/async_usage_example.py): Async/concurrent execution
+- [`multi_agent_crew_example.py`](examples/multi_agent_crew_example.py): Multi-agent crew collaboration
+- [`streaming_example.py`](examples/streaming_example.py): Streaming responses (backend-dependent)
 
 ## Contributing
 
