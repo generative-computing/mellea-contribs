@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from mellea_dspy import MelleaLM
 
 
@@ -67,7 +66,7 @@ class TestStrategyInForward:
         """Test forward accepts strategy as kwarg."""
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", strategy=mock_strategy)
 
             # Verify strategy was passed to generation
@@ -83,7 +82,7 @@ class TestStrategyInForward:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             forward_strategy = Mock(name="forward_strategy")
-            
+
             lm.forward(prompt="Test", strategy=forward_strategy)
 
             # Forward strategy should take precedence
@@ -95,7 +94,7 @@ class TestStrategyInForward:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["be concise", "use examples"]
-            
+
             lm.forward(prompt="Test", strategy=mock_strategy, requirements=requirements)
 
             call_kwargs = mock_gen.call_args[1]
@@ -106,7 +105,7 @@ class TestStrategyInForward:
         """Test forward with strategy explicitly set to None."""
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", strategy=None)
 
             call_kwargs = mock_gen.call_args[1]
@@ -121,7 +120,7 @@ class TestStrategyInAforward:
         """Test aforward accepts strategy as kwarg."""
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             await lm.aforward(prompt="Test", strategy=mock_strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -137,7 +136,7 @@ class TestStrategyInAforward:
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             forward_strategy = Mock(name="forward_strategy")
-            
+
             await lm.aforward(prompt="Test", strategy=forward_strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -149,7 +148,7 @@ class TestStrategyInAforward:
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["be concise"]
-            
+
             await lm.aforward(
                 prompt="Test", strategy=mock_strategy, requirements=requirements
             )
@@ -167,7 +166,7 @@ class TestStrategyWithMessages:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             messages = [{"role": "user", "content": "Hello"}]
-            
+
             lm.forward(messages=messages, strategy=mock_strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -180,7 +179,7 @@ class TestStrategyWithMessages:
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             messages = [{"role": "user", "content": "Hello"}]
-            
+
             await lm.aforward(messages=messages, strategy=mock_strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -200,7 +199,7 @@ class TestStrategyTypes:
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", strategy=strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -209,12 +208,13 @@ class TestStrategyTypes:
 
     def test_strategy_as_callable(self, lm):
         """Test strategy as a callable."""
+
         def custom_strategy():
             return "custom_strategy_result"
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", strategy=custom_strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -223,15 +223,11 @@ class TestStrategyTypes:
 
     def test_strategy_as_dict(self, lm):
         """Test strategy as a dictionary configuration."""
-        strategy = {
-            "type": "best_of_n",
-            "n": 3,
-            "temperature": 0.8,
-        }
+        strategy = {"type": "best_of_n", "n": 3, "temperature": 0.8}
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
+
             lm.forward(prompt="Test", strategy=strategy)
 
             call_kwargs = mock_gen.call_args[1]
@@ -252,7 +248,7 @@ class TestStrategyScenarios:
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
             requirements = ["must include code", "must be valid Python"]
-            
+
             lm.forward(
                 prompt="Generate a factorial function",
                 strategy=rejection_strategy,
@@ -272,11 +268,8 @@ class TestStrategyScenarios:
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
-            lm.forward(
-                prompt="Generate a creative slogan",
-                strategy=best_of_n_strategy,
-            )
+
+            lm.forward(prompt="Generate a creative slogan", strategy=best_of_n_strategy)
 
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["strategy"] == best_of_n_strategy
@@ -291,11 +284,8 @@ class TestStrategyScenarios:
 
         with patch.object(lm, "_generate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
-            lm.forward(
-                prompt="Classify this text",
-                strategy=ensemble_strategy,
-            )
+
+            lm.forward(prompt="Classify this text", strategy=ensemble_strategy)
 
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["strategy"] == ensemble_strategy
@@ -311,14 +301,12 @@ class TestStrategyScenarios:
 
         with patch.object(lm, "_agenerate_with_mellea") as mock_gen:
             mock_gen.return_value = Mock(content="response")
-            
-            await lm.aforward(
-                prompt="Answer this question",
-                strategy=adaptive_strategy,
-            )
+
+            await lm.aforward(prompt="Answer this question", strategy=adaptive_strategy)
 
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["strategy"] == adaptive_strategy
             assert call_kwargs["strategy"].confidence_threshold == 0.8
+
 
 # Made with Bob

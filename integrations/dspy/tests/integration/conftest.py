@@ -1,8 +1,7 @@
 """Shared fixtures for integration tests."""
 
-import pytest
-
 import dspy
+import pytest
 from mellea import start_session
 from mellea_dspy import MelleaLM
 
