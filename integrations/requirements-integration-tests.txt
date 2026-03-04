@@ -1,0 +1,35 @@
+# Integration Test Requirements for Mellea Framework Integrations
+# This file contains all dependencies needed to run integration tests
+# across dspy, crewai, and langchain integrations
+
+# Core testing framework
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Mellea core (required by all integrations)
+mellea>=0.3.0
+mellea-integration-core>=0.1.0
+
+# DSPy integration dependencies
+dspy>=3.1.3
+
+# CrewAI integration dependencies
+crewai>=0.1.0
+pydantic>=2.0.0
+
+# LangChain integration dependencies
+langchain-core>=0.3.0
+langchain>=0.3.0
+
+# Optional: Code quality tools
+ruff>=0.1.0
+mypy>=1.0.0
+
+# Optional: Additional LangChain tools
+langserve>=0.3.0
+
+# Note: Each integration can be installed individually with:
+# pip install -e dspy[dev]
+# pip install -e crewai[dev]
+# pip install -e langchain[dev]
