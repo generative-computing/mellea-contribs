@@ -5,6 +5,7 @@ enabling DSPy applications to use Mellea's generative programming
 capabilities through the standard DSPy interface.
 """
 
+import copy
 from typing import Any
 
 import dspy
@@ -98,6 +99,55 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
         )
 
         self.provider = "mellea"
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> "MelleaLM":
+        """Custom deepcopy to handle non-picklable objects.
+
+        DSPy's BestOfN and Refine use deepcopy to create independent copies
+        of the LM. Since MelleaSession contains thread locks that can't be
+        pickled, we need to handle the copy manually by reusing the same
+        session reference.
+
+        Args:
+            memo: Memoization dictionary for deepcopy
+
+        Returns:
+            A new MelleaLM instance sharing the same MelleaSession
+        """
+        # Create a new instance with the same mellea_session (shared reference)
+        # This is safe because MelleaSession is designed to be thread-safe
+
+        # Get temperature and max_tokens with proper type handling
+        temperature = self.kwargs.get("temperature", 0.0)
+        max_tokens = self.kwargs.get("max_tokens", 1000)
+
+        # Ensure max_tokens is an int
+        if isinstance(max_tokens, float):
+            max_tokens = int(max_tokens)
+
+        # Get requirements and strategy from base class if available
+        requirements = getattr(self, "_requirements", None)
+        strategy = getattr(self, "_strategy", None)
+
+        new_instance = MelleaLM(
+            mellea_session=self.mellea_session,
+            model=self.model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            requirements=requirements,
+            strategy=strategy,
+            **{
+                k: v
+                for k, v in self.kwargs.items()
+                if k not in ["temperature", "max_tokens"]
+            },
+        )
+
+        # Copy the history if it exists
+        if hasattr(self, "history"):
+            new_instance.history = copy.deepcopy(self.history, memo)
+
+        return new_instance
 
     def generate(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
         """Generate response using Mellea (sync version).
@@ -252,6 +302,3 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
         openai_response.model = self.model
 
         return openai_response
-
-
-# Made with Bob

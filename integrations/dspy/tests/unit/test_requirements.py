@@ -241,6 +241,3 @@ class TestRequirementsTypes:
 
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["requirements"] == requirements
-
-
-# Made with Bob

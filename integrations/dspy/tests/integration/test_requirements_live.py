@@ -234,6 +234,3 @@ class TestRequirementsCombinations:
 
         assert response is not None
         assert response.choices[0].message.content
-
-
-# Made with Bob

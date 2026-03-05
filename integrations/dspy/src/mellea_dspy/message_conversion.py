@@ -77,6 +77,3 @@ class DSPyMessageConverter(BaseMessageConverter):
         )
 
         return response_obj
-
-
-# Made with Bob
