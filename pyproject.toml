@@ -4,7 +4,7 @@ build-backend = "pdm.backend"
 
 [project]
 name = "mellea-contribs"
-version = "0.1.2"
+version = "0.0.1"
 authors = [
     { name = "Nathan Fulton", email = "nathan@ibm.com" },
     # add your name here!
@@ -19,7 +19,12 @@ classifiers = [
 ]
 
 dependencies = [
-  "mellea"
+  "mellea[litellm]",
+  "rapidfuzz>=3.14.3",
+  "eyecite",
+  "citeurl",
+  "playwright",
+  "markdown",
 ]
 
 [project.optional-dependencies]
