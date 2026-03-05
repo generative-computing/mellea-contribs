@@ -11,7 +11,7 @@ cd BenchDrift-Pipeline && pip install -e . && cd ..
 
 # 2. Install Mellea + Mellea-Contribs
 pip install -e path/to/mellea
-pip install -e path/to/mellea-contribs
+pip install -e "path/to/mellea-contribs[robustness]"
 
 # 3. Ollama
 ollama serve
