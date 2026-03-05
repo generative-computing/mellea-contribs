@@ -28,6 +28,7 @@ from typing import Any
 from mellea_contribs.kg.base import GraphEdge, GraphNode, GraphPath
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
+from mellea_contribs.kg.kgrag import KGRag, format_schema
 
 _neo4j_import_error: Exception | None = None
 _Neo4jBackend: Any = None
@@ -52,6 +53,8 @@ __all__ = [
     "GraphEdge",
     "GraphNode",
     "GraphPath",
+    "KGRag",
     "MockGraphBackend",
     "Neo4jBackend",
+    "format_schema",
 ]
