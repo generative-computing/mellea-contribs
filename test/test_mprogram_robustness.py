@@ -114,8 +114,7 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
     # --- Header ---
     print(f"\n{B}BenchDrift — M-Program Robustness Test{X}")
     print(f"{'─' * 70}")
-    print(f"  Variation model  : {B}{gen_model}{X}  {D}(generates prompt variations){X}")
-    print(f"  Backend model    : {B}{backend_model}{X}  {D}(Mellea m-program, model under test){X}")
+    print(f"  Model under test : {B}{backend_model}{X}")
     print(f"  Ground truth     : {ground_truth}")
     print(f"{'─' * 70}")
 

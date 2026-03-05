@@ -48,8 +48,7 @@ Running `python test/test_mprogram_robustness.py --backend-model qwen2.5:3b --to
 ```
 BenchDrift — M-Program Robustness Test
 ──────────────────────────────────────────────────────────────────────
-  Variation model  : qwen3:8b  (generates prompt variations)
-  Backend model    : qwen2.5:3b  (Mellea m-program, model under test)
+  Model under test : qwen2.5:3b
   Ground truth     : $351
 ──────────────────────────────────────────────────────────────────────
 Results
@@ -68,26 +67,6 @@ Results
 
 Results are saved as JSON in `logs/` after each run, including all variation texts, m-program answers, and pass/fail status. Use these to inspect which prompt phrasings the m-program handles correctly and which it doesn't.
 
-## Programmatic Usage
+## Note on the Variation Model
 
-```python
-from mellea import start_session
-from mellea_contribs.tools.benchdrift_runner import run_benchdrift_pipeline, analyze_robustness
-
-m = start_session(backend_name="ollama", model_id="qwen2.5:3b")
-
-def m_program(question):
-    response = m.instruct(question)
-    return response.value if hasattr(response, 'value') else response
-
-probes = run_benchdrift_pipeline(
-    baseline_problem="Your problem here",
-    ground_truth_answer="Expected answer",
-    m_program_callable=m_program,
-    mellea_session=m,
-    config_overrides={'gen_model': 'qwen3:8b', 'top_k': 5},
-)
-
-report = analyze_robustness(probes)
-print(f"Pass rate: {report['pass_rate']:.0%}")
-```
+The variation generation model (`--gen-model`, default: `qwen3:8b`) is internal to BenchDrift and generates the semantic variations of your problem. Ideally, this should be a more capable model than the model under test — it needs to understand the problem well enough to rephrase it while preserving the answer. You can change it with `--gen-model`, but the default is a good choice for most cases.
