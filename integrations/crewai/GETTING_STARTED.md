@@ -202,6 +202,169 @@ llm = MelleaLLM(
     requirements=requirements,
     strategy=RejectionSamplingStrategy(loop_budget=3)
 )
+
+## Using Task Guardrails
+
+CrewAI supports guardrails for task output validation. You can convert Mellea requirements into CrewAI-compatible guardrails:
+
+### Basic Guardrail Usage
+
+```python
+from mellea.stdlib.requirements import simple_validate
+from mellea_crewai import create_guardrail, MelleaLLM
+from crewai import Agent, Task, Crew
+
+# Create Mellea session
+m = start_session()
+llm = MelleaLLM(mellea_session=m)
+
+# Create a Mellea requirement
+word_count_req = simple_validate(
+    lambda x: 50 <= len(x.split()) <= 150,
+    "Must be between 50-150 words"
+)
+
+# Convert to CrewAI guardrail
+guardrail = create_guardrail(word_count_req)
+
+# Create agent and task with guardrail
+agent = Agent(
+    role="Writer",
+    goal="Write concise content",
+    llm=llm
+)
+
+task = Task(
+    description="Write a summary about AI",
+    expected_output="Brief AI summary",
+    agent=agent,
+    guardrails=[guardrail],
+    guardrail_max_retries=3  # Retry up to 3 times if validation fails
+)
+
+crew = Crew(agents=[agent], tasks=[task])
+result = crew.kickoff()
+```
+
+### Multiple Guardrails
+
+Apply multiple validation checks sequentially:
+
+```python
+from mellea_crewai import create_guardrails
+
+# Define multiple requirements
+requirements = [
+    simple_validate(
+        lambda x: 50 <= len(x.split()) <= 150,
+        "Must be between 50-150 words"
+    ),
+    simple_validate(
+        lambda x: "AI" in x or "artificial intelligence" in x.lower(),
+        "Must mention AI"
+    ),
+    simple_validate(
+        lambda x: x.strip() == x,
+        "No extra whitespace"
+    ),
+]
+
+# Convert all to guardrails
+guardrails = create_guardrails(requirements)
+
+# Use in task
+task = Task(
+    description="Write about AI",
+    expected_output="AI article",
+    agent=agent,
+    guardrails=guardrails,
+    guardrail_max_retries=3
+)
+```
+
+### Using Helper Functions
+
+Mellea-CrewAI provides helper functions for common validation patterns:
+
+```python
+from mellea_crewai import (
+    word_count_guardrail,
+    contains_keywords_guardrail,
+    no_profanity_guardrail,
+    format_output_guardrail,
+)
+
+task = Task(
+    description="Write a professional blog post about AI",
+    expected_output="Professional blog post",
+    agent=agent,
+    guardrails=[
+        word_count_guardrail(min_words=100, max_words=500),
+        contains_keywords_guardrail(["AI", "machine learning"]),
+        no_profanity_guardrail(),
+        format_output_guardrail(strip_whitespace=True, capitalize_first=True),
+    ],
+    guardrail_max_retries=3
+)
+```
+
+### Mixing Mellea Requirements with Custom Guardrails
+
+You can combine Mellea requirements with custom CrewAI guardrails:
+
+```python
+from typing import Tuple, Any
+from crewai import TaskOutput
+
+# Mellea requirement
+length_req = simple_validate(lambda x: len(x) > 100, "At least 100 characters")
+
+# Custom CrewAI guardrail
+def custom_format_check(result: TaskOutput) -> Tuple[bool, Any]:
+    """Custom formatting validation."""
+    text = result.raw
+    if not text[0].isupper():
+        return (False, "Must start with capital letter")
+    if not text.endswith("."):
+        return (False, "Must end with period")
+    return (True, text)
+
+# Combine both
+task = Task(
+    description="Write content",
+    expected_output="Formatted content",
+    agent=agent,
+    guardrails=[
+        create_guardrail(length_req),  # From Mellea
+        custom_format_check,            # Custom
+    ],
+    guardrail_max_retries=3
+)
+```
+
+### Available Helper Functions
+
+- **`word_count_guardrail(min_words, max_words)`**: Validate word count
+  ```python
+  word_count_guardrail(min_words=50, max_words=200)
+  ```
+
+- **`contains_keywords_guardrail(keywords, case_sensitive=False)`**: Check for required keywords
+  ```python
+  contains_keywords_guardrail(["AI", "machine learning"], case_sensitive=False)
+  ```
+
+- **`no_profanity_guardrail(profanity_list=None)`**: Filter inappropriate content
+  ```python
+  no_profanity_guardrail(["badword1", "badword2"])
+  ```
+
+- **`format_output_guardrail(strip_whitespace=True, capitalize_first=True)`**: Format output
+  ```python
+  format_output_guardrail(strip_whitespace=True, capitalize_first=True)
+  ```
+
+See [`examples/validator_usage_example.py`](examples/validator_usage_example.py) for complete examples.
 ```
 
 ## Working with Tools
