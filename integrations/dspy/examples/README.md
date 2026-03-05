@@ -169,6 +169,98 @@ uv run examples/07_ollama_granite.py
 **Important Note:**
 The `model` parameter in `MelleaLM` constructor is only used for metadata in response objects. The actual model used for generation is determined by the backend configuration in the MelleaSession.
 
+
+### 08. BestOfN Verification (`08_bestofn_verification.py`) ⭐ NEW
+**Runtime verification with BestOfN and Mellea requirements**
+
+Demonstrates how to use MelleaBestOfN to generate multiple candidates and select the best one:
+- Basic BestOfN usage with requirements
+- Multiple requirement types (length, content, format)
+- Custom callable requirements
+- Combination strategies (average, min, product)
+- Format requirements (bullets, numbered lists)
+- Threshold behavior and tuning
+
+**Run it:**
+```bash
+uv run examples/08_bestofn_verification.py
+```
+
+**Key Concepts:**
+- Parallel candidate generation
+- Requirement-to-reward conversion
+- Best candidate selection
+- Threshold configuration
+- Custom validation functions
+
+**Use Cases:**
+- Ensuring output meets specific criteria
+- Selecting best from multiple attempts
+- Format validation
+- Quality assurance
+
+---
+
+### 09. Refine Verification (`09_refine_verification.py`) ⭐ NEW
+**Iterative refinement with Mellea requirements**
+
+Demonstrates how to use MelleaRefine to iteratively improve outputs:
+- Basic Refine usage with requirements
+- Iterative improvement process
+- Quality-focused refinement
+- Custom refinement criteria
+- Comparison with BestOfN
+- Different refinement strategies
+
+**Run it:**
+```bash
+uv run examples/09_refine_verification.py
+```
+
+**Key Concepts:**
+- Iterative refinement
+- Requirement-guided improvement
+- Refinement strategies
+- Quality vs speed trade-offs
+- When to use Refine vs BestOfN
+
+**Use Cases:**
+- Gradual quality improvement
+- Meeting strict requirements
+- Building on previous attempts
+- Professional output generation
+
+---
+
+### 10. Hybrid Approach (`10_hybrid_approach.py`) ⭐ NEW
+**Two ways to use Mellea requirements with DSPy**
+
+Demonstrates both approaches for using Mellea requirements:
+- High-level wrappers (MelleaBestOfN, MelleaRefine)
+- Direct DSPy with create_reward_fn()
+- Side-by-side comparisons
+- Advanced customization examples
+- When to use each approach
+
+**Run it:**
+```bash
+uv run examples/10_hybrid_approach.py
+```
+
+**Key Concepts:**
+- Wrapper classes vs direct DSPy
+- create_reward_fn() function
+- API design trade-offs
+- Flexibility vs simplicity
+- Advanced customization
+
+**Use Cases:**
+- Simple projects (use wrappers)
+- Complex pipelines (use direct DSPy)
+- Multiple reward functions
+- Fine-grained control
+- Learning both approaches
+
 ---
 
 ## 🚀 Quick Start

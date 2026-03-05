@@ -51,3 +51,6 @@ asyncio_mode = "auto"
 markers = [
     "integration: marks tests as requiring a live Mellea session (deselect with -m 'not integration')",
 ]
+
+[tool.uv.sources]
+mellea-integration-core = { path = "../mellea-integration-core" }
