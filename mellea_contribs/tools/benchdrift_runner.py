@@ -44,6 +44,16 @@ from benchdrift.models.model_client import ModelClientFactory
 
 logger = logging.getLogger(__name__)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+VALID_CLIENTS = {'ollama', 'groq', 'rits', 'vllm', 'openai'}
+
+
+def _parse_model_spec(spec: str) -> tuple:
+    """Parse 'client/model' into (client_type, model_name). Default: ollama."""
+    if '/' in spec:
+        client, model = spec.split('/', 1)
+        if client.lower() in VALID_CLIENTS:
+            return client.lower(), model
+    return 'ollama', spec
 
 
 # --- Helpers ---
@@ -264,9 +274,13 @@ def run_benchdrift_pipeline(
     if answer_extractor is None:
         answer_extractor = _default_answer_extractor
 
-    gen_client = ModelClientFactory.create_client('ollama', gen_model)
-    judge_client = gen_client if judge_model == gen_model else ModelClientFactory.create_client('ollama', judge_model)
-    target_client = None if m_program_callable else ModelClientFactory.create_client('ollama', target_model)
+    gen_client_type, gen_model_name = _parse_model_spec(gen_model)
+    judge_client_type, judge_model_name = _parse_model_spec(judge_model)
+    target_client_type, target_model_name = _parse_model_spec(target_model)
+
+    gen_client = ModelClientFactory.create_client(gen_client_type, gen_model_name)
+    judge_client = gen_client if judge_model == gen_model else ModelClientFactory.create_client(judge_client_type, judge_model_name)
+    target_client = None if m_program_callable else ModelClientFactory.create_client(target_client_type, target_model_name)
 
     # Feature analysis
     features = get_problem_features(baseline_problem)
