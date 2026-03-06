@@ -146,13 +146,23 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
     # --- Progress display ---
     _out = sys.stdout
 
+    _spinner = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
+    _spin_idx = [0]
+
     def on_progress(current, total, status, entry):
         if status == "baseline":
             ans = _extract_answer(entry.get('variant_answer', '?'))
             ok = entry.get('correct', False)
             c = G if ok else R
-            _out.write(f"\r  Baseline: {c}{ans}{X}  |  0/{total} variations...")
+            _out.write(f"\r  Baseline: {c}{ans}{X}  |  generating 0/{total} variations...")
             _out.flush()
+            return
+        elif status == "waiting":
+            s = _spinner[_spin_idx[0] % len(_spinner)]
+            _spin_idx[0] += 1
+            _out.write(f"\r  {D}{s} generating variations...{X}   ")
+            _out.flush()
+            return
         elif status in ("skip", "invalid"):
             pct = int(current / total * 100)
             _out.write(f"\r  [{pct:3d}%] {current}/{total}  {D}{status}: {entry.get('variation_type','')}{X}   ")

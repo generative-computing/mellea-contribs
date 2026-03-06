@@ -307,50 +307,64 @@ def run_benchdrift_pipeline(
     if progress_callback:
         progress_callback(0, len(ranked), "baseline", results[0])
 
-    # Phase A: Generate all variations in parallel (Ollama calls only, no m-program)
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    # 3-stage pipeline: gen → validate → test, all overlapping
+    # Stage 1 (gen) and Stage 2 (validate) run in background threads.
+    # Stage 3 (test via m-program) runs on main thread as results arrive.
+    import queue, threading
 
     valid_ranked = [(t, s, a) for t, s, a in ranked if t in all_types]
-    max_workers = config_overrides.get('max_workers', 3)
+    total = len(valid_ranked)
 
-    def _gen_and_validate(item):
-        trans_name, score, axis = item
-        variation = _generate_one_variation(gen_client, baseline_problem, trans_name, all_types[trans_name])
-        if not variation:
-            return (trans_name, score, axis, None, False, "skip")
-        is_valid = True
-        if not skip_validation:
-            is_valid = _validate_variation(judge_client, baseline_problem, variation, ground_truth_answer)
-        if not is_valid:
-            return (trans_name, score, axis, variation, False, "invalid")
-        return (trans_name, score, axis, variation, True, "ready")
+    # Queue: validated variations ready for testing
+    ready_q = queue.Queue()
+    done_event = threading.Event()
 
-    # Run generation + validation in parallel
-    generated = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_idx = {executor.submit(_gen_and_validate, item): idx
-                         for idx, item in enumerate(valid_ranked)}
-        results_by_idx = {}
-        for future in as_completed(future_to_idx):
-            results_by_idx[future_to_idx[future]] = future.result()
-        generated = [results_by_idx[i] for i in range(len(valid_ranked))]
+    def _pipeline_worker():
+        """Background: generate + validate each variation, push to ready_q."""
+        for idx, (trans_name, score, axis) in enumerate(valid_ranked):
+            variation = _generate_one_variation(
+                gen_client, baseline_problem, trans_name, all_types[trans_name])
+            if not variation:
+                ready_q.put((idx, trans_name, score, axis, None, "skip"))
+                continue
+            if not skip_validation:
+                if not _validate_variation(judge_client, baseline_problem, variation, ground_truth_answer):
+                    ready_q.put((idx, trans_name, score, axis, None, "invalid"))
+                    continue
+            ready_q.put((idx, trans_name, score, axis, variation, "ready"))
+        done_event.set()
 
-    # Phase B: Test each valid variation through m-program (sequential, streaming)
-    variation_idx = 0
-    for i, (trans_name, score, axis, variation, is_valid, gen_status) in enumerate(generated, 1):
+    # Start background pipeline
+    worker = threading.Thread(target=_pipeline_worker, daemon=True)
+    worker.start()
+
+    # Main thread: test each variation as soon as it arrives
+    processed = 0
+    while True:
+        try:
+            item = ready_q.get(timeout=0.3)
+        except queue.Empty:
+            if done_event.is_set() and ready_q.empty():
+                break
+            if progress_callback:
+                progress_callback(processed, total, "waiting", {})
+            continue
+
+        idx, trans_name, score, axis, variation, gen_status = item
+        processed += 1
+
         if gen_status == "skip":
             if progress_callback:
-                progress_callback(i, len(generated), "skip", {"variation_type": trans_name})
+                progress_callback(processed, total, "skip", {"variation_type": trans_name})
             continue
         if gen_status == "invalid":
             if progress_callback:
-                progress_callback(i, len(generated), "invalid", {"variation_type": trans_name})
+                progress_callback(processed, total, "invalid", {"variation_type": trans_name})
             continue
 
-        # Test through m-program
+        # Test immediately via m-program (different model, no contention)
         answer = _get_answer(variation, m_program_callable, answer_extractor, target_client)
 
-        # Evaluate
         if use_llm_judge:
             correct = _llm_judge_answer(judge_client, variation, ground_truth_answer, answer)
         else:
@@ -367,12 +381,14 @@ def run_benchdrift_pipeline(
             'ground_truth_answer': ground_truth_answer,
             'variant_answer': answer,
             'correct': correct,
-            'valid': is_valid,
+            'valid': True,
         }
         results.append(entry)
 
         if progress_callback:
-            progress_callback(i, len(generated), status, entry)
+            progress_callback(processed, total, status, entry)
+
+    worker.join(timeout=5)
 
     return results
 
