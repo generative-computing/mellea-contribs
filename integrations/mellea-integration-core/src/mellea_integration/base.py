@@ -6,10 +6,12 @@ from typing import Any
 try:
     from mellea import MelleaSession
     from mellea.backends import ModelOption
+    from mellea.stdlib.sampling import SamplingResult
 except ImportError:
     # Fallback for type hints if mellea is not installed
     MelleaSession = Any  # type: ignore
     ModelOption = Any  # type: ignore
+    SamplingResult = None  # type: ignore
 
 from .types import MessageConverter, ToolConverter
 
@@ -221,7 +223,7 @@ class MelleaIntegrationBase(ABC):
             ValueError: If validation failed and no samples were generated
         """
         # Check if this is a SamplingResult object
-        if hasattr(response, "success") and hasattr(response, "result"):
+        if SamplingResult is not None and isinstance(response, SamplingResult):
             if response.success:
                 # Use the successful result
                 return response.result
@@ -266,5 +268,3 @@ class MelleaIntegrationBase(ABC):
             Framework-specific response format
         """
         pass
-
-

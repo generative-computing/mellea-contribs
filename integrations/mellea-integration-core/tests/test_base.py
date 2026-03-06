@@ -196,5 +196,3 @@ async def test_full_agenerate_flow(integration, mock_session):
 
     assert result["content"] == "Test async response"
     mock_session.achat.assert_called_once()
-
-

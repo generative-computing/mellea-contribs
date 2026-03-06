@@ -101,6 +101,7 @@ def test_get_tool_callable_tool_itself(converter):
 
 def test_get_tool_callable_not_found(converter):
     """Test error when no callable found."""
+
     # Create a non-callable object
     class NonCallable:
         pass
@@ -250,5 +251,3 @@ def test_full_tool_conversion_flow(converter):
     mellea_tools = converter.to_mellea(tools)
     assert len(mellea_tools) == 2
     assert all(hasattr(tool, "name") for tool in mellea_tools)
-
-

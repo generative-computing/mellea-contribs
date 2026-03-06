@@ -70,5 +70,3 @@ class ToolConverter(Protocol):
             List of tool call dictionaries with 'id', 'name', and 'args'
         """
         ...
-
-

@@ -7,7 +7,7 @@ Core abstractions and utilities for building clean, maintainable integrations be
 This package provides a **hybrid approach** to framework integration:
 - **Core abstractions** for common patterns (message conversion, tool handling, session management)
 - **Framework-specific extensions** for customization and framework-specific features
-- **Reduced code duplication** (~60% reduction across integrations)
+- **Reduced code duplication** across integrations by extracting common patterns
 - **Consistent behavior** across all framework integrations
 
 ## Features
@@ -17,7 +17,7 @@ This package provides a **hybrid approach** to framework integration:
 - ✅ **Tool Conversion**: Utilities for handling tool calling across frameworks
 - ✅ **Requirements Support**: Built-in support for Mellea's validation features
 - ✅ **Async Support**: Both sync and async generation patterns
-- ✅ **Type Safety**: Protocol-based design with type hints
+- ✅ **Type Safety**: Protocol-based design with type hints (note: some `Any` types used for framework flexibility)
 
 ## Installation
 
@@ -203,7 +203,7 @@ response = adapter.generate(
 ## Benefits
 
 ### Code Reduction
-- **~60% reduction** in duplicated code across integrations
+- Significant reduction in duplicated code across integrations
 - Shared message/tool conversion logic
 - Common Mellea session management
 
@@ -224,11 +224,11 @@ response = adapter.generate(
 
 ## Existing Integrations
 
-This core package is used by:
+This core package is designed to be used by framework integrations such as:
 
-- **[mellea-langchain](../langchain/)**: LangChain integration
-- **[mellea-crewai](../crewai/)**: CrewAI integration
-- **[mellea-dspy](../dspy/)**: DSPy integration
+- **mellea-langchain**: LangChain integration (in development)
+- **mellea-crewai**: CrewAI integration (in development)
+- **mellea-dspy**: DSPy integration (in development)
 
 ## Development
 

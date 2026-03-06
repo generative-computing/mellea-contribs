@@ -160,5 +160,3 @@ def test_full_conversion_flow(converter):
     response = Mock(content="Response text")
     result = converter.from_mellea(response)
     assert result["content"] == "Response text"
-
-

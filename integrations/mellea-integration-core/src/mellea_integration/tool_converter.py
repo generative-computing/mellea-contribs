@@ -92,7 +92,9 @@ class BaseToolConverter:
 
         # Pattern to match ToolCall objects in the string
         # Matches: ToolCall(function=Function(name='tool_name', arguments={...}))
-        pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{[^}]+\})\)\)"
+        # Note: This pattern uses a greedy match to handle nested dictionaries
+        # It will match from the first { to the last } in the arguments section
+        pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{.+?\})\)\)"
 
         for match in re.finditer(pattern, content_str):
             tool_name = match.group(1)
@@ -100,6 +102,7 @@ class BaseToolConverter:
 
             try:
                 # Safely evaluate the arguments dictionary
+                # ast.literal_eval can handle nested dictionaries
                 args_dict = ast.literal_eval(args_str)
 
                 tool_calls.append(
@@ -194,5 +197,3 @@ class BaseToolConverter:
             List of tool call dictionaries with 'id', 'name', and 'args'
         """
         return self.extract_tool_calls_from_response(response)
-
-

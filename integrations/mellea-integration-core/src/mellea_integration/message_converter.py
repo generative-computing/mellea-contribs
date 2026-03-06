@@ -1,6 +1,9 @@
 """Message conversion utilities for Mellea integrations."""
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from mellea.stdlib.components import Message
@@ -48,6 +51,10 @@ class BaseMessageConverter:
         # Validate and normalize role
         valid_roles = ["system", "user", "assistant", "tool"]
         if role not in valid_roles:
+            logger.error(
+                f"Invalid role '{role}' provided. Valid roles are: {valid_roles}. "
+                f"Defaulting to 'user'. This may indicate a bug in the conversion logic."
+            )
             role = "user"  # Default fallback
 
         return Message(role=role, content=content)
@@ -126,6 +133,8 @@ class BaseMessageConverter:
         else:
             # If response has no content or value attribute, return empty string
             # rather than string representation of the object
+            logger.warning(
+                f"Response object has no 'content' or 'value' attribute. "
+                f"Returning empty string. Response type: {type(response).__name__}"
+            )
             return ""
-
-
