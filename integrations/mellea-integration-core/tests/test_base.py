@@ -69,6 +69,8 @@ def test_prepare_generation_basic(integration):
 
 def test_prepare_generation_no_messages(integration):
     """Test preparation with no messages raises error."""
+    # Mock the to_mellea to return an empty list when given empty input
+    integration.message_converter.to_mellea = lambda x: []
     with pytest.raises(ValueError, match="No messages provided"):
         integration._prepare_generation([])
 

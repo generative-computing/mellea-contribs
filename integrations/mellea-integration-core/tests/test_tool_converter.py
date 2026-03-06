@@ -23,7 +23,9 @@ def converter():
 
 def test_extract_tool_schema_basic(converter):
     """Test extracting basic tool schema."""
-    tool = Mock(name="test_tool", description="Test description")
+    tool = Mock(spec=["name", "description"])
+    tool.name = "test_tool"
+    tool.description = "Test description"
 
     schema = converter.extract_tool_schema(tool)
 
@@ -99,7 +101,11 @@ def test_get_tool_callable_tool_itself(converter):
 
 def test_get_tool_callable_not_found(converter):
     """Test error when no callable found."""
-    tool = Mock(spec=[])
+    # Create a non-callable object
+    class NonCallable:
+        pass
+
+    tool = NonCallable()
 
     with pytest.raises(ValueError, match="Cannot extract callable"):
         converter.get_tool_callable(tool)
@@ -151,7 +157,10 @@ def test_parse_tool_calls_from_string_malformed_args(converter):
 
 def test_extract_tool_calls_from_response_tool_calls_attr(converter):
     """Test extracting from tool_calls attribute."""
-    mock_tc = Mock(id="call_1", name="test_tool", arguments={"arg": "val"})
+    mock_tc = Mock()
+    mock_tc.id = "call_1"
+    mock_tc.name = "test_tool"
+    mock_tc.arguments = {"arg": "val"}
     response = Mock(tool_calls=[mock_tc])
 
     tool_calls = converter.extract_tool_calls_from_response(response)
@@ -164,7 +173,10 @@ def test_extract_tool_calls_from_response_tool_calls_attr(converter):
 
 def test_extract_tool_calls_from_response_private_attr(converter):
     """Test extracting from _tool_calls attribute."""
-    mock_tc = Mock(id="call_1", name="test_tool", arguments={"arg": "val"})
+    mock_tc = Mock()
+    mock_tc.id = "call_1"
+    mock_tc.name = "test_tool"
+    mock_tc.arguments = {"arg": "val"}
     response = Mock(spec=["_tool_calls"])
     response._tool_calls = [mock_tc]
 
@@ -207,7 +219,10 @@ def test_extract_tool_calls_from_response_empty_list(converter):
 
 def test_parse_tool_calls_default_implementation(converter):
     """Test default parse_tool_calls implementation."""
-    mock_tc = Mock(id="call_1", name="test_tool", arguments={})
+    mock_tc = Mock()
+    mock_tc.id = "call_1"
+    mock_tc.name = "test_tool"
+    mock_tc.arguments = {}
     response = Mock(tool_calls=[mock_tc])
 
     tool_calls = converter.parse_tool_calls(response)

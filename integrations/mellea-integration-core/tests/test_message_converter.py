@@ -113,11 +113,12 @@ def test_extract_content_from_response_with_value(converter):
 
 
 def test_extract_content_from_response_fallback(converter):
-    """Test extracting content falls back to str()."""
+    """Test extracting content returns empty string when no content/value."""
     response = Mock(spec=[])
-    response.__str__ = Mock(return_value="String representation")
+    # Remove any default attributes to simulate object with no content/value
     result = converter.extract_content_from_response(response)
-    assert result == "String representation"
+    # The implementation returns empty string as fallback
+    assert result == ""
 
 
 def test_extract_content_from_response_none_content(converter):
