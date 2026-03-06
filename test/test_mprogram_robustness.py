@@ -150,9 +150,9 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
             c = G if ok else R
             _out.write(f"\r  Baseline: {c}{ans}{X}  |  0/{total} variations...")
             _out.flush()
-        elif status == "skip":
+        elif status in ("skip", "invalid"):
             pct = int(current / total * 100)
-            _out.write(f"\r  [{pct:3d}%] {current}/{total}  {D}skip: {entry.get('variation_type','')}{X}   ")
+            _out.write(f"\r  [{pct:3d}%] {current}/{total}  {D}{status}: {entry.get('variation_type','')}{X}   ")
             _out.flush()
         else:
             pct = int(current / total * 100)
@@ -162,9 +162,10 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
             _out.flush()
 
     # --- Run ---
+    _captured_err = io.StringIO()
     try:
         with contextlib.redirect_stdout(io.StringIO()), \
-             contextlib.redirect_stderr(io.StringIO()):
+             contextlib.redirect_stderr(_captured_err):
             probes = run_benchdrift_pipeline(
                 baseline_problem=baseline_question,
                 ground_truth_answer=ground_truth,
@@ -176,13 +177,22 @@ A company is ordering catering for 22 people for a Saturday event. The venue is 
             )
     except Exception as e:
         print(f"\n{R}Pipeline failed: {e}{X}")
+        err_output = _captured_err.getvalue()
+        if err_output:
+            print(f"{D}{err_output[:500]}{X}")
         import traceback; traceback.print_exc()
         return
 
     _out.write("\r" + " " * 80 + "\r")
     _out.flush()
 
-    assert probes and len(probes) > 1
+    if not probes or len(probes) <= 1:
+        print(f"\n{R}No variations generated. Check that gen-model is available:{X}")
+        print(f"  ollama pull {gen_model}")
+        err_output = _captured_err.getvalue()
+        if err_output:
+            print(f"{D}{err_output[:300]}{X}")
+        return
 
     # --- Results ---
     print(f"{B}Results{X}")
@@ -254,6 +264,12 @@ def parse_args():
                    help='Taxonomy axes, comma-separated or "all" (default: 5 core axes)')
     p.add_argument('--no-enrich', action='store_true',
                    help='Skip LLM feature enrichment (faster)')
+    p.add_argument('--judge-model', type=str, default=None,
+                   help='Ollama model for validation + evaluation (default: same as gen-model)')
+    p.add_argument('--skip-validation', action='store_true',
+                   help='Skip variation validation (faster, less filtering)')
+    p.add_argument('--use-llm-judge', action='store_true',
+                   help='Use LLM judge for answer evaluation (slower, more accurate)')
     return p.parse_args()
 
 
@@ -268,6 +284,12 @@ if __name__ == "__main__":
         overrides['top_k'] = args.top_k
     if args.use_axes:
         overrides['use_axes'] = args.use_axes
+    if args.judge_model:
+        overrides['judge_model'] = args.judge_model
     if args.no_enrich:
         overrides['no_enrich'] = True
+    if args.skip_validation:
+        overrides['skip_validation'] = True
+    if args.use_llm_judge:
+        overrides['use_llm_judge'] = True
     test_m_program_robustness(overrides or None)

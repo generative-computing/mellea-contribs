@@ -1,8 +1,14 @@
 """BenchDrift-Mellea integration for robustness testing of Mellea m-programs.
 
 Generates semantic variations of a problem using BenchDrift (demo-ui branch),
-tests each through the m-program, and checks correctness. Per-variation streaming:
-each variation is generated, tested, and reported before moving to the next.
+validates them, tests each through the m-program, and evaluates correctness.
+
+Per-variation streaming — for each ranked transformation:
+  1. Generate variation (Ollama)
+  2. Validate it preserves meaning (Ollama judge)
+  3. Test it through m-program
+  4. Evaluate answer correctness (string match or LLM judge)
+  5. Report result
 
 All models run via Ollama.
 """
@@ -28,6 +34,11 @@ from benchdrift.pipeline.unified_variation_engine_batched import UnifiedVariatio
 from benchdrift.pipeline.comprehensive_variation_engine_v2 import (
     clean_model_response,
     is_valid_question,
+)
+from benchdrift.pipeline.council_validator import (
+    get_judge_validation_prompt,
+    build_judge_user_prompt,
+    parse_judge_response,
 )
 from benchdrift.models.model_client import ModelClientFactory
 
@@ -72,6 +83,45 @@ def _generate_one_variation(gen_client, problem: str, trans_name: str,
         user_prompt = (f"Original: {problem}\n\nReturn ONLY the question text "
                        f"inside <question> tags. No explanation, no analysis.")
     return ""
+
+
+def _validate_variation(judge_client, original: str, variation: str,
+                        ground_truth: str) -> bool:
+    """Validate that a variation preserves the original answer.
+    Uses BenchDrift's judge validation prompt from council_validator."""
+    try:
+        system_prompt = get_judge_validation_prompt()
+        user_prompt = build_judge_user_prompt(original, variation, ground_truth)
+        raw = judge_client.get_single_response(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_new_tokens=32, temperature=0.0)
+        verdict = parse_judge_response(raw)
+        return verdict == "VALID"
+    except Exception:
+        return True  # on failure, don't filter out
+
+
+def _llm_judge_answer(judge_client, problem: str, ground_truth: str,
+                      predicted: str) -> bool:
+    """Use LLM judge to evaluate if predicted answer matches ground truth."""
+    try:
+        system_prompt = (
+            "You are an answer evaluation judge. Compare the predicted answer to the "
+            "ground truth answer. They may be in different formats but represent the same value. "
+            "Respond with ONLY 'CORRECT' or 'INCORRECT'."
+        )
+        user_prompt = (
+            f"Problem: {problem}\n"
+            f"Ground truth: {ground_truth}\n"
+            f"Predicted: {predicted}\n\n"
+            f"Is the predicted answer correct? Reply ONLY 'CORRECT' or 'INCORRECT'."
+        )
+        raw = judge_client.get_single_response(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_new_tokens=32, temperature=0.0)
+        return "CORRECT" in raw.upper() and "INCORRECT" not in raw.upper()
+    except Exception:
+        return _answers_match(predicted, ground_truth)  # fallback to string match
 
 
 def _clean_response(raw: str) -> str:
@@ -165,19 +215,34 @@ def run_benchdrift_pipeline(
 ) -> List[Dict[str, Any]]:
     """Generate semantic variations and test m-program robustness.
 
+    For each ranked transformation:
+      1. Generate a variation (gen_model via Ollama)
+      2. Validate it preserves meaning (gen_model as judge)
+      3. Test it through the m-program
+      4. Evaluate correctness (string match, or LLM judge if use_llm_judge=True)
+
     Args:
         baseline_problem: Problem text to generate variations for
         ground_truth_answer: Expected correct answer
         m_program_callable: M-program function (takes str, returns Any)
         mellea_session: Mellea session (required with m_program_callable)
         answer_extractor: Extract answer string from m-program response
-        config_overrides: Pipeline config (gen_model, target_model, top_k, use_axes, etc.)
+        config_overrides: Pipeline config:
+            gen_model:       Ollama model for variation gen + validation (default: 'qwen3:8b')
+            target_model:    Ollama model when no m-program (default: 'granite3.3:8b')
+            top_k:           Number of ranked transformations (default: 10)
+            use_axes:        Taxonomy axes (default: 5 core axes)
+            no_enrich:       Skip LLM feature enrichment (default: False)
+            skip_validation: Skip variation validation (default: False)
+            use_llm_judge:   Use LLM for answer evaluation (default: False)
+            ollama_url:      Ollama server URL
+            timeout:         Ollama call timeout in seconds
         progress_callback: Called after each variation: (current, total, status, entry)
-            status is "baseline", "skip", "PASS", or "FAIL"
+            status: "baseline", "skip", "invalid", "PASS", or "FAIL"
 
     Returns:
         List of probe dicts with: is_baseline, is_variant, variation_type,
-        modified_problem, variant_answer, correct, ground_truth_answer
+        modified_problem, variant_answer, correct, valid, ground_truth_answer
     """
     if (m_program_callable is None) != (mellea_session is None):
         raise ValueError("Both m_program_callable and mellea_session must be provided together.")
@@ -185,6 +250,7 @@ def run_benchdrift_pipeline(
         raise ValueError("config_overrides is required.")
 
     gen_model = config_overrides.get('gen_model', 'qwen3:8b')
+    judge_model = config_overrides.get('judge_model', gen_model)
     target_model = config_overrides.get('target_model', 'granite3.3:8b')
     top_k = config_overrides.get('top_k', 10)
     use_axes = config_overrides.get('use_axes',
@@ -192,11 +258,14 @@ def run_benchdrift_pipeline(
     ollama_url = config_overrides.get('ollama_url', OLLAMA_BASE_URL)
     timeout = config_overrides.get('timeout', 120)
     no_enrich = config_overrides.get('no_enrich', False)
+    skip_validation = config_overrides.get('skip_validation', False)
+    use_llm_judge = config_overrides.get('use_llm_judge', False)
 
     if answer_extractor is None:
         answer_extractor = _default_answer_extractor
 
     gen_client = ModelClientFactory.create_client('ollama', gen_model)
+    judge_client = gen_client if judge_model == gen_model else ModelClientFactory.create_client('ollama', judge_model)
     target_client = None if m_program_callable else ModelClientFactory.create_client('ollama', target_model)
 
     # Feature analysis
@@ -220,7 +289,10 @@ def run_benchdrift_pipeline(
 
     # Baseline
     baseline_answer = _get_answer(baseline_problem, m_program_callable, answer_extractor, target_client)
-    baseline_correct = _answers_match(baseline_answer, ground_truth_answer)
+    if use_llm_judge:
+        baseline_correct = _llm_judge_answer(judge_client, baseline_problem, ground_truth_answer, baseline_answer)
+    else:
+        baseline_correct = _answers_match(baseline_answer, ground_truth_answer)
 
     results = [{
         'is_baseline': True, 'is_variant': False,
@@ -229,26 +301,61 @@ def run_benchdrift_pipeline(
         'ground_truth_answer': ground_truth_answer,
         'variant_answer': baseline_answer,
         'correct': baseline_correct,
+        'valid': True,
     }]
 
     if progress_callback:
         progress_callback(0, len(ranked), "baseline", results[0])
 
-    # Per-variation: generate → test → report
-    for i, (trans_name, score, axis) in enumerate(ranked, 1):
-        if trans_name not in all_types:
-            continue
-        t0 = time.time()
+    # Phase A: Generate all variations in parallel (Ollama calls only, no m-program)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    valid_ranked = [(t, s, a) for t, s, a in ranked if t in all_types]
+    max_workers = config_overrides.get('max_workers', 3)
+
+    def _gen_and_validate(item):
+        trans_name, score, axis = item
         variation = _generate_one_variation(gen_client, baseline_problem, trans_name, all_types[trans_name])
-        gen_time = time.time() - t0
-
         if not variation:
+            return (trans_name, score, axis, None, False, "skip")
+        is_valid = True
+        if not skip_validation:
+            is_valid = _validate_variation(judge_client, baseline_problem, variation, ground_truth_answer)
+        if not is_valid:
+            return (trans_name, score, axis, variation, False, "invalid")
+        return (trans_name, score, axis, variation, True, "ready")
+
+    # Run generation + validation in parallel
+    generated = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_idx = {executor.submit(_gen_and_validate, item): idx
+                         for idx, item in enumerate(valid_ranked)}
+        results_by_idx = {}
+        for future in as_completed(future_to_idx):
+            results_by_idx[future_to_idx[future]] = future.result()
+        generated = [results_by_idx[i] for i in range(len(valid_ranked))]
+
+    # Phase B: Test each valid variation through m-program (sequential, streaming)
+    variation_idx = 0
+    for i, (trans_name, score, axis, variation, is_valid, gen_status) in enumerate(generated, 1):
+        if gen_status == "skip":
             if progress_callback:
-                progress_callback(i, len(ranked), "skip", {"variation_type": trans_name})
+                progress_callback(i, len(generated), "skip", {"variation_type": trans_name})
+            continue
+        if gen_status == "invalid":
+            if progress_callback:
+                progress_callback(i, len(generated), "invalid", {"variation_type": trans_name})
             continue
 
+        # Test through m-program
         answer = _get_answer(variation, m_program_callable, answer_extractor, target_client)
-        correct = _answers_match(answer, ground_truth_answer)
+
+        # Evaluate
+        if use_llm_judge:
+            correct = _llm_judge_answer(judge_client, variation, ground_truth_answer, answer)
+        else:
+            correct = _answers_match(answer, ground_truth_answer)
+
         status = "PASS" if correct else "FAIL"
 
         entry = {
@@ -260,12 +367,12 @@ def run_benchdrift_pipeline(
             'ground_truth_answer': ground_truth_answer,
             'variant_answer': answer,
             'correct': correct,
-            'generation_time_s': round(gen_time, 1),
+            'valid': is_valid,
         }
         results.append(entry)
 
         if progress_callback:
-            progress_callback(i, len(ranked), status, entry)
+            progress_callback(i, len(generated), status, entry)
 
     return results
 
