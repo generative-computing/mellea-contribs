@@ -1,7 +1,5 @@
 """Message conversion utilities between LangChain and Mellea formats."""
 
-import logging
-import re
 from typing import Any
 
 from langchain_core.messages import (
@@ -13,8 +11,7 @@ from langchain_core.messages import (
 )
 from langchain_core.outputs import ChatGeneration, ChatResult
 from mellea_integration import BaseMessageConverter
-
-logger = logging.getLogger(__name__)
+from mellea_integration.tool_converter import BaseToolConverter
 
 try:
     from mellea.core import ModelToolCall
@@ -130,67 +127,14 @@ class LangChainMessageConverter(BaseMessageConverter):
     def _extract_tool_calls(self, response: Any) -> list[dict[str, Any]]:
         """Extract tool calls from Mellea response.
 
+        Delegates to BaseToolConverter.extract_tool_calls_from_response() which handles
+        multiple formats including direct tool_calls attribute, _tool_calls attribute,
+        and string representation parsing.
+
         Args:
             response: Mellea response object
 
         Returns:
             List of tool call dictionaries
         """
-        tool_calls = []
-
-        # Check if the content looks like tool calls (string representation)
-        if hasattr(response, "content"):
-            content_str = str(response.content)
-            if content_str.startswith("[ToolCall"):
-                # Parse tool calls from the string representation
-                tool_calls = self._parse_tool_calls_from_string(content_str)
-
-        # Also check for _tool_calls attribute (alternative format)
-        if not tool_calls and hasattr(response, "_tool_calls") and response._tool_calls:
-            tool_calls = [
-                {"id": tc.id, "name": tc.name, "args": tc.arguments} for tc in response._tool_calls
-            ]
-
-        return tool_calls
-
-    @staticmethod
-    def _parse_tool_calls_from_string(content_str: str) -> list[dict[str, Any]]:
-        """Parse tool calls from Mellea's string representation.
-
-        Example input: "[ToolCall(function=Function(name='get_weather', arguments={'location': 'NYC'}))]"
-
-        Args:
-            content_str: String containing tool call representations
-
-        Returns:
-            List of tool call dictionaries
-        """
-        tool_calls = []
-
-        # Pattern to match ToolCall objects in the string
-        # Matches: ToolCall(function=Function(name='tool_name', arguments={...}))
-        pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{[^}]+\})\)\)"
-
-        for match in re.finditer(pattern, content_str):
-            tool_name = match.group(1)
-            args_str = match.group(2)
-
-            try:
-                # Safely evaluate the arguments dictionary
-                import ast
-
-                args_dict = ast.literal_eval(args_str)
-
-                tool_calls.append(
-                    {
-                        "id": f"call_{len(tool_calls)}",  # Generate a simple ID
-                        "name": tool_name,
-                        "args": args_dict,
-                    }
-                )
-            except (ValueError, SyntaxError) as e:
-                # If parsing fails, skip this tool call
-                logger.warning("Failed to parse tool call arguments: %s", e)
-                continue
-
-        return tool_calls
+        return BaseToolConverter.extract_tool_calls_from_response(response)
