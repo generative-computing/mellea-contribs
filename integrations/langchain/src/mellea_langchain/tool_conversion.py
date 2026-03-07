@@ -51,15 +51,8 @@ class LangChainToolConverter(BaseToolConverter):
         mellea_tools = []
 
         for tool in tools:
-            # Check if it's a LangChain tool by checking for the class name
-            if (
-                hasattr(tool, "__class__")
-                and tool.__class__.__name__ == "BaseTool"
-                or (
-                    hasattr(tool.__class__, "__mro__")
-                    and any(c.__name__ == "BaseTool" for c in tool.__class__.__mro__)
-                )
-            ):
+            # Check if it's a LangChain tool using isinstance
+            if BaseTool is not None and isinstance(tool, BaseTool):
                 # Convert LangChain tool to Mellea format using built-in converter
                 mellea_tool = MelleaTool.from_langchain(tool)  # type: ignore
                 mellea_tools.append(mellea_tool)

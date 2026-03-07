@@ -1,5 +1,6 @@
 """LangChain-compatible chat model that wraps Mellea."""
 
+import logging
 from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
@@ -15,6 +16,8 @@ from pydantic import Field
 
 from .message_conversion import LangChainMessageConverter
 from .tool_conversion import LangChainToolConverter
+
+logger = logging.getLogger(__name__)
 
 try:
     from mellea import MelleaSession
@@ -38,6 +41,10 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
     This allows LangChain applications to use Mellea's generative
     programming capabilities through the standard LangChain interface.
 
+    Note:
+        Streaming is not currently supported by Mellea. The streaming methods
+        (_stream and _astream) will return the full response as a single chunk.
+
     Example:
         ```python
         from mellea import start_session
@@ -57,7 +64,9 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
 
     mellea_session: Any = Field(description="The Mellea session to use for generation")
     model_name: str = Field(default="mellea", description="Name to identify this model")
-    streaming: bool = Field(default=False, description="Whether to stream responses by default")
+    # Note: Tool execution is handled by LangChain agents/executors, not by the model itself.
+    # The model only returns tool calls in the AIMessage, which the agent then executes.
+    # The _execute_tool_calls method below is for internal use and compatibility testing only.
 
     class Config:
         """Pydantic configuration."""
@@ -69,7 +78,6 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         self,
         mellea_session: Any,
         model_name: str = "mellea",
-        streaming: bool = False,
         requirements: list[Any] | None = None,
         strategy: Any | None = None,
         **kwargs: Any,
@@ -79,17 +87,19 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         Args:
             mellea_session: Configured Mellea session
             model_name: Name to identify this model
-            streaming: Whether to stream by default
             requirements: Optional list of requirements for validation
             strategy: Optional sampling strategy for validation
             **kwargs: Additional LangChain model parameters
+
+        Note:
+            Streaming is not currently supported. The model will return
+            full responses even when streaming is requested.
         """
         # Initialize BaseChatModel first (Pydantic model)
         BaseChatModel.__init__(
             self,
             mellea_session=mellea_session,
             model_name=model_name,
-            streaming=streaming,
             **kwargs,
         )
 
@@ -138,9 +148,9 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         bound_model = self.__class__(
             mellea_session=self.mellea_session,
             model_name=self.model_name,
-            streaming=self.streaming,
             requirements=self._requirements,
             strategy=self._strategy,
+            **kwargs,
         )
 
         # Store tools and tool choice for later use
@@ -156,6 +166,14 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
 
     def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Execute tool calls and return results.
+
+        WARNING: This method is for internal testing and compatibility only.
+        In standard LangChain/LangGraph usage, the model should NOT execute tools.
+        Instead, the model returns tool calls in the AIMessage, and the agent
+        executor (e.g., AgentExecutor, LangGraph's react agent) handles execution.
+
+        This method may be removed or modified in future versions to align with
+        standard LangChain patterns.
 
         Args:
             tool_calls: List of tool call dictionaries with 'id', 'name', and 'args'
@@ -226,6 +244,12 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         Returns:
             ChatResult with generated message
         """
+        # Log warning if stop sequences are provided
+        if stop:
+            logger.warning(
+                "Stop sequences are not currently supported by Mellea and will be ignored: %s",
+                stop,
+            )
         # Get bound tools if available
         tools = getattr(self, "_bound_tools", None) or kwargs.get("tools")
 
@@ -259,36 +283,43 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         # Convert response using message converter
         result = self.message_converter.from_mellea(response)
 
-        # Execute tool calls if present
-        if tool_calls_enabled and result.generations:
-            ai_message = result.generations[0].message
-            if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-                # Execute the tools
-                tool_results = self._execute_tool_calls(ai_message.tool_calls)
+        # NOTE: Tool execution is commented out to align with standard LangChain behavior.
+        # In LangChain/LangGraph, the model returns tool calls but doesn't execute them.
+        # The agent executor handles tool execution and sends results back to the model.
+        #
+        # If you need automatic tool execution for testing or specific use cases,
+        # uncomment the code below, but be aware this deviates from standard patterns.
 
-                # Store tool execution results in the AIMessage
-                if tool_results:
-                    from langchain_core.messages import AIMessage
-                    from langchain_core.outputs import ChatGeneration
-
-                    updated_message = AIMessage(
-                        content=ai_message.content,
-                        tool_calls=ai_message.tool_calls,
-                        additional_kwargs={
-                            **ai_message.additional_kwargs,
-                            "tool_execution_results": tool_results,
-                        },
-                        response_metadata={
-                            **ai_message.response_metadata,
-                            "tool_execution_results": tool_results,
-                        },
-                        id=ai_message.id,
-                    )
-
-                    result.generations[0] = ChatGeneration(
-                        message=updated_message,
-                        generation_info=result.generations[0].generation_info,
-                    )
+        # # Execute tool calls if present
+        # if tool_calls_enabled and result.generations:
+        #     ai_message = result.generations[0].message
+        #     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
+        #         # Execute the tools
+        #         tool_results = self._execute_tool_calls(ai_message.tool_calls)
+        #
+        #         # Store tool execution results in the AIMessage
+        #         if tool_results:
+        #             from langchain_core.messages import AIMessage
+        #             from langchain_core.outputs import ChatGeneration
+        #
+        #             updated_message = AIMessage(
+        #                 content=ai_message.content,
+        #                 tool_calls=ai_message.tool_calls,
+        #                 additional_kwargs={
+        #                     **ai_message.additional_kwargs,
+        #                     "tool_execution_results": tool_results,
+        #                 },
+        #                 response_metadata={
+        #                     **ai_message.response_metadata,
+        #                     "tool_execution_results": tool_results,
+        #                 },
+        #                 id=ai_message.id,
+        #             )
+        #
+        #             result.generations[0] = ChatGeneration(
+        #                 message=updated_message,
+        #                 generation_info=result.generations[0].generation_info,
+        #             )
 
         # Invoke callbacks
         if run_manager:
@@ -322,6 +353,12 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         Returns:
             ChatResult with generated message
         """
+        # Log warning if stop sequences are provided
+        if stop:
+            logger.warning(
+                "Stop sequences are not currently supported by Mellea and will be ignored: %s",
+                stop,
+            )
         # Get bound tools if available
         tools = getattr(self, "_bound_tools", None) or kwargs.get("tools")
 
@@ -355,36 +392,43 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         # Convert response using message converter
         result = self.message_converter.from_mellea(response)
 
-        # Execute tool calls if present
-        if tool_calls_enabled and result.generations:
-            ai_message = result.generations[0].message
-            if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-                # Execute the tools
-                tool_results = self._execute_tool_calls(ai_message.tool_calls)
+        # NOTE: Tool execution is commented out to align with standard LangChain behavior.
+        # In LangChain/LangGraph, the model returns tool calls but doesn't execute them.
+        # The agent executor handles tool execution and sends results back to the model.
+        #
+        # If you need automatic tool execution for testing or specific use cases,
+        # uncomment the code below, but be aware this deviates from standard patterns.
 
-                # Store tool execution results in the AIMessage
-                if tool_results:
-                    from langchain_core.messages import AIMessage
-                    from langchain_core.outputs import ChatGeneration
-
-                    updated_message = AIMessage(
-                        content=ai_message.content,
-                        tool_calls=ai_message.tool_calls,
-                        additional_kwargs={
-                            **ai_message.additional_kwargs,
-                            "tool_execution_results": tool_results,
-                        },
-                        response_metadata={
-                            **ai_message.response_metadata,
-                            "tool_execution_results": tool_results,
-                        },
-                        id=ai_message.id,
-                    )
-
-                    result.generations[0] = ChatGeneration(
-                        message=updated_message,
-                        generation_info=result.generations[0].generation_info,
-                    )
+        # # Execute tool calls if present
+        # if tool_calls_enabled and result.generations:
+        #     ai_message = result.generations[0].message
+        #     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
+        #         # Execute the tools
+        #         tool_results = self._execute_tool_calls(ai_message.tool_calls)
+        #
+        #         # Store tool execution results in the AIMessage
+        #         if tool_results:
+        #             from langchain_core.messages import AIMessage
+        #             from langchain_core.outputs import ChatGeneration
+        #
+        #             updated_message = AIMessage(
+        #                 content=ai_message.content,
+        #                 tool_calls=ai_message.tool_calls,
+        #                 additional_kwargs={
+        #                     **ai_message.additional_kwargs,
+        #                     "tool_execution_results": tool_results,
+        #                 },
+        #                 response_metadata={
+        #                     **ai_message.response_metadata,
+        #                     "tool_execution_results": tool_results,
+        #                 },
+        #                 id=ai_message.id,
+        #             )
+        #
+        #             result.generations[0] = ChatGeneration(
+        #                 message=updated_message,
+        #                 generation_info=result.generations[0].generation_info,
+        #             )
 
         # Invoke callbacks
         if run_manager:

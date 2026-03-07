@@ -1,5 +1,6 @@
 """Message conversion utilities between LangChain and Mellea formats."""
 
+import logging
 import re
 from typing import Any
 
@@ -12,6 +13,8 @@ from langchain_core.messages import (
 )
 from langchain_core.outputs import ChatGeneration, ChatResult
 from mellea_integration import BaseMessageConverter
+
+logger = logging.getLogger(__name__)
 
 try:
     from mellea.core import ModelToolCall
@@ -187,7 +190,7 @@ class LangChainMessageConverter(BaseMessageConverter):
                 )
             except (ValueError, SyntaxError) as e:
                 # If parsing fails, skip this tool call
-                print(f"Warning: Failed to parse tool call arguments: {e}")
+                logger.warning("Failed to parse tool call arguments: %s", e)
                 continue
 
         return tool_calls
