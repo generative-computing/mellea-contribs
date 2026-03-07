@@ -4,7 +4,7 @@ build-backend = "pdm.backend"
 
 [project]
 name = "mellea-contribs"
-version = "0.0.1"
+version = "0.1.2"
 authors = [
     { name = "Nathan Fulton", email = "nathan@ibm.com" },
     # add your name here!
@@ -19,20 +19,12 @@ classifiers = [
 ]
 
 dependencies = [
-  "mellea[litellm]",
-  "rapidfuzz>=3.14.3",
-  "eyecite",
-  "citeurl",
-  "playwright",
-  "markdown",
+  "mellea>=0.2.0,<0.3.0",
 ]
 
 [project.optional-dependencies]
 robustness = [
-  "benchdrift @ git+https://github.com/IBM/BenchDrift.git@demo-ui",
-  "pint>=0.17",
-  "spacy[lookups]>=3.0.0",
-  "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+  "benchdrift",
 ]
 
 [dependency-groups]
@@ -147,3 +139,6 @@ branch = "main"
 parser_angular_allowed_types = "build,chore,ci,docs,feat,fix,perf,style,refactor,test,release"
 parser_angular_minor_types = "release"
 parser_angular_patch_types = "fix,perf,feat"
+
+[tool.uv.sources]
+benchdrift = { git = "https://github.com/IBM/BenchDrift.git", rev = "95db1c95b6abbc3b9f9bc177f6a7933c555c7175" }
