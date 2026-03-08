@@ -24,7 +24,7 @@ Example Usage::
         print(f"Extracted {len(result.entities)} entities and {len(result.relations)} relations")
 """
 
-from movie_preprocessor import MovieKGPreprocessor
+from .movie_preprocessor import MovieKGPreprocessor
 
 __all__ = [
     "MovieKGPreprocessor",
