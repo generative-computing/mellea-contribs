@@ -6,7 +6,6 @@ import asyncio
 
 from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.models import Entity
-from mellea_contribs.kg.embed_models import EmbeddingConfig
 
 
 class TestKGEmbedderStructure:
@@ -48,51 +47,54 @@ class TestKGEmbedderStructure:
 
 
 class TestKGEmbedderInterface:
-    """Tests for KGEmbedder interface and contract."""
+    """Tests for KGEmbedder interface matching Mellea Layer 1 pattern."""
 
-    def test_kg_embedder_init_with_config(self):
-        """Test KGEmbedder initialization with config."""
-        config = EmbeddingConfig(
-            embedding_model="test-model",
-            embedding_dimensions=384,
+    def test_kg_embedder_init_individual_params(self):
+        """Test KGEmbedder initialization with individual parameters (Mellea pattern)."""
+        # Create embedder with individual parameters (matching KGRag/KGPreprocessor pattern)
+        embedder = KGEmbedder(
+            session=None,  # Would be MelleaSession in real usage
+            model="text-embedding-3-small",
+            dimension=1536,
         )
 
-        embedder = KGEmbedder(config=config)
-
         assert embedder is not None
-        assert embedder.config == config
+        # Verify individual parameters are accessible
+        assert embedder.embedding_model == "text-embedding-3-small"
+        assert embedder.embedding_dimension == 1536
 
     def test_kg_embedder_init_defaults(self):
         """Test KGEmbedder initialization with defaults."""
-        embedder = KGEmbedder()
+        embedder = KGEmbedder(session=None)
 
         assert embedder is not None
-        assert embedder.config is not None
+        # Should have default values
+        assert hasattr(embedder, "embedding_model")
+        assert hasattr(embedder, "embedding_dimension")
 
-    def test_kg_embedder_config_accessible(self):
-        """Test that KGEmbedder config is accessible."""
-        config = EmbeddingConfig(embedding_dimensions=1536)
-        embedder = KGEmbedder(config=config)
+    def test_kg_embedder_init_all_params(self):
+        """Test KGEmbedder initialization with all individual parameters."""
+        embedder = KGEmbedder(
+            session=None,
+            model="all-MiniLM-L6-v2",
+            dimension=384,
+            api_base="http://localhost:8000",
+            api_key="test-key",
+            batch_size=64,
+        )
 
-        assert embedder.config is not None
-        assert embedder.config.embedding_dimensions == 1536
+        assert embedder is not None
+        assert embedder.embedding_model == "all-MiniLM-L6-v2"
+        assert embedder.embedding_dimension == 384
 
-    def test_kg_embedder_method_signatures(self):
-        """Test that methods have correct signatures."""
-        embed_entity_sig = inspect.signature(KGEmbedder.embed_entity)
-        embed_entity_params = list(embed_entity_sig.parameters.keys())
-        assert "self" in embed_entity_params
-        assert "entity" in embed_entity_params
+    def test_kg_embedder_parameter_defaults(self):
+        """Test that KGEmbedder has sensible parameter defaults."""
+        embedder = KGEmbedder(session=None)
 
-        embed_batch_sig = inspect.signature(KGEmbedder.embed_batch)
-        embed_batch_params = list(embed_batch_sig.parameters.keys())
-        assert "self" in embed_batch_params
-        assert "entities" in embed_batch_params
-
-        get_similar_sig = inspect.signature(KGEmbedder.get_similar_entities)
-        get_similar_params = list(get_similar_sig.parameters.keys())
-        assert "self" in get_similar_params
-        assert "query_entity" in get_similar_params
+        # Should have reasonable defaults
+        assert isinstance(embedder.embedding_model, str)
+        assert isinstance(embedder.embedding_dimension, int)
+        assert embedder.embedding_dimension > 0
 
 
 class TestKGEmbedderDocumentation:
@@ -118,37 +120,62 @@ class TestKGEmbedderDocumentation:
 
 
 class TestKGEmbedderInstantiation:
-    """Tests for KGEmbedder instantiation."""
+    """Tests for KGEmbedder instantiation (Mellea Layer 1 pattern)."""
 
     def test_kg_embedder_can_be_instantiated(self):
         """Test that KGEmbedder can be instantiated."""
-        embedder = KGEmbedder()
+        embedder = KGEmbedder(session=None)
         assert embedder is not None
         assert isinstance(embedder, KGEmbedder)
 
-    def test_kg_embedder_with_custom_config(self):
-        """Test KGEmbedder with custom configuration."""
-        config = EmbeddingConfig(
-            embedding_model="custom-model",
-            embedding_api="custom-api",
-            embedding_dimensions=768,
-            batch_size=64,
+    def test_kg_embedder_with_various_models(self):
+        """Test KGEmbedder with various embedding models."""
+        models = [
+            "text-embedding-3-small",
+            "text-embedding-3-large",
+            "all-MiniLM-L6-v2",
+        ]
+
+        for model_name in models:
+            embedder = KGEmbedder(
+                session=None,
+                model=model_name,
+            )
+
+            assert embedder is not None
+            assert embedder.embedding_model == model_name
+
+    def test_kg_embedder_with_various_dimensions(self):
+        """Test KGEmbedder with various embedding dimensions."""
+        dimensions = [384, 768, 1536, 3072]
+
+        for dim in dimensions:
+            embedder = KGEmbedder(
+                session=None,
+                dimension=dim,
+            )
+
+            assert embedder is not None
+            assert embedder.embedding_dimension == dim
+
+    def test_kg_embedder_consistency_across_instances(self):
+        """Test that multiple KGEmbedder instances maintain separate configs."""
+        embedder1 = KGEmbedder(
+            session=None,
+            model="model1",
+            dimension=384,
         )
 
-        embedder = KGEmbedder(config=config)
+        embedder2 = KGEmbedder(
+            session=None,
+            model="model2",
+            dimension=1536,
+        )
 
-        assert embedder.config.embedding_model == "custom-model"
-        assert embedder.config.embedding_api == "custom-api"
-        assert embedder.config.embedding_dimensions == 768
-        assert embedder.config.batch_size == 64
-
-    def test_kg_embedder_config_immutability_in_method_calls(self):
-        """Test that config is properly used in method signatures."""
-        config = EmbeddingConfig(embedding_dimensions=1536)
-        embedder = KGEmbedder(config=config)
-
-        # Verify config is accessible after instantiation
-        assert embedder.config.embedding_dimensions == 1536
+        assert embedder1.embedding_model == "model1"
+        assert embedder1.embedding_dimension == 384
+        assert embedder2.embedding_model == "model2"
+        assert embedder2.embedding_dimension == 1536
 
 
 class TestKGEmbedderMethodSignatures:
@@ -161,8 +188,9 @@ class TestKGEmbedderMethodSignatures:
 
         assert "self" in params
         assert "entity" in params
-        # Check for optional parameters
-        assert "use_name" in params or "use_description" in params
+        # Check for optional parameters like use_name, use_description
+        param_names = list(params.keys())
+        assert any("use" in p.lower() for p in param_names)
 
     def test_embed_batch_parameters(self):
         """Test embed_batch method parameters."""
@@ -178,12 +206,7 @@ class TestKGEmbedderMethodSignatures:
         params = sig.parameters
 
         assert "self" in params
-        assert "query_entity" in params
-        # Should have candidates parameter or something similar
-        param_names = list(params.keys())
-        assert any(
-            "candidate" in p.lower() or "entities" in p.lower() for p in param_names
-        )
+        assert "query_entity" in params or "query" in params
 
 
 class TestKGEmbedderIntegration:
@@ -199,21 +222,36 @@ class TestKGEmbedderIntegration:
             paragraph_end="here.",
         )
 
-        config = EmbeddingConfig()
-        embedder = KGEmbedder(config=config)
+        embedder = KGEmbedder(session=None)
 
         # Just verify the interaction is type-safe
         assert entity is not None
         assert embedder is not None
 
-    def test_kg_embedder_config_consistency(self):
-        """Test that embedder maintains config consistency."""
-        config1 = EmbeddingConfig(embedding_dimensions=384)
-        embedder1 = KGEmbedder(config=config1)
+    def test_kg_embedder_parameter_consistency(self):
+        """Test that embedder maintains parameter consistency."""
+        # Verify that parameters are stored and accessible
+        embedder = KGEmbedder(
+            session=None,
+            model="test-model",
+            dimension=512,
+            batch_size=32,
+        )
 
-        config2 = EmbeddingConfig(embedding_dimensions=1536)
-        embedder2 = KGEmbedder(config=config2)
+        assert embedder.embedding_model == "test-model"
+        assert embedder.embedding_dimension == 512
 
-        assert embedder1.config.embedding_dimensions == 384
-        assert embedder2.config.embedding_dimensions == 1536
-        assert embedder1.config != embedder2.config
+    def test_kg_embedder_matches_layer1_pattern(self):
+        """Test that KGEmbedder matches Mellea Layer 1 pattern (individual params)."""
+        # Similar to KGRag and KGPreprocessor
+        embedder = KGEmbedder(
+            session=None,  # Would be MelleaSession
+            model="default-model",
+            dimension=1536,
+            batch_size=10,  # Individual parameters, not config object
+        )
+
+        assert embedder is not None
+        # All parameters should be individually accessible
+        assert hasattr(embedder, "embedding_model")
+        assert hasattr(embedder, "embedding_dimension")

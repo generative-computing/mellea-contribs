@@ -156,9 +156,9 @@ class TestQAResult:
     def test_qa_result_with_direct_answer(self):
         """Test QAResult with DirectAnswer object."""
         direct_answer = DirectAnswer(
+            sufficient="Yes",
+            reason="LLM has knowledge about this",
             answer="42",
-            confidence=0.9,
-            supporting_facts=["fact1", "fact2"],
         )
         result = QAResult(
             question="What is the answer?",
@@ -167,7 +167,7 @@ class TestQAResult:
         )
 
         assert result.direct_answer == direct_answer
-        assert result.direct_answer.confidence == 0.9
+        assert result.direct_answer.answer == "42"
 
 
 class TestQAStats:

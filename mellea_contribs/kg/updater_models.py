@@ -20,7 +20,7 @@ class UpdateConfig(BaseModel):
     """
 
     batch_size: int = Field(
-        default=10,
+        default=32,
         description="Number of documents to process in parallel.",
     )
 
@@ -31,7 +31,7 @@ class UpdateConfig(BaseModel):
     )
 
     similarity_threshold: float = Field(
-        default=0.85,
+        default=0.8,
         ge=0.0,
         le=1.0,
         description="Confidence threshold for merging entities/relations (0.0-1.0). "
@@ -56,15 +56,15 @@ class UpdateConfig(BaseModel):
         "Used for domain-specific extraction hints.",
     )
 
-    entity_types: Optional[str] = Field(
+    entity_types: Optional[list[str]] = Field(
         default=None,
-        description="Comma-separated list of entity types to extract. "
+        description="List of entity types to extract. "
         "If None, extract all types found.",
     )
 
-    relation_types: Optional[str] = Field(
+    relation_types: Optional[list[str]] = Field(
         default=None,
-        description="Comma-separated list of relation types to extract. "
+        description="List of relation types to extract. "
         "If None, extract all types found.",
     )
 
@@ -93,10 +93,9 @@ class UpdateSessionConfig(BaseModel):
         description="Temperature for extraction LLM (0.0-2.0).",
     )
 
-    alignment_model: Optional[str] = Field(
-        default=None,
-        description="Optional separate model for entity alignment. "
-        "If None, uses extraction_model.",
+    alignment_model: str = Field(
+        default="gpt-4o-mini",
+        description="Model for entity alignment.",
     )
 
     alignment_temperature: float = Field(
@@ -106,10 +105,16 @@ class UpdateSessionConfig(BaseModel):
         description="Temperature for alignment LLM.",
     )
 
-    merge_decision_model: Optional[str] = Field(
-        default=None,
-        description="Optional separate model for merge decisions. "
-        "If None, uses extraction_model.",
+    merge_decision_model: str = Field(
+        default="gpt-4o-mini",
+        description="Model for merge decisions.",
+    )
+
+    merge_decision_temperature: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=2.0,
+        description="Temperature for merge decision LLM.",
     )
 
     use_few_shot_examples: bool = Field(
@@ -129,49 +134,69 @@ class UpdateStats(BaseModel):
     Tracks metrics about entities/relations extracted, merged, and added.
     """
 
-    total_documents: int = Field(description="Total documents processed")
+    total_documents: int = Field(
+        default=0, description="Total documents processed"
+    )
 
-    successful_documents: int = Field(description="Documents processed successfully")
+    successful_documents: int = Field(
+        default=0, description="Documents processed successfully"
+    )
 
-    failed_documents: int = Field(description="Documents that failed processing")
+    failed_documents: int = Field(
+        default=0, description="Documents that failed processing"
+    )
 
     # Extraction statistics
-    total_entities_extracted: int = Field(description="Total entities extracted from documents")
+    entities_extracted: int = Field(
+        default=0, description="Total entities extracted from documents"
+    )
 
-    total_relations_extracted: int = Field(description="Total relations extracted from documents")
+    relations_extracted: int = Field(
+        default=0, description="Total relations extracted from documents"
+    )
 
     # Alignment statistics
     entities_aligned: int = Field(
-        description="Entities aligned with existing KG entities"
+        default=0, description="Entities aligned with existing KG entities"
     )
 
-    entities_new: int = Field(description="New entities added to KG")
+    entities_new: int = Field(
+        default=0, description="New entities added to KG"
+    )
 
     relations_aligned: int = Field(
-        description="Relations aligned with existing KG relations"
+        default=0, description="Relations aligned with existing KG relations"
     )
 
-    relations_new: int = Field(description="New relations added to KG")
+    relations_new: int = Field(
+        default=0, description="New relations added to KG"
+    )
 
     # Merge statistics
-    entities_merged: int = Field(description="Entities merged with existing entities")
+    entities_merged: int = Field(
+        default=0, description="Entities merged with existing entities"
+    )
 
-    relations_merged: int = Field(description="Relations merged with existing relations")
+    relations_merged: int = Field(
+        default=0, description="Relations merged with existing relations"
+    )
 
     entities_skipped: int = Field(
-        description="Entities skipped due to merge conflicts"
+        default=0, description="Entities skipped due to merge conflicts"
     )
 
     relations_skipped: int = Field(
-        description="Relations skipped due to merge conflicts"
+        default=0, description="Relations skipped due to merge conflicts"
     )
 
     # Performance
     average_processing_time_per_doc_ms: float = Field(
-        description="Average processing time per document (milliseconds)"
+        default=0.0, description="Average processing time per document (milliseconds)"
     )
 
-    total_processing_time_ms: float = Field(description="Total processing time")
+    total_processing_time_ms: float = Field(
+        default=0.0, description="Total processing time"
+    )
 
 
 class MergeConflict(BaseModel):
@@ -180,15 +205,13 @@ class MergeConflict(BaseModel):
     Tracks conflicts that occurred when trying to align/merge entities or relations.
     """
 
+    source_id: str = Field(description="ID of source entity/relation")
+
+    target_id: str = Field(description="ID of target entity/relation")
+
     conflict_type: str = Field(
         description="Type of conflict: 'entity_merge', 'relation_merge', 'property_conflict'"
     )
-
-    existing_id: str = Field(description="ID of existing entity/relation in KG")
-
-    existing_name: str = Field(description="Name of existing entity/relation")
-
-    extracted_name: str = Field(description="Name of extracted entity/relation")
 
     similarity_score: float = Field(
         ge=0.0, le=1.0, description="Similarity score between entities/relations"
@@ -200,7 +223,9 @@ class MergeConflict(BaseModel):
 
     reason: str = Field(description="Reasoning for the decision")
 
-    timestamp: str = Field(description="When conflict occurred (ISO format)")
+    timestamp: Optional[str] = Field(
+        default=None, description="When conflict occurred (ISO format)"
+    )
 
 
 class UpdateResult(BaseModel):
@@ -211,30 +236,42 @@ class UpdateResult(BaseModel):
 
     document_id: str = Field(description="ID of document being processed")
 
-    success: bool = Field(description="Whether update completed successfully")
+    success: bool = Field(
+        default=True, description="Whether update completed successfully"
+    )
 
     # Extraction results
-    entities_found: int = Field(description="Number of entities found in document")
+    entities_found: int = Field(
+        default=0, description="Number of entities found in document"
+    )
 
-    relations_found: int = Field(description="Number of relations found in document")
+    relations_found: int = Field(
+        default=0, description="Number of relations found in document"
+    )
 
     # What was added/merged
-    entities_added: list[str] = Field(
-        default_factory=list, description="IDs of new entities added to KG"
+    entities_added: int = Field(
+        default=0, description="Number of new entities added to KG"
     )
 
-    entities_merged: list[tuple[str, str]] = Field(
-        default_factory=list,
-        description="Pairs of (extracted_id, merged_with_kg_id) for merged entities",
+    entities_merged: int = Field(
+        default=0, description="Number of entities merged with existing KG entities"
     )
 
-    relations_added: list[str] = Field(
-        default_factory=list, description="IDs of new relations added to KG"
+    entities_skipped: int = Field(
+        default=0, description="Number of entities skipped due to conflicts"
     )
 
-    relations_merged: list[tuple[str, str]] = Field(
-        default_factory=list,
-        description="Pairs of (extracted_id, merged_with_kg_id) for merged relations",
+    relations_added: int = Field(
+        default=0, description="Number of new relations added to KG"
+    )
+
+    relations_merged: int = Field(
+        default=0, description="Number of relations merged with existing KG relations"
+    )
+
+    relations_skipped: int = Field(
+        default=0, description="Number of relations skipped due to conflicts"
     )
 
     # Conflicts
@@ -243,9 +280,13 @@ class UpdateResult(BaseModel):
     )
 
     # Metadata
-    processing_time_ms: float = Field(description="Time to process document (milliseconds)")
+    processing_time_ms: float = Field(
+        default=0.0, description="Time to process document (milliseconds)"
+    )
 
-    model_used: str = Field(description="Extraction model used")
+    model_used: str = Field(
+        default="gpt-4o-mini", description="Extraction model used"
+    )
 
     error: Optional[str] = Field(default=None, description="Error message if failed")
 
@@ -260,19 +301,41 @@ class UpdateBatchResult(BaseModel):
     Combines results from updating multiple documents with statistics.
     """
 
-    results: list[UpdateResult] = Field(description="Per-document results")
+    total_documents: int = Field(
+        default=0, description="Total documents processed"
+    )
 
-    stats: UpdateStats = Field(description="Aggregated statistics")
+    successful_documents: int = Field(
+        default=0, description="Number of successful documents"
+    )
 
-    start_time: str = Field(description="When batch processing started (ISO format)")
+    failed_documents: int = Field(
+        default=0, description="Number of failed documents"
+    )
 
-    end_time: str = Field(description="When batch processing ended (ISO format)")
+    results: list[UpdateResult] = Field(
+        default_factory=list, description="Per-document results"
+    )
 
-    total_time_ms: float = Field(description="Total time for batch (milliseconds)")
+    stats: UpdateStats = Field(
+        default_factory=UpdateStats, description="Aggregated statistics"
+    )
 
-    successful_count: int = Field(description="Number of successful documents")
+    total_time_ms: float = Field(
+        default=0.0, description="Total time for batch (milliseconds)"
+    )
 
-    failed_count: int = Field(description="Number of failed documents")
+    avg_time_per_document_ms: float = Field(
+        default=0.0, description="Average time per document (milliseconds)"
+    )
+
+    start_time: Optional[str] = Field(
+        default=None, description="When batch processing started (ISO format)"
+    )
+
+    end_time: Optional[str] = Field(
+        default=None, description="When batch processing ended (ISO format)"
+    )
 
 
 __all__ = [

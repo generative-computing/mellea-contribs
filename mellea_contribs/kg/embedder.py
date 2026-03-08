@@ -79,23 +79,38 @@ class KGEmbedder:
     def __init__(
         self,
         session: MelleaSession,
-        embedding_model: str = "text-embedding-3-small",
-        embedding_dimension: int = 1536,
+        model: str = "text-embedding-3-small",
+        dimension: int = 1536,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
+        batch_size: int = 10,
         backend: Optional[GraphBackend] = None,
     ):
-        """Initialize the KG embedder.
+        """Initialize the KG embedder using individual parameters (Mellea Layer 1 pattern).
+
+        Matches the pattern used by KGRag and KGPreprocessor with individual
+        configuration parameters rather than a config object.
 
         Args:
-            session: MelleaSession for LLM operations
-            embedding_model: Name of embedding model (LiteLLM compatible)
+            session: MelleaSession for LLM operations (required)
+            model: Name of embedding model (LiteLLM compatible).
                 Default: "text-embedding-3-small" (OpenAI model)
-            embedding_dimension: Dimension of embedding vectors
+            dimension: Dimension of embedding vectors.
                 Default: 1536 (OpenAI's embedding size)
+            api_base: Optional API base URL for custom embedding service.
+                If None, uses default LiteLLM routing
+            api_key: Optional API key for embedding service
+            batch_size: Number of entities to embed in parallel per batch.
+                Default: 10
             backend: Optional GraphBackend for persisting embeddings
         """
+
         self.session = session
-        self.embedding_model = embedding_model
-        self.embedding_dimension = embedding_dimension
+        self.embedding_model = model
+        self.embedding_dimension = dimension
+        self.api_base = api_base
+        self.api_key = api_key
+        self.batch_size_value = batch_size
         self.backend = backend
 
     async def embed_entity(
