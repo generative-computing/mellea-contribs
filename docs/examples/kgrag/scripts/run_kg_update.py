@@ -19,44 +19,25 @@ import sys
 import time
 from pathlib import Path
 
-try:
-    from mellea import start_session
-except ImportError:
-    print("Error: mellea not installed. Run: pip install mellea[litellm]")
-    sys.exit(1)
-
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
-from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
-
-try:
-    from mellea_contribs.kg.graph_dbs.neo4j import Neo4jBackend
-except ImportError:
-    Neo4jBackend = None
-
 from mellea_contribs.kg.kgrag import orchestrate_kg_update
 from mellea_contribs.kg.updater_models import (
     UpdateBatchResult,
     UpdateResult,
     UpdateStats,
 )
-
-
-def build_backend(args) -> GraphBackend:
-    """Build graph backend from command line arguments."""
-    if args.mock:
-        return MockGraphBackend()
-    if Neo4jBackend is None:
-        print("Error: Neo4j backend not available. Install: pip install mellea-contribs[kg]")
-        sys.exit(1)
-    return Neo4jBackend(
-        connection_uri=args.neo4j_uri,
-        auth=(args.neo4j_user, args.neo4j_password),
-    )
+from mellea_contribs.kg.utils import (
+    create_session,
+    create_backend,
+    load_jsonl,
+    log_progress,
+    output_json,
+    print_stats,
+)
 
 
 async def update_kg_with_documents(
     input_path: Path,
-    backend: GraphBackend,
+    backend,
     session,
     model: str,
     domain: str,
@@ -68,78 +49,71 @@ async def update_kg_with_documents(
     results = []
 
     try:
-        with open(input_path, "r") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
+        for line_num, doc in enumerate(load_jsonl(input_path), 1):
+            doc_id = doc.get("id", f"doc_{line_num}")
+            doc_text = doc.get("text", "")
 
-                try:
-                    doc = json.loads(line)
-                    doc_id = doc.get("id", f"doc_{line_num}")
-                    doc_text = doc.get("text", "")
+            if not doc_text:
+                log_progress(f"[{line_num}] WARNING: Empty text for {doc_id}")
+                continue
 
-                    if not doc_text:
-                        print(
-                            f"[{line_num}] WARNING: Empty text for {doc_id}",
-                            file=sys.stderr
-                        )
-                        continue
+            doc_start = time.time()
 
-                    doc_start = time.time()
+            # Call orchestrate_kg_update
+            try:
+                update_result = await orchestrate_kg_update(
+                    session=session,
+                    backend=backend,
+                    doc_text=doc_text,
+                    domain=domain,
+                    hints="",
+                    entity_types="",
+                    relation_types="",
+                )
 
-                    # Call orchestrate_kg_update
-                    try:
-                        update_result = await orchestrate_kg_update(
-                            session=session,
-                            backend=backend,
-                            doc_text=doc_text,
-                            domain=domain,
-                            hints="",
-                            entity_types="",
-                            relation_types="",
-                        )
+                doc_elapsed = time.time() - doc_start
 
-                        doc_elapsed = time.time() - doc_start
+                # Create UpdateResult from response
+                result = UpdateResult(
+                    document_id=doc_id,
+                    success=True,
+                    entities_found=len(
+                        update_result.get("extracted_entities", [])
+                    ),
+                    relations_found=len(
+                        update_result.get("extracted_relations", [])
+                    ),
+                    entities_added=len(
+                        update_result.get("extracted_entities", [])
+                    ),
+                    relations_added=len(
+                        update_result.get("extracted_relations", [])
+                    ),
+                    processing_time_ms=doc_elapsed * 1000,
+                    model_used=model,
+                )
+                results.append(result)
+                batch_result.successful_documents += 1
 
-                        # Create UpdateResult from response
-                        result = UpdateResult(
-                            document_id=doc_id,
-                            success=True,
-                            entities_found=len(update_result.get("extracted_entities", [])),
-                            relations_found=len(update_result.get("extracted_relations", [])),
-                            entities_added=len(update_result.get("extracted_entities", [])),
-                            relations_added=len(update_result.get("extracted_relations", [])),
-                            processing_time_ms=doc_elapsed * 1000,
-                            model_used=model,
-                        )
-                        results.append(result)
-                        batch_result.successful_documents += 1
+                log_progress(
+                    f"[{line_num}] Updated {doc_id}: "
+                    f"{result.entities_found} entities, {result.relations_found} relations "
+                    f"({doc_elapsed:.2f}s)"
+                )
 
-                        print(
-                            f"[{line_num}] Updated {doc_id}: "
-                            f"{result.entities_found} entities, {result.relations_found} relations "
-                            f"({doc_elapsed:.2f}s)",
-                            file=sys.stderr
-                        )
+            except Exception as inner_e:
+                log_progress(f"[{line_num}] ERROR in update: {inner_e}")
+                result = UpdateResult(
+                    document_id=doc_id,
+                    success=False,
+                    error=str(inner_e),
+                    processing_time_ms=(time.time() - doc_start) * 1000,
+                )
+                results.append(result)
+                batch_result.failed_documents += 1
 
-                    except Exception as inner_e:
-                        print(f"[{line_num}] ERROR in update: {inner_e}", file=sys.stderr)
-                        result = UpdateResult(
-                            document_id=doc_id,
-                            success=False,
-                            error=str(inner_e),
-                            processing_time_ms=(time.time() - doc_start) * 1000,
-                        )
-                        results.append(result)
-                        batch_result.failed_documents += 1
-
-                except json.JSONDecodeError as e:
-                    print(f"[{line_num}] ERROR: Failed to parse JSON: {e}", file=sys.stderr)
-                    batch_result.failed_documents += 1
-
-    except IOError as e:
-        print(f"ERROR: Failed to read input file: {e}", file=sys.stderr)
+    except Exception as e:
+        log_progress(f"ERROR: Failed to read input file: {e}")
         return batch_result
 
     batch_elapsed = time.time() - batch_start
@@ -229,12 +203,17 @@ async def main():
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"ERROR: Input file not found: {input_path}", file=sys.stderr)
+        log_progress(f"ERROR: Input file not found: {input_path}")
         sys.exit(1)
 
-    # Initialize backend and session
-    backend = build_backend(args)
-    session = start_session(backend_name="litellm", model_id=args.model)
+    # Initialize backend and session using utilities
+    backend = create_backend(
+        backend_type="neo4j" if not args.mock else "mock",
+        neo4j_uri=args.neo4j_uri,
+        neo4j_user=args.neo4j_user,
+        neo4j_password=args.neo4j_password,
+    )
+    session = create_session(model_id=args.model)
 
     try:
         # Update KG
@@ -247,14 +226,13 @@ async def main():
             batch_size=args.batch_size,
         )
 
-        # Print summary
-        print("\n=== KG Update Summary ===", file=sys.stderr)
-        print(f"Total documents: {batch_result.total_documents}", file=sys.stderr)
-        print(f"Successful: {batch_result.successful_documents}", file=sys.stderr)
-        print(f"Failed: {batch_result.failed_documents}", file=sys.stderr)
-        print(
-            f"Average time per doc: {batch_result.avg_time_per_document_ms:.2f}ms",
-            file=sys.stderr
+        # Print summary using utility
+        log_progress("\n=== KG Update Summary ===")
+        log_progress(f"Total documents: {batch_result.total_documents}")
+        log_progress(f"Successful: {batch_result.successful_documents}")
+        log_progress(f"Failed: {batch_result.failed_documents}")
+        log_progress(
+            f"Average time per doc: {batch_result.avg_time_per_document_ms:.2f}ms"
         )
 
         # Write results to output file if requested
@@ -263,10 +241,10 @@ async def main():
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w") as f:
                 json.dump(batch_result.model_dump(), f, indent=2)
-            print(f"\nResults saved to: {output_path}", file=sys.stderr)
+            log_progress(f"Results saved to: {output_path}")
 
         # Write batch result to stdout as JSON
-        print(json.dumps(batch_result.model_dump()))
+        output_json(batch_result)
 
     finally:
         await backend.close()

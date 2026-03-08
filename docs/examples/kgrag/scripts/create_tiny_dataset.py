@@ -10,8 +10,9 @@ Example::
 """
 
 import argparse
-import json
 from pathlib import Path
+
+from mellea_contribs.kg.utils import save_jsonl
 
 
 # Minimal set of movie Q&A pairs for quick tests
@@ -57,14 +58,9 @@ def main():
     )
     args = parser.parse_args()
 
-    # Create output directory if needed
+    # Write tiny Q&A pairs to JSONL using utility
     output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write tiny Q&A pairs to JSONL
-    with open(output_path, "w") as f:
-        for pair in TINY_QA_PAIRS:
-            f.write(json.dumps(pair) + "\n")
+    save_jsonl(TINY_QA_PAIRS, output_path)
 
     print(f"Created tiny dataset with {len(TINY_QA_PAIRS)} Q&A pairs")
     print(f"Saved to: {output_path}")

@@ -10,9 +10,10 @@ Example::
 """
 
 import argparse
-import json
 import random
 from pathlib import Path
+
+from mellea_contribs.kg.utils import load_jsonl, save_jsonl
 
 
 def main():
@@ -45,25 +46,15 @@ def main():
     )
     args = parser.parse_args()
 
-    # Read input dataset
+    # Read input dataset using utility
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"Error: Input file not found: {input_path}")
         return
 
-    examples = []
     try:
-        with open(input_path, "r") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    example = json.loads(line)
-                    examples.append(example)
-                except json.JSONDecodeError as e:
-                    print(f"Warning: Failed to parse line {line_num}: {e}")
-    except IOError as e:
+        examples = list(load_jsonl(input_path))
+    except Exception as e:
         print(f"Error: Failed to read input file: {e}")
         return
 
@@ -75,17 +66,12 @@ def main():
         print(f"Shuffled examples")
 
     # Truncate to max examples
-    truncated = examples[:args.max_examples]
+    truncated = examples[: args.max_examples]
     print(f"Truncated to {len(truncated)} examples")
 
-    # Create output directory if needed
+    # Write truncated dataset to JSONL using utility
     output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write truncated dataset to JSONL
-    with open(output_path, "w") as f:
-        for example in truncated:
-            f.write(json.dumps(example) + "\n")
+    save_jsonl(truncated, output_path)
 
     print(f"Saved to: {output_path}")
 

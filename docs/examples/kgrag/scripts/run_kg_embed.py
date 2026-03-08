@@ -17,35 +17,15 @@ import sys
 import time
 from typing import Optional
 
-try:
-    from mellea import start_session, MelleaSession
-except ImportError:
-    print("Error: mellea not installed. Run: pip install mellea[litellm]")
-    sys.exit(1)
-
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
-from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
-
-try:
-    from mellea_contribs.kg.graph_dbs.neo4j import Neo4jBackend
-except ImportError:
-    Neo4jBackend = None
-
 from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.embed_models import EmbeddingConfig, EmbeddingStats
-
-
-def build_backend(args) -> GraphBackend:
-    """Build graph backend from command line arguments."""
-    if args.mock:
-        return MockGraphBackend()
-    if Neo4jBackend is None:
-        print("Error: Neo4j backend not available. Install: pip install mellea-contribs[kg]")
-        sys.exit(1)
-    return Neo4jBackend(
-        connection_uri=args.neo4j_uri,
-        auth=(args.neo4j_user, args.neo4j_password),
-    )
+from mellea_contribs.kg.utils import (
+    create_session,
+    create_backend,
+    log_progress,
+    output_json,
+    print_stats,
+)
 
 
 async def embed_entities(
@@ -68,7 +48,7 @@ async def embed_entities(
     try:
         # Fetch entities from backend (mock backend returns empty list by default)
         entities = await backend.get_all_nodes()
-        print(f"Found {len(entities)} entities to embed", file=sys.stderr)
+        log_progress(f"Found {len(entities)} entities to embed")
 
         if not entities:
             # For mock backend, return zero stats
@@ -111,7 +91,7 @@ async def embed_entities(
         return stats
 
     except Exception as e:
-        print(f"ERROR: Failed to embed entities: {e}", file=sys.stderr)
+        log_progress(f"ERROR: Failed to embed entities: {e}")
         elapsed = time.time() - start_time
         stats = EmbeddingStats(
             total_entities=0,
@@ -178,9 +158,14 @@ async def main():
     )
     args = parser.parse_args()
 
-    # Initialize backend and session
-    backend = build_backend(args)
-    session = start_session(backend_name="litellm", model_id="gpt-4o-mini")
+    # Initialize backend and session using utilities
+    backend = create_backend(
+        backend_type="neo4j" if not args.mock else "mock",
+        neo4j_uri=args.neo4j_uri,
+        neo4j_user=args.neo4j_user,
+        neo4j_password=args.neo4j_password,
+    )
+    session = create_session(model_id="gpt-4o-mini")
 
     try:
         # Embed entities
@@ -191,27 +176,22 @@ async def main():
             batch_size=args.batch_size,
         )
 
-        # Print stats
-        print("\n=== Embedding Stats ===", file=sys.stderr)
-        print(f"Total entities: {stats.total_entities}", file=sys.stderr)
-        print(f"Successful: {stats.successful_embeddings}", file=sys.stderr)
-        print(f"Failed: {stats.failed_embeddings}", file=sys.stderr)
-        print(f"Skipped: {stats.skipped_embeddings}", file=sys.stderr)
-        print(f"Average time per entity: {stats.average_embedding_time:.4f}s", file=sys.stderr)
-        print(f"Total time: {stats.total_time:.2f}s", file=sys.stderr)
-        print(f"Model: {stats.model_used}", file=sys.stderr)
+        # Print stats using utility
+        log_progress("\n=== Embedding Stats ===")
+        print_stats(stats, to_stderr=True)
 
         # Output stats to file if requested
         if args.output_stats:
-            import pathlib
-            output_path = pathlib.Path(args.output_stats)
+            from pathlib import Path
+
+            output_path = Path(args.output_stats)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w") as f:
                 json.dump(stats.model_dump(), f, indent=2)
-            print(f"\nStats saved to: {output_path}", file=sys.stderr)
+            log_progress(f"Stats saved to: {output_path}")
 
         # Write stats to stdout as JSON
-        print(json.dumps(stats.model_dump()))
+        output_json(stats)
 
     finally:
         await backend.close()

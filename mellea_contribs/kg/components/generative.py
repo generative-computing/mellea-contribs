@@ -6,7 +6,7 @@ Layer 3: @generative functions that call the LLM
 """
 from typing import List
 
-from mellea.stdlib.genslot import generative
+from mellea import generative
 
 from mellea_contribs.kg.models import (
     DirectAnswer,

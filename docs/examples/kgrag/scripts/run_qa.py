@@ -20,40 +20,21 @@ import sys
 import time
 from pathlib import Path
 
-try:
-    from mellea import start_session
-except ImportError:
-    print("Error: mellea not installed. Run: pip install mellea[litellm]")
-    sys.exit(1)
-
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
-from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
-
-try:
-    from mellea_contribs.kg.graph_dbs.neo4j import Neo4jBackend
-except ImportError:
-    Neo4jBackend = None
-
 from mellea_contribs.kg.kgrag import orchestrate_qa_retrieval
 from mellea_contribs.kg.qa_models import QAResult, QAStats
-
-
-def build_backend(args) -> GraphBackend:
-    """Build graph backend from command line arguments."""
-    if args.mock:
-        return MockGraphBackend()
-    if Neo4jBackend is None:
-        print("Error: Neo4j backend not available. Install: pip install mellea-contribs[kg]")
-        sys.exit(1)
-    return Neo4jBackend(
-        connection_uri=args.neo4j_uri,
-        auth=(args.neo4j_user, args.neo4j_password),
-    )
+from mellea_contribs.kg.utils import (
+    create_session,
+    create_backend,
+    load_jsonl,
+    log_progress,
+    output_json,
+    print_stats,
+)
 
 
 async def run_qa_on_questions(
     input_path: Path,
-    backend: GraphBackend,
+    backend,
     session,
     model: str,
     domain: str,
@@ -68,85 +49,69 @@ async def run_qa_on_questions(
     matches = 0
 
     try:
-        with open(input_path, "r") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
+        for line_num, item in enumerate(load_jsonl(input_path), 1):
+            question = item.get("question", "")
+            ground_truth = item.get("answer")
 
-                try:
-                    item = json.loads(line)
-                    question = item.get("question", "")
-                    ground_truth = item.get("answer")
+            if not question:
+                log_progress(f"[{line_num}] WARNING: Empty question")
+                continue
 
-                    if not question:
-                        print(
-                            f"[{line_num}] WARNING: Empty question",
-                            file=sys.stderr
-                        )
-                        continue
+            q_start = time.time()
 
-                    q_start = time.time()
+            try:
+                # Call orchestrate_qa_retrieval
+                answer = await orchestrate_qa_retrieval(
+                    session=session,
+                    backend=backend,
+                    query=question,
+                    query_time="",
+                    domain=domain,
+                    num_routes=num_routes,
+                    hints="",
+                )
 
-                    try:
-                        # Call orchestrate_qa_retrieval
-                        answer = await orchestrate_qa_retrieval(
-                            session=session,
-                            backend=backend,
-                            query=question,
-                            query_time="",
-                            domain=domain,
-                            num_routes=num_routes,
-                            hints="",
-                        )
+                q_elapsed = time.time() - q_start
 
-                        q_elapsed = time.time() - q_start
+                # Create QAResult
+                result = QAResult(
+                    question=question,
+                    answer=answer,
+                    confidence=0.7,  # Default confidence
+                    processing_time_ms=q_elapsed * 1000,
+                    model_used=model,
+                )
+                qa_results.append(result)
+                times.append(q_elapsed)
+                confidences.append(result.confidence)
+                stats.successful_answers += 1
 
-                        # Create QAResult
-                        result = QAResult(
-                            question=question,
-                            answer=answer,
-                            confidence=0.7,  # Default confidence
-                            processing_time_ms=q_elapsed * 1000,
-                            model_used=model,
-                        )
-                        qa_results.append(result)
-                        times.append(q_elapsed)
-                        confidences.append(result.confidence)
-                        stats.successful_answers += 1
+                # Check if answer matches ground truth
+                if ground_truth and answer.lower() == ground_truth.lower():
+                    matches += 1
+                    log_progress(
+                        f"[{line_num}] ✓ {question} ({q_elapsed:.2f}s)"
+                    )
+                else:
+                    log_progress(
+                        f"[{line_num}] ? {question} ({q_elapsed:.2f}s)"
+                    )
 
-                        # Check if answer matches ground truth
-                        if ground_truth and answer.lower() == ground_truth.lower():
-                            matches += 1
-                            print(
-                                f"[{line_num}] ✓ {question} ({q_elapsed:.2f}s)",
-                                file=sys.stderr
-                            )
-                        else:
-                            print(
-                                f"[{line_num}] ? {question} ({q_elapsed:.2f}s)",
-                                file=sys.stderr
-                            )
+            except Exception as inner_e:
+                log_progress(f"[{line_num}] ERROR in QA: {inner_e}")
+                result = QAResult(
+                    question=question,
+                    answer="",
+                    confidence=0.0,
+                    error=str(inner_e),
+                    processing_time_ms=(time.time() - q_start) * 1000,
+                    model_used=model,
+                )
+                qa_results.append(result)
+                stats.failed_answers += 1
 
-                    except Exception as inner_e:
-                        print(f"[{line_num}] ERROR in QA: {inner_e}", file=sys.stderr)
-                        result = QAResult(
-                            question=question,
-                            answer="",
-                            confidence=0.0,
-                            error=str(inner_e),
-                            processing_time_ms=(time.time() - q_start) * 1000,
-                            model_used=model,
-                        )
-                        qa_results.append(result)
-                        stats.failed_answers += 1
-
-                except json.JSONDecodeError as e:
-                    print(f"[{line_num}] ERROR: Failed to parse JSON: {e}", file=sys.stderr)
-                    stats.failed_answers += 1
-
-    except IOError as e:
-        print(f"ERROR: Failed to read input file: {e}", file=sys.stderr)
+    except Exception as e:
+        log_progress(f"ERROR: Failed to read input file: {e}")
         return qa_results, stats
 
     # Compute aggregate stats
@@ -232,12 +197,17 @@ async def main():
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"ERROR: Input file not found: {input_path}", file=sys.stderr)
+        log_progress(f"ERROR: Input file not found: {input_path}")
         sys.exit(1)
 
-    # Initialize backend and session
-    backend = build_backend(args)
-    session = start_session(backend_name="litellm", model_id=args.model)
+    # Initialize backend and session using utilities
+    backend = create_backend(
+        backend_type="neo4j" if not args.mock else "mock",
+        neo4j_uri=args.neo4j_uri,
+        neo4j_user=args.neo4j_user,
+        neo4j_password=args.neo4j_password,
+    )
+    session = create_session(model_id=args.model)
 
     try:
         # Run QA
@@ -251,19 +221,9 @@ async def main():
             format_style=args.format_style,
         )
 
-        # Print summary
-        print("\n=== QA Summary ===", file=sys.stderr)
-        print(f"Total questions: {stats.total_questions}", file=sys.stderr)
-        print(f"Successful: {stats.successful_answers}", file=sys.stderr)
-        print(f"Failed: {stats.failed_answers}", file=sys.stderr)
-        print(f"Average confidence: {stats.average_confidence:.2f}", file=sys.stderr)
-        print(
-            f"Average time per question: {stats.average_processing_time_ms:.2f}ms",
-            file=sys.stderr
-        )
-        if stats.exact_match_count > 0:
-            accuracy = stats.exact_match_count / stats.total_questions * 100
-            print(f"Exact match accuracy: {accuracy:.1f}%", file=sys.stderr)
+        # Print summary using utility
+        log_progress("\n=== QA Summary ===")
+        print_stats(stats, to_stderr=True)
 
         # Write results to output file if requested
         if args.output:
@@ -272,7 +232,7 @@ async def main():
             with open(output_path, "w") as f:
                 for result in qa_results:
                     f.write(json.dumps(result.model_dump()) + "\n")
-            print(f"\nResults saved to: {output_path}", file=sys.stderr)
+            log_progress(f"Results saved to: {output_path}")
 
         # Write results to stdout as JSONL
         for result in qa_results:

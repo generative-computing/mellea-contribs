@@ -15,7 +15,6 @@ Example::
 
 import argparse
 import asyncio
-import json
 import sys
 import time
 from pathlib import Path
@@ -26,45 +25,28 @@ _SCRIPT_DIR = Path(__file__).parent
 _EXAMPLES_DIR = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_EXAMPLES_DIR))
 
-try:
-    from mellea import start_session, MelleaSession
-except ImportError:
-    print("Error: mellea not installed. Run: pip install mellea[litellm]")
-    sys.exit(1)
-
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
-from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
-
-try:
-    from mellea_contribs.kg.graph_dbs.neo4j import Neo4jBackend
-except ImportError:
-    Neo4jBackend = None
-
 from mellea_contribs.kg.updater_models import UpdateStats
+from mellea_contribs.kg.utils import (
+    create_session,
+    create_backend,
+    load_jsonl,
+    log_progress,
+    output_json,
+    print_stats,
+)
 from preprocessor.movie_preprocessor import MovieKGPreprocessor
-
-
-def build_backend(args) -> GraphBackend:
-    """Build graph backend from command line arguments."""
-    if args.mock:
-        return MockGraphBackend()
-    if Neo4jBackend is None:
-        print("Error: Neo4j backend not available. Install: pip install mellea-contribs[kg]")
-        sys.exit(1)
-    return Neo4jBackend(
-        connection_uri=args.neo4j_uri,
-        auth=(args.neo4j_user, args.neo4j_password),
-    )
 
 
 async def process_documents(
     input_path: Path,
-    backend: GraphBackend,
-    session: MelleaSession,
+    backend,
+    session,
     model: str,
     batch_size: int,
 ) -> UpdateStats:
     """Process documents and build KG."""
+    from mellea_contribs.kg.graph_dbs.base import GraphBackend
+
     preprocessor = MovieKGPreprocessor(
         backend=backend,
         session=session,
@@ -75,58 +57,46 @@ async def process_documents(
     start_time = time.time()
 
     try:
-        with open(input_path, "r") as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
+        for line_num, doc in enumerate(load_jsonl(input_path), 1):
+            doc_id = doc.get("id", f"doc_{line_num}")
+            doc_text = doc.get("text", "")
 
-                try:
-                    doc = json.loads(line)
-                    doc_id = doc.get("id", f"doc_{line_num}")
-                    doc_text = doc.get("text", "")
+            if not doc_text:
+                log_progress(f"[{line_num}] WARNING: Empty text for {doc_id}")
+                continue
 
-                    if not doc_text:
-                        print(f"[{line_num}] WARNING: Empty text for {doc_id}", file=sys.stderr)
-                        continue
+            try:
+                # Process document
+                doc_start = time.time()
+                result = await preprocessor.process_document(
+                    doc_text=doc_text,
+                    doc_id=doc_id,
+                )
+                doc_elapsed = time.time() - doc_start
 
-                    # Process document
-                    doc_start = time.time()
-                    result = await preprocessor.process_document(
-                        doc_text=doc_text,
-                        doc_id=doc_id,
-                    )
-                    doc_elapsed = time.time() - doc_start
+                # Update stats
+                stats.total_documents += 1
+                stats.successful_documents += 1
+                stats.entities_extracted += len(result.entities)
+                stats.relations_extracted += len(result.relations)
 
-                    # Update stats
-                    stats.total_documents += 1
-                    stats.successful_documents += 1
-                    stats.entities_extracted += len(result.entities)
-                    stats.relations_extracted += len(result.relations)
+                # Simple persistence tracking
+                stats.entities_new += len(result.entities)
+                stats.relations_new += len(result.relations)
 
-                    # Simple persistence tracking
-                    stats.entities_new += len(result.entities)
-                    stats.relations_new += len(result.relations)
+                log_progress(
+                    f"[{line_num}] Processed {doc_id}: "
+                    f"{len(result.entities)} entities, {len(result.relations)} relations "
+                    f"({doc_elapsed:.2f}s)"
+                )
 
-                    print(
-                        f"[{line_num}] Processed {doc_id}: "
-                        f"{len(result.entities)} entities, {len(result.relations)} relations "
-                        f"({doc_elapsed:.2f}s)",
-                        file=sys.stderr
-                    )
+            except Exception as e:
+                log_progress(f"[{line_num}] ERROR: {e}")
+                stats.total_documents += 1
+                stats.failed_documents += 1
 
-                except json.JSONDecodeError as e:
-                    print(f"[{line_num}] ERROR: Failed to parse JSON: {e}", file=sys.stderr)
-                    stats.total_documents += 1
-                    stats.failed_documents += 1
-                except Exception as e:
-                    print(f"[{line_num}] ERROR: {e}", file=sys.stderr)
-                    stats.total_documents += 1
-                    stats.failed_documents += 1
-
-    except IOError as e:
-        print(f"ERROR: Failed to read input file: {e}", file=sys.stderr)
-        return stats
+    except Exception as e:
+        log_progress(f"ERROR: Failed to read input file: {e}")
 
     elapsed = time.time() - start_time
     stats.total_processing_time_ms = elapsed * 1000
@@ -195,12 +165,17 @@ async def main():
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"ERROR: Input file not found: {input_path}", file=sys.stderr)
+        log_progress(f"ERROR: Input file not found: {input_path}")
         sys.exit(1)
 
-    # Initialize backend and session
-    backend = build_backend(args)
-    session = start_session(backend_name="litellm", model_id=args.model)
+    # Initialize backend and session using utilities
+    backend = create_backend(
+        backend_type="neo4j" if not args.mock else "mock",
+        neo4j_uri=args.neo4j_uri,
+        neo4j_user=args.neo4j_user,
+        neo4j_password=args.neo4j_password,
+    )
+    session = create_session(model_id=args.model)
 
     try:
         # Process documents
@@ -212,30 +187,22 @@ async def main():
             batch_size=args.batch_size,
         )
 
-        # Print stats
-        print("\n=== KG Preprocessing Stats ===", file=sys.stderr)
-        print(f"Total documents: {stats.total_documents}", file=sys.stderr)
-        print(f"Successful: {stats.successful_documents}", file=sys.stderr)
-        print(f"Failed: {stats.failed_documents}", file=sys.stderr)
-        print(f"Entities extracted: {stats.entities_extracted}", file=sys.stderr)
-        print(f"Relations extracted: {stats.relations_extracted}", file=sys.stderr)
-        print(f"Entities added: {stats.entities_new}", file=sys.stderr)
-        print(f"Relations added: {stats.relations_new}", file=sys.stderr)
-        print(
-            f"Average time per doc: {stats.average_processing_time_per_doc_ms:.2f}ms",
-            file=sys.stderr
-        )
+        # Print stats using utility
+        log_progress("\n=== KG Preprocessing Stats ===")
+        print_stats(stats, to_stderr=True)
 
         # Output stats to file if requested
         if args.output_stats:
+            import json
+
             output_path = Path(args.output_stats)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w") as f:
                 json.dump(stats.model_dump(), f, indent=2)
-            print(f"\nStats saved to: {output_path}", file=sys.stderr)
+            log_progress(f"Stats saved to: {output_path}")
 
         # Write stats to stdout as JSON
-        print(json.dumps(stats.model_dump()))
+        output_json(stats)
 
     finally:
         await backend.close()
