@@ -49,21 +49,39 @@ Example:
 from typing import Any
 
 from mellea_contribs.kg.base import GraphEdge, GraphNode, GraphPath
-from mellea_contribs.kg.components import (
-    align_entity_with_kg,
-    align_relation_with_kg,
-    align_topic_entities,
-    break_down_question,
-    decide_entity_merge,
-    decide_relation_merge,
-    evaluate_knowledge_sufficiency,
-    extract_entities_and_relations,
-    extract_topic_entities,
-    generate_direct_answer,
-    prune_relations,
-    prune_triplets,
-    validate_consensus,
-)
+
+# Optional imports from mellea components (requires mellea to be installed)
+try:
+    from mellea_contribs.kg.components import (
+        align_entity_with_kg,
+        align_relation_with_kg,
+        align_topic_entities,
+        break_down_question,
+        decide_entity_merge,
+        decide_relation_merge,
+        evaluate_knowledge_sufficiency,
+        extract_entities_and_relations,
+        extract_topic_entities,
+        generate_direct_answer,
+        prune_relations,
+        prune_triplets,
+        validate_consensus,
+    )
+except ImportError:
+    # These functions are optional - mellea may not be installed
+    align_entity_with_kg = None
+    align_relation_with_kg = None
+    align_topic_entities = None
+    break_down_question = None
+    decide_entity_merge = None
+    decide_relation_merge = None
+    evaluate_knowledge_sufficiency = None
+    extract_entities_and_relations = None
+    extract_topic_entities = None
+    generate_direct_answer = None
+    prune_relations = None
+    prune_triplets = None
+    validate_consensus = None
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
 from mellea_contribs.kg.embedder import KGEmbedder
@@ -139,7 +157,8 @@ except ImportError as e:
 
 Neo4jBackend = _Neo4jBackend
 
-__all__ = [
+# Build __all__ list dynamically, only including successfully imported items
+_all = [
     # Core data structures
     "GraphBackend",
     "GraphEdge",
@@ -182,21 +201,6 @@ __all__ = [
     # Backends (Layer 4)
     "MockGraphBackend",
     "Neo4jBackend",
-    # Generative functions - QA
-    "break_down_question",
-    "extract_topic_entities",
-    "align_topic_entities",
-    "prune_relations",
-    "prune_triplets",
-    "evaluate_knowledge_sufficiency",
-    "validate_consensus",
-    "generate_direct_answer",
-    # Generative functions - Update
-    "extract_entities_and_relations",
-    "align_entity_with_kg",
-    "decide_entity_merge",
-    "align_relation_with_kg",
-    "decide_relation_merge",
     # Utilities - Representation (Optional)
     "normalize_entity_name",
     "entity_to_text",
@@ -216,3 +220,25 @@ __all__ = [
     # Other Utilities
     "format_schema",
 ]
+
+# Add generative functions only if they were successfully imported
+if extract_entities_and_relations is not None:
+    _all.extend([
+        # Generative functions - QA
+        "break_down_question",
+        "extract_topic_entities",
+        "align_topic_entities",
+        "prune_relations",
+        "prune_triplets",
+        "evaluate_knowledge_sufficiency",
+        "validate_consensus",
+        "generate_direct_answer",
+        # Generative functions - Update
+        "extract_entities_and_relations",
+        "align_entity_with_kg",
+        "decide_entity_merge",
+        "align_relation_with_kg",
+        "decide_relation_merge",
+    ])
+
+__all__ = _all

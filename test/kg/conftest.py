@@ -7,7 +7,11 @@ import os
 
 import pytest
 
-from mellea_contribs.kg.components.query import GraphQuery
+try:
+    from mellea_contribs.kg.components.query import GraphQuery
+except ImportError:
+    # Allow tests to run even if mellea is not fully installed
+    GraphQuery = None
 
 try:
     from mellea_contribs.kg.graph_dbs.neo4j import Neo4jBackend
@@ -68,6 +72,9 @@ async def populated_neo4j_backend(neo4j_backend):
 
     Clears existing data, populates with test data, and cleans up after tests.
     """
+    if GraphQuery is None:
+        pytest.skip("GraphQuery not available (mellea not fully installed)")
+
     # Clear any existing data
     clear_query = GraphQuery(query_string="MATCH (n) DETACH DELETE n")
     await neo4j_backend.execute_query(clear_query)

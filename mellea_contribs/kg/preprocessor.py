@@ -37,12 +37,20 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from mellea import MelleaSession
+try:
+    from mellea import MelleaSession
+except ImportError:
+    MelleaSession = None
 
 from mellea_contribs.kg.base import GraphEdge, GraphNode
-from mellea_contribs.kg.components import (
-    extract_entities_and_relations,
-)
+
+try:
+    from mellea_contribs.kg.components import (
+        extract_entities_and_relations,
+    )
+except ImportError:
+    extract_entities_and_relations = None
+
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.models import Entity, ExtractionResult, Relation
 

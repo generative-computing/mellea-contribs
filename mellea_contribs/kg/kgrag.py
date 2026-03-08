@@ -37,30 +37,56 @@ Example::
     asyncio.run(main())
 """
 
-from mellea import MelleaSession
+try:
+    from mellea import MelleaSession
+except ImportError:
+    MelleaSession = None
 
-from mellea_contribs.kg.components import (
-    align_entity_with_kg,
-    align_relation_with_kg,
-    align_topic_entities,
-    break_down_question,
-    decide_entity_merge,
-    decide_relation_merge,
-    evaluate_knowledge_sufficiency,
-    extract_entities_and_relations,
-    extract_topic_entities,
-    generate_direct_answer,
-    prune_relations,
-    prune_triplets,
-    validate_consensus,
-)
-from mellea_contribs.kg.components.llm_guided import (
-    explain_query_result,
-    natural_language_to_cypher,
-    suggest_query_improvement,
-)
-from mellea_contribs.kg.components.query import CypherQuery
-from mellea_contribs.kg.components.result import GraphResult
+# Optional imports from mellea components (requires mellea to be installed)
+try:
+    from mellea_contribs.kg.components import (
+        align_entity_with_kg,
+        align_relation_with_kg,
+        align_topic_entities,
+        break_down_question,
+        decide_entity_merge,
+        decide_relation_merge,
+        evaluate_knowledge_sufficiency,
+        extract_entities_and_relations,
+        extract_topic_entities,
+        generate_direct_answer,
+        prune_relations,
+        prune_triplets,
+        validate_consensus,
+    )
+    from mellea_contribs.kg.components.llm_guided import (
+        explain_query_result,
+        natural_language_to_cypher,
+        suggest_query_improvement,
+    )
+    from mellea_contribs.kg.components.query import CypherQuery
+    from mellea_contribs.kg.components.result import GraphResult
+except ImportError:
+    # These are optional - mellea may not be installed
+    align_entity_with_kg = None
+    align_relation_with_kg = None
+    align_topic_entities = None
+    break_down_question = None
+    decide_entity_merge = None
+    decide_relation_merge = None
+    evaluate_knowledge_sufficiency = None
+    extract_entities_and_relations = None
+    extract_topic_entities = None
+    generate_direct_answer = None
+    prune_relations = None
+    prune_triplets = None
+    validate_consensus = None
+    explain_query_result = None
+    natural_language_to_cypher = None
+    suggest_query_improvement = None
+    CypherQuery = None
+    GraphResult = None
+
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 
 # Maximum Cypher repair attempts before giving up
