@@ -1,6 +1,6 @@
 """Pydantic models for KG-RAG structured outputs."""
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,10 +66,33 @@ class DirectAnswer(BaseModel):
     answer: str = Field(description="The answer or 'I don't know'")
 
 
-# Update Models
-class ExtractedEntity(BaseModel):
-    """Extracted entity from document."""
+# ── Unified Entity / Relation models ────────────────────────────────────────
+# Single class for both extracted and stored entities/relations.
+# Storage fields (id, confidence, etc.) are optional: None until persisted.
 
+
+class Entity(BaseModel):
+    """Entity in the KG (extracted from document or stored).
+
+    Unified model for both extracted and stored entities.
+    Storage fields are None until the entity has been persisted.
+
+    Fields:
+        Extraction context (always present):
+            type: Entity type (e.g., Person, Movie, Organization)
+            name: Entity name
+            description: Brief description
+            paragraph_start: First 5-30 chars of supporting paragraph
+            paragraph_end: Last 5-30 chars of supporting paragraph
+            properties: Additional domain-specific properties
+
+        Storage fields (optional, None before persistence):
+            id: Stable KG node ID
+            confidence: Extraction confidence score 0-1
+            embedding: Vector embedding for similarity search
+    """
+
+    # Extraction context
     type: str = Field(description="Entity type (e.g., Person, Movie, Organization)")
     name: str = Field(description="Entity name")
     description: str = Field(description="Brief description of the entity")
@@ -77,14 +100,43 @@ class ExtractedEntity(BaseModel):
         description="First 5-30 chars of supporting paragraph"
     )
     paragraph_end: str = Field(description="Last 5-30 chars of supporting paragraph")
-    properties: Dict[str, any] = Field(
+    properties: Dict[str, Any] = Field(
         default_factory=dict, description="Additional properties"
     )
 
+    # Storage fields (optional, assigned on persistence)
+    id: Optional[str] = Field(default=None, description="Stable KG node ID")
+    confidence: float = Field(default=1.0, description="Extraction confidence 0-1")
+    embedding: Optional[List[float]] = Field(
+        default=None, description="Vector embedding for similarity search"
+    )
 
-class ExtractedRelation(BaseModel):
-    """Extracted relation between entities."""
 
+class Relation(BaseModel):
+    """Relation in the KG (extracted from document or stored).
+
+    Unified model for both extracted and stored relations.
+    Storage fields are None until the relation has been persisted and aligned.
+
+    Fields:
+        Extraction context (always present):
+            source_entity: Source entity name
+            relation_type: Relation type (e.g., acted_in, directed)
+            target_entity: Target entity name
+            description: Description of the relation
+            paragraph_start: First 5-30 chars of supporting paragraph
+            paragraph_end: Last 5-30 chars of supporting paragraph
+            properties: Additional domain-specific properties
+
+        Storage fields (optional, None before persistence):
+            id: Stable KG edge ID
+            source_entity_id: Resolved source node ID in KG
+            target_entity_id: Resolved target node ID in KG
+            valid_from: ISO date when relation became valid
+            valid_until: ISO date when relation ceased to be valid
+    """
+
+    # Extraction context
     source_entity: str = Field(description="Source entity name")
     relation_type: str = Field(description="Relation type (e.g., acted_in, directed)")
     target_entity: str = Field(description="Target entity name")
@@ -93,18 +145,31 @@ class ExtractedRelation(BaseModel):
         description="First 5-30 chars of supporting paragraph"
     )
     paragraph_end: str = Field(description="Last 5-30 chars of supporting paragraph")
-    properties: Dict[str, any] = Field(
+    properties: Dict[str, Any] = Field(
         default_factory=dict, description="Additional properties"
+    )
+
+    # Storage fields (optional, assigned on persistence)
+    id: Optional[str] = Field(default=None, description="Stable KG edge ID")
+    source_entity_id: Optional[str] = Field(
+        default=None, description="Resolved source node ID in KG"
+    )
+    target_entity_id: Optional[str] = Field(
+        default=None, description="Resolved target node ID in KG"
+    )
+    valid_from: Optional[str] = Field(
+        default=None, description="ISO date when relation became valid"
+    )
+    valid_until: Optional[str] = Field(
+        default=None, description="ISO date when relation ceased to be valid"
     )
 
 
 class ExtractionResult(BaseModel):
     """Result of entity and relation extraction."""
 
-    entities: List[ExtractedEntity] = Field(description="List of extracted entities")
-    relations: List[ExtractedRelation] = Field(
-        description="List of extracted relations"
-    )
+    entities: List[Entity] = Field(description="List of extracted entities")
+    relations: List[Relation] = Field(description="List of extracted relations")
     reasoning: str = Field(description="Reasoning for the extractions")
 
 
@@ -123,6 +188,6 @@ class MergeDecision(BaseModel):
 
     should_merge: bool = Field(description="Whether entities should be merged")
     reasoning: str = Field(description="Reasoning for the merge decision")
-    merged_properties: Dict[str, any] = Field(
+    merged_properties: Dict[str, Any] = Field(
         default_factory=dict, description="Properties of merged entity if merging"
     )

@@ -8,10 +8,33 @@ Optional Dependencies:
 Example:
     Basic usage with MockGraphBackend::
 
-        from mellea_contribs.kg import MockGraphBackend, GraphNode
+        from mellea_contribs.kg import MockGraphBackend, GraphNode, Entity
 
         backend = MockGraphBackend()
         node = GraphNode(id="1", label="Person", properties={"name": "Alice"})
+
+        # Create a generic entity
+        entity = Entity(
+            type="Person",
+            name="Alice",
+            description="Example person",
+            paragraph_start="Alice is",
+            paragraph_end="here.",
+        )
+
+    With domain-specific entities (movie example)::
+
+        from docs.examples.kgrag.models import MovieEntity
+
+        movie = MovieEntity(
+            type="Movie",
+            name="Oppenheimer",
+            description="2023 film",
+            paragraph_start="Oppenheimer is",
+            paragraph_end="by Nolan.",
+            release_year=2023,
+            director="Christopher Nolan"
+        )
 
     With Neo4j::
 
@@ -43,12 +66,22 @@ from mellea_contribs.kg.components import (
 )
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
+from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.kgrag import KGRag, format_schema
+from mellea_contribs.kg.preprocessor import KGPreprocessor
+from mellea_contribs.kg.embed_models import (
+    EmbeddingConfig,
+    EmbeddingResult,
+    EmbeddingSimilarity,
+    EmbeddingStats,
+)
 from mellea_contribs.kg.models import (
     DirectAnswer,
+    Entity,
     EvaluationResult,
     ExtractionResult,
     QuestionRoutes,
+    Relation,
     RelevantEntities,
     RelevantRelations,
     TopicEntities,
@@ -79,7 +112,7 @@ __all__ = [
     "GraphEdge",
     "GraphNode",
     "GraphPath",
-    # Models
+    # Models - QA/extraction outputs
     "DirectAnswer",
     "EvaluationResult",
     "ExtractionResult",
@@ -88,8 +121,19 @@ __all__ = [
     "RelevantRelations",
     "TopicEntities",
     "ValidationResult",
-    # Backends
+    # Models - Stored entities/relations (base classes)
+    "Entity",
+    "Relation",
+    # Models - Embedding configuration and results
+    "EmbeddingConfig",
+    "EmbeddingResult",
+    "EmbeddingSimilarity",
+    "EmbeddingStats",
+    # Layer 1 Applications
     "KGRag",
+    "KGPreprocessor",
+    "KGEmbedder",
+    # Backends (Layer 4)
     "MockGraphBackend",
     "Neo4jBackend",
     # Generative functions - QA
