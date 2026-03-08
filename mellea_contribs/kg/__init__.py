@@ -69,11 +69,44 @@ from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
 from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.kgrag import KGRag, format_schema
 from mellea_contribs.kg.preprocessor import KGPreprocessor
+from mellea_contribs.kg.rep import (
+    camelcase_to_snake_case,
+    entity_to_text,
+    format_entity_list,
+    format_kg_context,
+    format_relation_list,
+    normalize_entity_name,
+    relation_to_text,
+    snake_case_to_camelcase,
+)
+from mellea_contribs.kg.requirements_models import (
+    entity_confidence_threshold,
+    entity_has_description,
+    entity_has_name,
+    entity_type_valid,
+    relation_entities_exist,
+    relation_type_valid,
+)
 from mellea_contribs.kg.embed_models import (
     EmbeddingConfig,
     EmbeddingResult,
     EmbeddingSimilarity,
     EmbeddingStats,
+)
+from mellea_contribs.kg.qa_models import (
+    QAConfig,
+    QADatasetConfig,
+    QAResult,
+    QASessionConfig,
+    QAStats,
+)
+from mellea_contribs.kg.updater_models import (
+    MergeConflict,
+    UpdateBatchResult,
+    UpdateConfig,
+    UpdateResult,
+    UpdateSessionConfig,
+    UpdateStats,
 )
 from mellea_contribs.kg.models import (
     DirectAnswer,
@@ -129,6 +162,19 @@ __all__ = [
     "EmbeddingResult",
     "EmbeddingSimilarity",
     "EmbeddingStats",
+    # Models - QA pipeline configuration and results
+    "QAConfig",
+    "QASessionConfig",
+    "QADatasetConfig",
+    "QAResult",
+    "QAStats",
+    # Models - KG update pipeline configuration and results
+    "UpdateConfig",
+    "UpdateSessionConfig",
+    "UpdateStats",
+    "MergeConflict",
+    "UpdateResult",
+    "UpdateBatchResult",
     # Layer 1 Applications
     "KGRag",
     "KGPreprocessor",
@@ -151,6 +197,22 @@ __all__ = [
     "decide_entity_merge",
     "align_relation_with_kg",
     "decide_relation_merge",
-    # Utilities
+    # Utilities - Representation (Optional)
+    "normalize_entity_name",
+    "entity_to_text",
+    "relation_to_text",
+    "format_entity_list",
+    "format_relation_list",
+    "format_kg_context",
+    "camelcase_to_snake_case",
+    "snake_case_to_camelcase",
+    # Utilities - Requirements/Validation (Optional)
+    "entity_type_valid",
+    "entity_has_name",
+    "entity_has_description",
+    "relation_type_valid",
+    "relation_entities_exist",
+    "entity_confidence_threshold",
+    # Other Utilities
     "format_schema",
 ]
