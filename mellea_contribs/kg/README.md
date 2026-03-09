@@ -15,12 +15,23 @@ The KG library provides:
 ## Installation
 
 ```bash
-# Basic installation (includes MockGraphBackend)
+# Basic installation (MockGraphBackend, no database)
 pip install mellea-contribs
 
-# With Neo4j support
+# With Neo4j support (for production)
 pip install mellea-contribs[kg]
+
+# With progress bars (tqdm) for Phase 3 utilities
+pip install mellea-contribs[kg-utils]
+
+# Complete installation (everything)
+pip install mellea-contribs[kg,kg-utils,dev]
 ```
+
+**Optional Dependencies:**
+- `tqdm`: Progress bars for batch processing (Phase 3 ProgressTracker)
+- `neo4j`: Neo4j driver for production backend (Phase 1/2 production)
+- `rapidfuzz`: Fuzzy string matching for evaluation (Phase 3 already included)
 
 ## Quick Start
 
@@ -296,27 +307,216 @@ docker stop neo4j-test && docker rm neo4j-test
 
 ## Implementation Status
 
-- ✓ **Layer 1**: Application Orchestration (complete)
+### Phase 1: Core KG Modules ✓ COMPLETE
+- ✓ **Layer 1**: Application Orchestration
   - `orchestrate_qa_retrieval()` - Multi-route QA entry point
   - `orchestrate_kg_update()` - KG update entry point
 
-- ✓ **Layer 2**: Components (partial)
+- ✓ **Layer 2**: Components
   - GraphQuery, CypherQuery, SparqlQuery types
   - GraphResult with format_for_llm()
   - natural_language_to_cypher, explain_query_result
-  - [Placeholder: Layer 2 controller functions for full orchestration]
 
-- ✓ **Layer 3**: LLM-Guided Logic (complete)
+- ✓ **Layer 3**: LLM-Guided Logic
   - 8 QA @generative functions with full prompts
   - 5 Update @generative functions with full prompts
   - 12 Pydantic models for structured outputs
-  - [Placeholder: Layer 3 helper utilities for parsing/formatting]
 
-- ✓ **Layer 4**: Backend Abstraction (complete)
+- ✓ **Layer 4**: Backend Abstraction
   - GraphNode, GraphEdge, GraphPath data structures
   - GraphBackend abstract interface
   - Neo4jBackend production implementation
   - MockGraphBackend for testing
+
+### Phase 2: Run Scripts ✓ COMPLETE
+- ✓ **8 Production-Ready CLI Scripts** (docs/examples/kgrag/scripts/)
+  - Dataset creation: create_demo_dataset.py, create_tiny_dataset.py, create_truncated_dataset.py
+  - Pipeline operations: run_kg_preprocess.py, run_kg_embed.py, run_kg_update.py, run_qa.py, run_eval.py
+  - All scripts support --mock flag for testing without database
+  - JSONL I/O for seamless pipeline chaining
+
+### Phase 3: Utility Modules ✓ COMPLETE (95 Tests Passing)
+- ✓ **5 Reusable Utility Modules** (mellea_contribs/kg/utils/)
+  - `data_utils.py` - JSONL I/O, batching, schema validation (27 tests)
+  - `session_manager.py` - Session/backend factories, async resource management (19 tests)
+  - `progress.py` - Logging, progress tracking, JSON output (23 tests)
+  - `eval_utils.py` - Evaluation metrics, result aggregation (26 tests)
+  - All utilities tested with 95 comprehensive unit + integration tests
+
+### Phase 4: Configuration & Validation ✓ COMPLETE
+- ✓ **.env_template** - Configuration template with all variables
+- ✓ **pyproject.toml** - Updated with kg-utils optional dependency group
+- ✓ **sun.sh** - Comprehensive end-to-end test suite validating all phases
+
+## Utility Modules (Phase 3)
+
+The `mellea_contribs.kg.utils` package provides reusable utilities extracted from the run scripts:
+
+### JSONL Data Utilities
+```python
+from mellea_contribs.kg.utils import (
+    load_jsonl, save_jsonl, append_jsonl,
+    batch_iterator, truncate_jsonl, shuffle_jsonl,
+    validate_jsonl_schema
+)
+
+# Load JSONL file
+items = list(load_jsonl("data/questions.jsonl"))
+
+# Save and append
+save_jsonl(items, "output/results.jsonl")
+append_jsonl({"new": "item"}, "output/results.jsonl")
+
+# Batch processing
+batches = list(batch_iterator(items, batch_size=10))
+
+# Truncate and shuffle
+truncate_jsonl("input.jsonl", "output.jsonl", max_items=100)
+shuffle_jsonl("input.jsonl", "output_shuffled.jsonl")
+
+# Validate schema
+valid, errors = validate_jsonl_schema("data.jsonl", required_fields=["id", "text"])
+```
+
+### Session & Backend Management
+```python
+from mellea_contribs.kg.utils import (
+    create_session, create_backend, MelleaResourceManager
+)
+
+# Create session and backend
+session = create_session(model_id="gpt-4o-mini")
+backend = create_backend(backend_type="mock")
+
+# Or use async context manager for automatic cleanup
+async with MelleaResourceManager(backend_type="mock") as manager:
+    # manager.session and manager.backend available
+    schema = await manager.backend.get_schema()
+```
+
+### Progress Tracking & Logging
+```python
+from mellea_contribs.kg.utils import (
+    setup_logging, log_progress, output_json,
+    print_stats, ProgressTracker
+)
+
+# Setup logging
+setup_logging(log_level="INFO", log_file="pipeline.log")
+log_progress("Processing started", level="INFO")
+
+# Output JSON
+stats = compute_stats()
+output_json(stats)  # Prints to stdout
+
+# Print formatted stats
+print_stats(stats, indent=2, to_stderr=False)
+
+# Progress tracking
+tracker = ProgressTracker(total=1000, desc="Processing")
+for item in items:
+    process(item)
+    tracker.update(1)
+tracker.close()
+```
+
+### Evaluation Metrics
+```python
+from mellea_contribs.kg.utils import (
+    exact_match, fuzzy_match, mean_reciprocal_rank,
+    precision, recall, f1_score,
+    aggregate_qa_results, aggregate_update_results
+)
+
+# Matching
+is_match = exact_match("Paris", "PARIS")  # True (case-insensitive)
+is_similar = fuzzy_match("Oppenheimer", "Oppenheimer", threshold=0.8)  # True
+
+# Metrics
+mrr = mean_reciprocal_rank(qa_results)
+prec = precision(predicted_entities, expected_entities)
+rec = recall(predicted_entities, expected_entities)
+f1 = f1_score(prec, rec)
+
+# Aggregation
+stats = aggregate_qa_results(qa_results_list)
+stats = aggregate_update_results(update_results_list)
+```
+
+### Complete Workflow Example
+```python
+from mellea_contribs.kg.utils import (
+    load_jsonl, batch_iterator, create_session, create_backend,
+    log_progress, output_json, aggregate_qa_results
+)
+
+async def evaluate_qa_pipeline():
+    # Setup
+    setup_logging(log_level="INFO")
+    session = create_session(model_id="gpt-4o-mini")
+    backend = create_backend(backend_type="mock")
+
+    # Load questions
+    questions = list(load_jsonl("questions.jsonl"))
+
+    # Process in batches
+    all_results = []
+    for batch in batch_iterator(questions, batch_size=10):
+        results = await run_qa_batch(session, backend, batch)
+        all_results.extend(results)
+
+    # Aggregate and output
+    stats = aggregate_qa_results(all_results)
+    output_json(stats)
+
+    await backend.close()
+```
+
+## Testing & Validation (Phase 3 & 4)
+
+### Running Tests
+```bash
+# All KG tests
+pytest test/kg/ -v
+
+# Unit tests only (Phase 1, 3)
+pytest test/kg/ --ignore=test/kg/test_scripts/ -v
+
+# Utility module tests (95 tests)
+pytest test/kg/utils/ -v
+
+# Neo4j tests (requires running Neo4j)
+export NEO4J_URI=bolt://localhost:7687
+pytest test/kg/ -v -m neo4j
+```
+
+### Comprehensive Validation Suite (sun.sh)
+```bash
+# Run complete end-to-end validation
+./sun.sh
+
+# Quick validation (skip some slower tests)
+./sun.sh --quick
+
+# Unit tests only
+./sun.sh --unit-only
+```
+
+The `sun.sh` script validates:
+- Phase 0: Environment (Python, dependencies, imports)
+- Phase 1: Core KG modules (95+ unit tests)
+- Phase 2: Run scripts (all 8 scripts with mock backend)
+- Phase 3: Utility modules (95 comprehensive tests)
+- Phase 4: Configuration and dependencies
+
+### Test Coverage
+- **Phase 1**: Core modules (entity models, preprocessor, embedder, orchestrators)
+- **Phase 2**: Run scripts (dataset creation, preprocessing, embedding, QA, evaluation)
+- **Phase 3**: Utility modules
+  - JSONL I/O: 27 tests (load, save, append, batch, truncate, shuffle, validate)
+  - Session management: 19 tests (backend creation, session creation, async resources)
+  - Progress/logging: 23 tests (logging levels, JSON output, progress tracking)
+  - Evaluation: 26 tests (exact/fuzzy matching, MRR, precision/recall/F1, aggregation)
 
 ## Key Problems Solved
 
@@ -410,9 +610,47 @@ This library was adapted from the KGRag system in mellea PR#3. Key differences:
 - **Structured API**: Clear Layer 1-4 separation with orchestration entry points
 - **Full type hints**: Pydantic models throughout
 
+## Quick Reference: Running Everything
+
+### Minimal Setup (Mock Backend, No Database)
+```bash
+# Install
+pip install -e .[kg,kg-utils]
+
+# Run tests
+pytest test/kg/utils/ -v
+
+# Run full validation
+./sun.sh
+
+# Try an example script
+python docs/examples/kgrag/scripts/create_demo_dataset.py --output /tmp/demo.jsonl
+python docs/examples/kgrag/scripts/run_qa.py --input /tmp/demo.jsonl --mock --output /tmp/qa.jsonl
+```
+
+### Production Setup (With Neo4j)
+```bash
+# Install with all features
+pip install -e .[kg,kg-utils,dev]
+
+# Start Neo4j
+docker run -d -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5.0
+
+# Configure
+cp .env_template .env
+# Edit .env with your Neo4j credentials
+
+# Run scripts
+python docs/examples/kgrag/scripts/run_kg_preprocess.py --input data.jsonl
+python docs/examples/kgrag/scripts/run_qa.py --input questions.jsonl --output results.jsonl
+```
+
 ## See Also
 
 - [Main README](../../README.md) - KG-RAG overview and quick start
 - [CLAUDE.md](../../CLAUDE.md) - Development guide and architecture
+- [PHASE4_CONFIGURATION.md](../../PHASE4_CONFIGURATION.md) - Configuration templates and setup
+- [missing_for_run_sh.txt](../../missing_for_run_sh.txt) - Implementation status and progress
+- [Test README](utils/README.md) - Phase 3 utility module tests documentation
 - [Mellea Framework](https://github.com/generative-computing/mellea) - Parent framework
 - [Original PR#3](https://github.com/ydzhu98/mellea/pull/3) - Source of KG-RAG system
