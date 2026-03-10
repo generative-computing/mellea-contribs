@@ -1,0 +1,22 @@
+# Model Configuration for BenchDrift (Ollama-native)
+#
+# All models run locally via Ollama. No RITS or cloud API keys required.
+
+default_client: ollama
+
+# Recommended Ollama models by task
+recommended_models:
+  variation_generation:
+    - qwen3:8b        # Good at following transformation prompts
+    - mistral:7b      # Fast alternative
+    - llama3.1:8b     # General purpose
+
+  target_testing:
+    - granite3.3:8b   # IBM Granite (good for math/reasoning)
+    - qwen3:8b        # Alternative
+    - mistral:7b      # Fast alternative
+
+# Ollama setup commands:
+#   ollama serve                  # Start server
+#   ollama pull qwen3:8b         # Pull generation model
+#   ollama pull granite3.3:8b    # Pull target/test model

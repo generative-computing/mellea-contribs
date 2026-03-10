@@ -1,0 +1,45 @@
+# BenchDrift Configuration (Ollama-native, per-variation streaming)
+#
+# Uses the demo-ui branch of IBM/BenchDrift. Same pattern as benchdrift_cli.py
+# and app.py: feature analysis → relevance ranking → per-variation generate+test+eval.
+#
+# All models run via Ollama — no RITS or cloud API keys required.
+
+# ====================
+# Ollama Models
+# ====================
+
+gen_model: "qwen3:8b"
+  # Ollama model for variation generation
+  # Run: ollama pull qwen3:8b
+
+target_model: "granite3.3:8b"
+  # Ollama model for testing (when no m-program is provided)
+  # When m-program is provided, this is ignored
+  # Run: ollama pull granite3.3:8b
+
+# ====================
+# Variation Control
+# ====================
+
+top_k: 10
+  # Number of top-ranked transformations to generate
+  # Each generates one variation, immediately tested and evaluated
+
+use_axes: "linguistic,referential,pragmatic,structural,constraint_targeted"
+  # Comma-separated taxonomy axes
+  # Available: linguistic, referential, pragmatic, structural,
+  #            persona, long_context, constraint_targeted
+  # Use "all" for all, subtract with "all,-persona,-long_context"
+
+no_enrich: false
+  # Skip LLM feature enrichment
+  # true: regex features only (instant)
+  # false: +LLM enrichment (~2-3s, deeper features)
+
+# ====================
+# Ollama Connection
+# ====================
+
+ollama_url: "http://localhost:11434"
+timeout: 120
