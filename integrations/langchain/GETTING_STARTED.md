@@ -79,23 +79,25 @@ chat_model = MelleaChatModel(mellea_session=m)
 response = chat_model.invoke([HumanMessage(content="Hello!")])
 ```
 
-### 3. Streaming Responses
+### 3. Async Usage
 
 ```python
 from langchain_core.messages import HumanMessage
 
-# Async streaming
-async for chunk in chat_model.astream([
+# Async invoke
+response = await chat_model.ainvoke([
     HumanMessage(content="Write a short poem")
-]):
-    print(chunk.content, end="", flush=True)
+])
+print(response.content)
 
-# Sync streaming
-for chunk in chat_model.stream([
-    HumanMessage(content="Count to 5")
-]):
-    print(chunk.content, end="", flush=True)
+# Async batch processing
+responses = await chat_model.abatch([
+    [HumanMessage(content="What is 2+2?")],
+    [HumanMessage(content="Count to 5")]
+])
 ```
+
+**Note**: Streaming is not currently supported. The `stream()` and `astream()` methods will return the full response as a single chunk.
 
 ### 4. Using with LangChain Chains
 
@@ -147,8 +149,8 @@ The `examples/` directory contains several working examples:
 # Basic usage
 python examples/basic_usage.py
 
-# Streaming
-python examples/streaming_example.py
+# Sync and async usage
+python examples/async_example.py
 
 # LangChain chains
 python examples/langchain_chain.py
@@ -183,14 +185,13 @@ response = chat_model.invoke(
 )
 ```
 
-### Streaming by Default
+### Async by Default
 
 ```python
-# Enable streaming by default
-chat_model = MelleaChatModel(
-    mellea_session=m,
-    streaming=True
-)
+# Use async methods for better performance
+response = await chat_model.ainvoke([
+    HumanMessage(content="Your question here")
+])
 ```
 
 ### Custom Model Name

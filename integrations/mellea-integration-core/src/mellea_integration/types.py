@@ -45,6 +45,17 @@ class MessageConverter(Protocol):
         """
         ...
 
+    def extract_last_user_message(self, messages: Any) -> str:
+        """Extract the last user message content from a list of messages.
+
+        Args:
+            messages: Framework-specific message format
+
+        Returns:
+            Content of the last user message as a string
+        """
+        ...
+
 
 class ToolConverter(Protocol):
     """Protocol for tool conversion between frameworks and Mellea."""
@@ -70,5 +81,3 @@ class ToolConverter(Protocol):
             List of tool call dictionaries with 'id', 'name', and 'args'
         """
         ...
-
-
