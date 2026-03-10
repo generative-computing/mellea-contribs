@@ -5,3 +5,5 @@
 
 The `mellea-contribs` repository is an incubation point for contributions to
 the Mellea ecosystem.
+
+(adding this to test the CI)
