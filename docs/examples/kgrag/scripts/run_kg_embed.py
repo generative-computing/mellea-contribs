@@ -19,6 +19,7 @@ from typing import Optional
 
 from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.embed_models import EmbeddingConfig, EmbeddingStats
+from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.utils import (
     create_session,
     create_backend,
@@ -30,12 +31,19 @@ from mellea_contribs.kg.utils import (
 
 async def embed_entities(
     backend: GraphBackend,
+    session,
     model: str,
     dimension: int,
     batch_size: int,
 ) -> EmbeddingStats:
     """Embed all entities in the KG."""
-    embedder = KGEmbedder(backend=backend)
+    embedder = KGEmbedder(
+        session=session,
+        model=model,
+        dimension=dimension,
+        batch_size=batch_size,
+        backend=backend,
+    )
 
     config = EmbeddingConfig(
         model=model,
@@ -171,6 +179,7 @@ async def main():
         # Embed entities
         stats = await embed_entities(
             backend=backend,
+            session=session,
             model=args.model,
             dimension=args.dimension,
             batch_size=args.batch_size,

@@ -4,6 +4,7 @@ Provides reusable functions for reading/writing JSONL files, batch processing,
 and dataset manipulation.
 """
 
+import bz2
 import json
 import random
 import sys
@@ -14,8 +15,10 @@ from typing import Iterator, List, Dict, Any, Callable, Optional
 def load_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
     """Load JSONL file and yield each line as a dictionary.
 
+    Supports both plain text and bz2-compressed JSONL files.
+
     Args:
-        path: Path to JSONL file.
+        path: Path to JSONL file (plain or .bz2).
 
     Yields:
         Dictionary from each JSON line.
@@ -28,7 +31,12 @@ def load_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    with open(path, "r") as f:
+    if str(path).endswith('.bz2'):
+        f = bz2.open(path, "rt", encoding="utf-8")
+    else:
+        f = open(path, "r")
+
+    try:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -38,6 +46,8 @@ def load_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
             except json.JSONDecodeError as e:
                 print(f"[Line {line_num}] JSON decode error: {e}", file=sys.stderr)
                 raise
+    finally:
+        f.close()
 
 
 def save_jsonl(data: List[Dict[str, Any]], path: Path) -> None:

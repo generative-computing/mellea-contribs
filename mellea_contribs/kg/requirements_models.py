@@ -2,6 +2,8 @@
 
 Provides Requirement factories for validating entities and relations
 against type constraints, schema rules, and data quality standards.
+
+Requires: Mellea >= 0.3.0 (for mellea.stdlib.context and mellea.stdlib.requirements)
 """
 
 from typing import Optional

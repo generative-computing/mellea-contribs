@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "mellea[litellm]",
+  "mellea[litellm]>=0.3.0",
   "rapidfuzz>=3.14.3",
   "eyecite",
   "citeurl",

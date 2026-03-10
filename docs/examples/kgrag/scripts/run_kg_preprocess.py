@@ -58,8 +58,23 @@ async def process_documents(
 
     try:
         for line_num, doc in enumerate(load_jsonl(input_path), 1):
-            doc_id = doc.get("id", f"doc_{line_num}")
+            doc_id = doc.get("id", doc.get("interaction_id", f"doc_{line_num}"))
+
+            # Try different text fields depending on dataset format
             doc_text = doc.get("text", "")
+            if not doc_text:
+                # For CRAG format, use search results
+                search_results = doc.get("search_results", [])
+                if search_results and isinstance(search_results, list):
+                    # Combine all page results into one text
+                    texts = []
+                    for sr in search_results:
+                        if isinstance(sr, dict):
+                            if "page_result" in sr:
+                                texts.append(sr.get("page_result", ""))
+                            elif "page_snippet" in sr:
+                                texts.append(sr.get("page_snippet", ""))
+                    doc_text = "\n".join(texts)
 
             if not doc_text:
                 log_progress(f"[{line_num}] WARNING: Empty text for {doc_id}")

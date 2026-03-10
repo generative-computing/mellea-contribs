@@ -1,70 +1,131 @@
 #!/usr/bin/env python3
-"""Create a tiny JSONL dataset with ~5 synthetic movie Q&A pairs.
+"""Create a tiny dataset for quick testing (10-20 documents).
 
-Creates a minimal JSONL file with 5 movie Q&A pairs for quick sanity-check runs.
-This is a subset of the demo dataset for testing with minimal LLM calls.
+This script creates an extremely small dataset for rapid testing and development.
+It takes the first N documents from the full CRAG dataset.
 
-Example::
-
-    python create_tiny_dataset.py --output /tmp/tiny.jsonl
+Usage:
+    python create_tiny_dataset.py --num-docs 10
+    python create_tiny_dataset.py --num-docs 20 --output ../data/crag_movie_tiny.jsonl.bz2
 """
 
 import argparse
+import bz2
+import json
 from pathlib import Path
 
-from mellea_contribs.kg.utils import save_jsonl
 
-
-# Minimal set of movie Q&A pairs for quick tests
-TINY_QA_PAIRS = [
-    {
-        "question": "Who directed Avatar?",
-        "answer": "James Cameron",
-        "domain": "movie"
-    },
-    {
-        "question": "What year was Titanic released?",
-        "answer": "1997",
-        "domain": "movie"
-    },
-    {
-        "question": "Who directed The Matrix?",
-        "answer": "The Wachowskis",
-        "domain": "movie"
-    },
-    {
-        "question": "What studio produced Inception?",
-        "answer": "Warner Bros",
-        "domain": "movie"
-    },
-    {
-        "question": "In which year was Parasite released?",
-        "answer": "2019",
-        "domain": "movie"
-    },
-]
-
-
-def main():
-    """Create tiny dataset and write to JSONL file."""
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Create a tiny JSONL dataset with 5 movie Q&A pairs"
+        description="Create a tiny dataset for quick testing",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Create 10-document dataset
+  %(prog)s --num-docs 10
+
+  # Create 20-document dataset
+  %(prog)s --num-docs 20
+
+  # Create 5-document dataset for ultra-fast testing
+  %(prog)s --num-docs 5 --output ../data/crag_movie_micro.jsonl.bz2
+        """
     )
+
+    parser.add_argument(
+        "--num-docs",
+        type=int,
+        default=10,
+        help="Number of documents to include (default: 10)"
+    )
+
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="../dataset/crag_movie_dev.jsonl.bz2",
+        help="Input dataset file (default: ../dataset/crag_movie_dev.jsonl.bz2)"
+    )
+
     parser.add_argument(
         "--output",
         type=str,
-        default="data/tiny_dataset.jsonl",
-        help="Output file path (default: data/tiny_dataset.jsonl)",
+        default="../data/crag_movie_tiny.jsonl.bz2",
+        help="Output dataset file (default: ../data/crag_movie_tiny.jsonl.bz2)"
     )
-    args = parser.parse_args()
 
-    # Write tiny Q&A pairs to JSONL using utility
-    output_path = Path(args.output)
-    save_jsonl(TINY_QA_PAIRS, output_path)
+    return parser.parse_args()
 
-    print(f"Created tiny dataset with {len(TINY_QA_PAIRS)} Q&A pairs")
-    print(f"Saved to: {output_path}")
+
+def main():
+    """Main entry point."""
+    args = parse_arguments()
+
+    print("=" * 60)
+    print("Creating Tiny Test Dataset")
+    print("=" * 60)
+    print(f"Input: {args.input}")
+    print(f"Output: {args.output}")
+    print(f"Number of documents: {args.num_docs}")
+    print("=" * 60)
+
+    # Ensure output directory exists
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+
+    # Read first N documents from input
+    documents = []
+    try:
+        with bz2.open(args.input, 'rt', encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                if i >= args.num_docs:
+                    break
+                try:
+                    doc = json.loads(line.strip())
+                    documents.append(doc)
+                except json.JSONDecodeError as e:
+                    print(f"Warning: Failed to parse line {i+1}: {e}")
+                    continue
+
+        print(f"\nRead {len(documents)} documents from input")
+
+        # Write to output
+        with bz2.open(args.output, 'wt', encoding='utf-8') as f:
+            for doc in documents:
+                f.write(json.dumps(doc, ensure_ascii=False) + '\n')
+
+        print(f"Wrote {len(documents)} documents to {args.output}")
+
+        # Print some statistics
+        print("\n" + "=" * 60)
+        print("Tiny Dataset Created Successfully!")
+        print("=" * 60)
+        print(f"Total documents: {len(documents)}")
+        print(f"Output file: {args.output}")
+
+        # Show first document as example
+        if documents:
+            print("\nFirst document fields:")
+            for key in list(documents[0].keys())[:5]:  # Show first 5 fields
+                print(f"  - {key}")
+
+        print("\nTo use this dataset, either:")
+        print("  1. Update KG_BASE_DIRECTORY in your .env to point to the dataset directory")
+        print(f"  2. Or pass --dataset {args.output} to run_kg_update.py")
+
+        return 0
+
+    except FileNotFoundError:
+        print(f"\nError: Input file not found: {args.input}")
+        print(f"\nMake sure you have the full dataset at:")
+        print(f"  {Path(args.input).resolve()}")
+        print(f"\nCurrent working directory: {Path.cwd()}")
+        return 1
+    except Exception as e:
+        print(f"\nError: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    exit(main())

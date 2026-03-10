@@ -351,6 +351,7 @@ async def orchestrate_kg_update(
     """
     # Step 1: Extract entities and relations from document
     extraction = await extract_entities_and_relations(
+        m=session,
         doc_context=doc_text,
         domain=domain,
         hints=hints,

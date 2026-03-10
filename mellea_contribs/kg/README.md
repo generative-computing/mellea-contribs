@@ -21,7 +21,7 @@ pip install mellea-contribs
 # With Neo4j support (for production)
 pip install mellea-contribs[kg]
 
-# With progress bars (tqdm) for Phase 3 utilities
+# With progress bars (tqdm)
 pip install mellea-contribs[kg-utils]
 
 # Complete installation (everything)
@@ -29,9 +29,9 @@ pip install mellea-contribs[kg,kg-utils,dev]
 ```
 
 **Optional Dependencies:**
-- `tqdm`: Progress bars for batch processing (Phase 3 ProgressTracker)
-- `neo4j`: Neo4j driver for production backend (Phase 1/2 production)
-- `rapidfuzz`: Fuzzy string matching for evaluation (Phase 3 already included)
+- `tqdm`: Progress bars for batch processing 
+- `neo4j`: Neo4j driver for production backend 
+- `rapidfuzz`: Fuzzy string matching for evaluation
 
 ## Quick Start
 
