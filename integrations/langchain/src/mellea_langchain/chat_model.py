@@ -68,11 +68,10 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
     # The model only returns tool calls in the AIMessage, which the agent then executes.
     # The _execute_tool_calls method below is for internal use and compatibility testing only.
 
-    class Config:
-        """Pydantic configuration."""
-
-        arbitrary_types_allowed = True
-        extra = "allow"  # Allow extra attributes for integration base
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "extra": "allow",  # Allow extra attributes for integration base
+    }
 
     def __init__(
         self,
@@ -164,68 +163,6 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         """Return type of chat model."""
         return "mellea"
 
-    def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Execute tool calls and return results.
-
-        WARNING: This method is for internal testing and compatibility only.
-        In standard LangChain/LangGraph usage, the model should NOT execute tools.
-        Instead, the model returns tool calls in the AIMessage, and the agent
-        executor (e.g., AgentExecutor, LangGraph's react agent) handles execution.
-
-        This method may be removed or modified in future versions to align with
-        standard LangChain patterns.
-
-        Args:
-            tool_calls: List of tool call dictionaries with 'id', 'name', and 'args'
-
-        Returns:
-            List of tool execution results
-        """
-        if not hasattr(self, "_bound_tools") or not self._bound_tools:
-            return []
-
-        # Create tools dictionary for easy lookup
-        tools_dict = {tool.name: tool for tool in self._bound_tools}
-
-        results = []
-        for tool_call in tool_calls:
-            tool_name = tool_call.get("name")
-            tool_args = tool_call.get("args", {})
-            tool_id = tool_call.get("id", "unknown")
-
-            if tool_name in tools_dict:
-                try:
-                    # Execute the tool
-                    result = tools_dict[tool_name].invoke(tool_args)
-                    results.append(
-                        {
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": str(result),
-                            "success": True,
-                        }
-                    )
-                except Exception as e:
-                    results.append(
-                        {
-                            "tool_call_id": tool_id,
-                            "name": tool_name,
-                            "content": f"Error executing {tool_name}: {e!s}",
-                            "success": False,
-                        }
-                    )
-            else:
-                results.append(
-                    {
-                        "tool_call_id": tool_id,
-                        "name": tool_name,
-                        "content": f"Tool '{tool_name}' not found",
-                        "success": False,
-                    }
-                )
-
-        return results
-
     def _generate(
         self,
         messages: list[BaseMessage],
@@ -283,43 +220,12 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         # Convert response using message converter
         result = self.message_converter.from_mellea(response)
 
-        # NOTE: Tool execution is commented out to align with standard LangChain behavior.
-        # In LangChain/LangGraph, the model returns tool calls but doesn't execute them.
-        # The agent executor handles tool execution and sends results back to the model.
+        # NOTE: Following standard LangChain patterns, this model returns tool calls
+        # in the AIMessage but does NOT execute them. Tool execution should be handled
+        # by LangChain agents (e.g., AgentExecutor) or LangGraph's react agent pattern.
         #
-        # If you need automatic tool execution for testing or specific use cases,
-        # uncomment the code below, but be aware this deviates from standard patterns.
-
-        # # Execute tool calls if present
-        # if tool_calls_enabled and result.generations:
-        #     ai_message = result.generations[0].message
-        #     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-        #         # Execute the tools
-        #         tool_results = self._execute_tool_calls(ai_message.tool_calls)
-        #
-        #         # Store tool execution results in the AIMessage
-        #         if tool_results:
-        #             from langchain_core.messages import AIMessage
-        #             from langchain_core.outputs import ChatGeneration
-        #
-        #             updated_message = AIMessage(
-        #                 content=ai_message.content,
-        #                 tool_calls=ai_message.tool_calls,
-        #                 additional_kwargs={
-        #                     **ai_message.additional_kwargs,
-        #                     "tool_execution_results": tool_results,
-        #                 },
-        #                 response_metadata={
-        #                     **ai_message.response_metadata,
-        #                     "tool_execution_results": tool_results,
-        #                 },
-        #                 id=ai_message.id,
-        #             )
-        #
-        #             result.generations[0] = ChatGeneration(
-        #                 message=updated_message,
-        #                 generation_info=result.generations[0].generation_info,
-        #             )
+        # For automatic tool execution, use LangChain's AgentExecutor or create a
+        # LangGraph agent. See the examples directory for proper usage patterns.
 
         # Invoke callbacks
         if run_manager:
@@ -392,43 +298,12 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         # Convert response using message converter
         result = self.message_converter.from_mellea(response)
 
-        # NOTE: Tool execution is commented out to align with standard LangChain behavior.
-        # In LangChain/LangGraph, the model returns tool calls but doesn't execute them.
-        # The agent executor handles tool execution and sends results back to the model.
+        # NOTE: Following standard LangChain patterns, this model returns tool calls
+        # in the AIMessage but does NOT execute them. Tool execution should be handled
+        # by LangChain agents (e.g., AgentExecutor) or LangGraph's react agent pattern.
         #
-        # If you need automatic tool execution for testing or specific use cases,
-        # uncomment the code below, but be aware this deviates from standard patterns.
-
-        # # Execute tool calls if present
-        # if tool_calls_enabled and result.generations:
-        #     ai_message = result.generations[0].message
-        #     if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-        #         # Execute the tools
-        #         tool_results = self._execute_tool_calls(ai_message.tool_calls)
-        #
-        #         # Store tool execution results in the AIMessage
-        #         if tool_results:
-        #             from langchain_core.messages import AIMessage
-        #             from langchain_core.outputs import ChatGeneration
-        #
-        #             updated_message = AIMessage(
-        #                 content=ai_message.content,
-        #                 tool_calls=ai_message.tool_calls,
-        #                 additional_kwargs={
-        #                     **ai_message.additional_kwargs,
-        #                     "tool_execution_results": tool_results,
-        #                 },
-        #                 response_metadata={
-        #                     **ai_message.response_metadata,
-        #                     "tool_execution_results": tool_results,
-        #                 },
-        #                 id=ai_message.id,
-        #             )
-        #
-        #             result.generations[0] = ChatGeneration(
-        #                 message=updated_message,
-        #                 generation_info=result.generations[0].generation_info,
-        #             )
+        # For automatic tool execution, use LangChain's AgentExecutor or create a
+        # LangGraph agent. See the examples directory for proper usage patterns.
 
         # Invoke callbacks
         if run_manager:

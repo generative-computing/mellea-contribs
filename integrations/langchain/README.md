@@ -7,11 +7,12 @@ A LangChain-compatible chat model that wraps Mellea, enabling LangChain applicat
 This integration allows LangChain users to leverage Mellea's structured approach to generative programming while using familiar LangChain APIs. It provides full support for:
 
 - ✅ **Chat Completion**: Standard synchronous and asynchronous generation
-- ✅ **Streaming**: Real-time token-by-token generation
 - ✅ **Requirements & Validation**: Mellea's requirements and sampling strategies
 - ✅ **Tool Calling**: Function calling with LangChain agents
 - ✅ **Chains**: Integration with LangChain chains
 - ✅ **Agents**: Support for LangChain agents
+
+**Note**: Streaming is not currently supported. The `stream()` and `astream()` methods will return the full response as a single chunk.
 
 ## Quick Start
 
@@ -68,16 +69,16 @@ chat_model = MelleaChatModel(mellea_session=m)
 response = chat_model.invoke([HumanMessage(content="Hello!")])
 ```
 
-### Streaming Example
+### Async Example
 
 ```python
 from langchain_core.messages import HumanMessage
 
-# Stream responses
-for chunk in chat_model.stream([
+# Async invoke
+response = await chat_model.ainvoke([
     HumanMessage(content="Write a short story about AI")
-]):
-    print(chunk.content, end="", flush=True)
+])
+print(response.content)
 ```
 
 ### Using with LangChain Chains
@@ -223,16 +224,18 @@ SystemMessage(content="...") → Message(role="system", content="...")
 ToolMessage(...) → Message(role="tool", ...)
 ```
 
-#### 3. Full Streaming Support
+#### 3. Async Support
 
 ```python
-# Async streaming
-async for chunk in chat_model.astream([HumanMessage(content="Tell me a story")]):
-    print(chunk.content, end="")
+# Async invoke
+response = await chat_model.ainvoke([HumanMessage(content="Tell me a story")])
+print(response.content)
 
-# Sync streaming
-for chunk in chat_model.stream([HumanMessage(content="Tell me a story")]):
-    print(chunk.content, end="")
+# Async batch processing
+responses = await chat_model.abatch([
+    [HumanMessage(content="What is 2+2?")],
+    [HumanMessage(content="What is the capital of France?")]
+])
 ```
 
 #### 4. Tool Calling for Agents
@@ -279,7 +282,7 @@ langchain/
 │   └── test_tool_conversion.py       # Tool conversion tests
 └── examples/
     ├── basic_usage.py                # Basic example
-    ├── streaming_example.py          # Streaming example
+    ├── async_example.py              # Sync and async example
     ├── tools_example.py              # Tool calling example
     ├── langchain_chain.py            # Chain example
     └── requirements_strategy_example.py  # Requirements/validation example
@@ -448,7 +451,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](../LIC
 
 ### Q: Does this support all LangChain features?
 
-**A**: It supports the core features: chat, streaming, tool calling, chains, agents, and LangServe. Some advanced features may have limitations.
+**A**: It supports the core features: chat, tool calling, chains, agents, and LangServe. Note: Streaming is not currently supported - `stream()` and `astream()` methods return the full response as a single chunk.
 
 ### Q: Can I use Mellea's advanced features?
 
@@ -467,7 +470,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](../LIC
 See the `examples/` directory for complete examples:
 
 - [`basic_usage.py`](examples/basic_usage.py): Simple chat completion
-- [`streaming_example.py`](examples/streaming_example.py): Real-time streaming
+- [`async_example.py`](examples/async_example.py): Synchronous and asynchronous usage
 - [`tools_example.py`](examples/tools_example.py): Function calling with agents
 - [`langchain_chain.py`](examples/langchain_chain.py): Using with chains
 - [`requirements_strategy_example.py`](examples/requirements_strategy_example.py): Requirements and validation

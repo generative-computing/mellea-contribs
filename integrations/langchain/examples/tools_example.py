@@ -4,6 +4,10 @@ This example shows how to:
 1. Define LangChain tools
 2. Bind tools to the Mellea chat model
 3. Use the model with tools for function calling
+
+Note: This example shows the model returning tool calls. For automatic tool
+execution, use LangGraph's react agent pattern or create custom tool execution logic.
+See the test_agent_integration.py file for working examples.
 """
 
 import sys
@@ -81,21 +85,12 @@ def main():
 
     # Check if tool calls were made
     if hasattr(response, "tool_calls") and response.tool_calls:
-        print(f"\nTool calls made: {len(response.tool_calls)}")
+        print(f"\nTool calls requested: {len(response.tool_calls)}")
         for tool_call in response.tool_calls:
-            print(f"  - {tool_call}")
-
-        # Display tool execution results if available
-        if (
-            hasattr(response, "response_metadata")
-            and "tool_execution_results" in response.response_metadata
-        ):
-            tool_results = response.response_metadata["tool_execution_results"]
-            if tool_results:
-                print("\n🔧 Tool Execution Results:")
-                for result in tool_results:
-                    status = "✅" if result.get("success") else "❌"
-                    print(f"  {status} {result['name']}: {result['content']}")
+            print(f"  - Tool: {tool_call.get('name', 'unknown')}")
+            print(f"    Args: {tool_call.get('args', {})}")
+        print("\nNote: Tool calls are returned but not executed.")
+        print("See test_agent_integration.py for automatic tool execution examples.")
 
     # Example 2: Bind multiple tools
     print("\n" + "=" * 60)
@@ -109,21 +104,12 @@ def main():
     print(f"\nResponse: {response.content}")
 
     if hasattr(response, "tool_calls") and response.tool_calls:
-        print(f"\nTool calls made: {len(response.tool_calls)}")
+        print(f"\nTool calls requested: {len(response.tool_calls)}")
         for tool_call in response.tool_calls:
-            print(f"  - {tool_call}")
-
-        # Display tool execution results if available
-        if (
-            hasattr(response, "response_metadata")
-            and "tool_execution_results" in response.response_metadata
-        ):
-            tool_results = response.response_metadata["tool_execution_results"]
-            if tool_results:
-                print("\n🔧 Tool Execution Results:")
-                for result in tool_results:
-                    status = "✅" if result.get("success") else "❌"
-                    print(f"  {status} {result['name']}: {result['content']}")
+            print(f"  - Tool: {tool_call.get('name', 'unknown')}")
+            print(f"    Args: {tool_call.get('args', {})}")
+        print("\nNote: Tool calls are returned but not executed.")
+        print("See test_agent_integration.py for automatic tool execution examples.")
 
     # Example 3: Complex query that might use multiple tools
     print("\n" + "=" * 60)
@@ -137,27 +123,20 @@ def main():
     print(f"\nResponse: {response.content}")
 
     if hasattr(response, "tool_calls") and response.tool_calls:
-        print(f"\nTool calls made: {len(response.tool_calls)}")
+        print(f"\nTool calls requested: {len(response.tool_calls)}")
         for tool_call in response.tool_calls:
-            print(f"  - {tool_call}")
-
-        # Display tool execution results if available
-        if (
-            hasattr(response, "response_metadata")
-            and "tool_execution_results" in response.response_metadata
-        ):
-            tool_results = response.response_metadata["tool_execution_results"]
-            if tool_results:
-                print("\n🔧 Tool Execution Results:")
-                for result in tool_results:
-                    status = "✅" if result.get("success") else "❌"
-                    print(f"  {status} {result['name']}: {result['content']}")
+            print(f"  - Tool: {tool_call.get('name', 'unknown')}")
+            print(f"    Args: {tool_call.get('args', {})}")
+        print("\nNote: Tool calls are returned but not executed.")
+        print("See test_agent_integration.py for automatic tool execution examples.")
 
     print("\n" + "=" * 60)
     print("Tool calling examples completed!")
     print("=" * 60)
-    print("\nNote: Tool calling support depends on the underlying model's")
-    print("capabilities. Some models may not support function calling.")
+    print("\nNote: This example shows the model returning tool calls.")
+    print("For automatic tool execution, use LangGraph's react agent pattern")
+    print("or create custom tool execution logic. Tool calling support")
+    print("depends on the underlying model's capabilities.")
 
 
 if __name__ == "__main__":
