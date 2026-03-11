@@ -251,3 +251,125 @@ def test_full_tool_conversion_flow(converter):
     mellea_tools = converter.to_mellea(tools)
     assert len(mellea_tools) == 2
     assert all(hasattr(tool, "name") for tool in mellea_tools)
+
+
+def test_parse_tool_calls_nested_dict_single_level(converter):
+    """Test parsing tool calls with single-level nested dictionary."""
+    content = "[ToolCall(function=Function(name='process_config', arguments={'config': {'key': 'value'}}))]"
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "process_config"
+    assert tool_calls[0]["args"]["config"]["key"] == "value"
+
+
+def test_parse_tool_calls_nested_dict_multiple_levels(converter):
+    """Test parsing tool calls with deeply nested dictionaries."""
+    content = "[ToolCall(function=Function(name='deep_config', arguments={'a': {'b': {'c': {'d': 'value'}}}}))]"
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "deep_config"
+    assert tool_calls[0]["args"]["a"]["b"]["c"]["d"] == "value"
+
+
+def test_parse_tool_calls_nested_dict_with_arrays(converter):
+    """Test parsing tool calls with nested dicts containing arrays."""
+    content = "[ToolCall(function=Function(name='list_config', arguments={'items': [{'id': 1}, {'id': 2}]}))]"
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "list_config"
+    assert tool_calls[0]["args"]["items"][0]["id"] == 1
+    assert tool_calls[0]["args"]["items"][1]["id"] == 2
+
+
+def test_parse_tool_calls_nested_dict_mixed_types(converter):
+    """Test parsing tool calls with nested dicts containing various types."""
+    content = (
+        "[ToolCall(function=Function(name='complex_tool', "
+        "arguments={'config': {'name': 'test', 'count': 42, 'enabled': True, 'items': ['a', 'b']}}))]"
+    )
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "complex_tool"
+    args = tool_calls[0]["args"]["config"]
+    assert args["name"] == "test"
+    assert args["count"] == 42
+    assert args["enabled"] is True
+    assert args["items"] == ["a", "b"]
+
+
+def test_parse_tool_calls_nested_dict_with_braces_in_strings(converter):
+    """Test parsing tool calls where strings contain brace characters."""
+    content = (
+        "[ToolCall(function=Function(name='json_tool', "
+        "arguments={'template': '{\"key\": \"value\"}'}))]"
+    )
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 1
+    assert tool_calls[0]["name"] == "json_tool"
+    assert tool_calls[0]["args"]["template"] == '{"key": "value"}'
+
+
+def test_parse_tool_calls_nested_dict_multiple_calls_all_nested(converter):
+    """Test parsing multiple tool calls with nested dicts."""
+    content = (
+        "[ToolCall(function=Function(name='tool1', arguments={'config': {'x': 1}})), "
+        "ToolCall(function=Function(name='tool2', arguments={'config': {'y': 2}}))]"
+    )
+
+    tool_calls = converter.parse_tool_calls_from_string(content)
+
+    assert len(tool_calls) == 2
+    assert tool_calls[0]["name"] == "tool1"
+    assert tool_calls[0]["args"]["config"]["x"] == 1
+    assert tool_calls[1]["name"] == "tool2"
+    assert tool_calls[1]["args"]["config"]["y"] == 2
+
+
+def test_extract_balanced_braces_simple(converter):
+    """Test _extract_balanced_braces with simple dictionary."""
+    text = "{'key': 'value'} rest"
+    result = converter._extract_balanced_braces(text, 0)
+
+    assert result == "{'key': 'value'}"
+
+
+def test_extract_balanced_braces_nested(converter):
+    """Test _extract_balanced_braces with nested braces."""
+    text = "{'a': {'b': 'c'}} rest"
+    result = converter._extract_balanced_braces(text, 0)
+
+    assert result == "{'a': {'b': 'c'}}"
+
+
+def test_extract_balanced_braces_with_strings_containing_braces(converter):
+    """Test _extract_balanced_braces with brace characters in strings."""
+    text = '{"text": "{hello}"} rest'
+    result = converter._extract_balanced_braces(text, 0)
+
+    assert result == '{"text": "{hello}"}'
+
+
+def test_extract_balanced_braces_invalid_start(converter):
+    """Test _extract_balanced_braces with non-brace start position."""
+    text = "not a brace {here}"
+    result = converter._extract_balanced_braces(text, 0)
+
+    assert result is None
+
+
+def test_extract_balanced_braces_unclosed_brace(converter):
+    """Test _extract_balanced_braces with unclosed brace."""
+    text = "{'key': 'value' no closing brace"
+    result = converter._extract_balanced_braces(text, 0)
+
+    assert result is None

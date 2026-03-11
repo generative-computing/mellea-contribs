@@ -76,6 +76,50 @@ class BaseToolConverter:
         raise ValueError(f"Cannot extract callable from tool: {tool}")
 
     @staticmethod
+    def _extract_balanced_braces(text: str, start_pos: int) -> str | None:
+        """Extract a balanced dictionary string starting at start_pos.
+
+        Uses brace counting to find the matching closing brace, handles nested dicts.
+
+        Args:
+            text: Full text to search in
+            start_pos: Position of the opening brace
+
+        Returns:
+            The balanced dictionary string, or None if not found
+        """
+        if start_pos >= len(text) or text[start_pos] != "{":
+            return None
+
+        brace_count = 0
+        in_string = False
+        escape_next = False
+        pos = start_pos
+
+        while pos < len(text):
+            char = text[pos]
+
+            if escape_next:
+                escape_next = False
+            elif char == "\\":
+                escape_next = True
+            elif char == '"' and not in_string:
+                in_string = True
+            elif char == '"' and in_string:
+                in_string = False
+            elif not in_string:
+                if char == "{":
+                    brace_count += 1
+                elif char == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        return text[start_pos : pos + 1]
+
+            pos += 1
+
+        return None
+
+    @staticmethod
     def parse_tool_calls_from_string(content_str: str) -> list[dict[str, Any]]:
         """Parse tool calls from Mellea's string representation.
 
@@ -90,19 +134,26 @@ class BaseToolConverter:
         """
         tool_calls = []
 
-        # Pattern to match ToolCall objects in the string
-        # Matches: ToolCall(function=Function(name='tool_name', arguments={...}))
-        # Note: This pattern uses a greedy match to handle nested dictionaries
-        # It will match from the first { to the last } in the arguments section
-        pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{.+?\})\)\)"
+        # Pattern to extract just the tool name from ToolCall
+        # Matches: ToolCall(function=Function(name='tool_name', ...
+        name_pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments="
 
-        for match in re.finditer(pattern, content_str):
+        for match in re.finditer(name_pattern, content_str):
             tool_name = match.group(1)
-            args_str = match.group(2)
+            args_start = match.end()
+
+            # Find the opening brace for arguments
+            args_brace_pos = content_str.find("{", args_start)
+            if args_brace_pos == -1:
+                continue
+
+            # Use brace counting to extract the complete dictionary
+            args_str = BaseToolConverter._extract_balanced_braces(content_str, args_brace_pos)
+            if not args_str:
+                continue
 
             try:
                 # Safely evaluate the arguments dictionary
-                # ast.literal_eval can handle nested dictionaries
                 args_dict = ast.literal_eval(args_str)
 
                 tool_calls.append(
