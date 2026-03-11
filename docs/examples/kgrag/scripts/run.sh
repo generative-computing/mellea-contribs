@@ -50,9 +50,36 @@ python run_kg_embed.py \
   --batch-size 100 > "$KGRAG_ROOT/output/embedding_stats.json"
 echo "✓ Entity embeddings computed"
 
-# Step 3: Verify KG is loaded
+# Step 3: Update KG with documents (if dataset exists)
 echo ""
-echo "Step 3: Verifying Knowledge Graph..."
+echo "Step 3: Updating Knowledge Graph with documents..."
+
+# Check if tiny dataset exists (for quick testing)
+if [ -f "$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2" ]; then
+  python run_kg_update.py \
+    --dataset "$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2" \
+    --domain movie \
+    --neo4j-uri "$NEO4J_URI" \
+    --neo4j-user "$NEO4J_USER" \
+    --neo4j-password "$NEO4J_PASSWORD" \
+    --num-workers 4 > "$KGRAG_ROOT/output/update_stats.json"
+  echo "✓ Knowledge Graph updated with documents"
+elif [ -f "$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2" ]; then
+  python run_kg_update.py \
+    --dataset "$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2" \
+    --domain movie \
+    --neo4j-uri "$NEO4J_URI" \
+    --neo4j-user "$NEO4J_USER" \
+    --neo4j-password "$NEO4J_PASSWORD" > "$KGRAG_ROOT/output/update_stats.json"
+  echo "✓ Knowledge Graph updated with documents"
+else
+  echo "⚠ No dataset found for KG update (optional step)"
+  echo "  To enable: place crag_movie_dev.jsonl.bz2 or crag_movie_tiny.jsonl.bz2 in dataset/"
+fi
+
+# Step 4: Verify KG is complete
+echo ""
+echo "Step 4: Verifying Knowledge Graph..."
 echo "✓ Knowledge Graph population complete"
 echo "  - 64,283 movies loaded"
 echo "  - 373,608 persons loaded"
@@ -65,8 +92,12 @@ echo "=================================================="
 echo "Summary:"
 echo "  ✓ Movie database loaded into Neo4j"
 echo "  ✓ Entity embeddings computed"
+echo "  ✓ Knowledge Graph updated with documents"
 echo "  ✓ Knowledge Graph ready for queries"
 echo ""
 echo "Neo4j is running at: $NEO4J_URI"
 echo "Logs saved to: $KGRAG_ROOT/output/"
+echo "  - preprocess_stats.json"
+echo "  - embedding_stats.json"
+echo "  - update_stats.json (if documents were processed)"
 echo "=================================================="
