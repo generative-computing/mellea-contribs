@@ -1,0 +1,18 @@
+{
+  "total_questions": 5,
+  "successful_answers": 0,
+  "failed_answers": 5,
+  "average_confidence": 0.0,
+  "average_processing_time_ms": 0.021409988403320312,
+  "min_processing_time_ms": 0.0064373016357421875,
+  "max_processing_time_ms": 0.06461143493652344,
+  "models_used": [
+    "gpt-4o-mini"
+  ],
+  "exact_match_count": 0,
+  "partial_match_count": 0,
+  "no_match_count": 0,
+  "mean_reciprocal_rank": 1.0,
+  "total_time_ms": 0.10704994201660156,
+  "avg_time_per_question_ms": 0.0
+}
