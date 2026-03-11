@@ -467,15 +467,17 @@ async def process_dataset(
     model_id = os.getenv("MODEL_NAME", config.session_config.model)
 
     if api_base:
+        # Set environment variables for LiteLLM to use
+        os.environ["OPENAI_API_BASE"] = api_base
+        os.environ["OPENAI_API_KEY"] = api_key or "dummy"
         log_progress(f"Using API Base: {api_base}")
-        session = create_session(
-            model_id=model_id,
-            api_base=api_base,
-            api_key=api_key,
-        )
+        log_progress(f"Using Model: {model_id}")
+        session = create_session(model_id=model_id)
     else:
-        log_progress(f"Using model: {config.session_config.model}")
-        session = create_session(model_id=config.session_config.model)
+        # Use default model if no API_BASE configured
+        model_id = config.session_config.model
+        log_progress(f"Using model: {model_id}")
+        session = create_session(model_id=model_id)
 
     batch_result = UpdateBatchResult()
     results = []
@@ -493,7 +495,7 @@ async def process_dataset(
                 backend=backend,
                 session=session,
                 domain=config.dataset_config.domain,
-                model=config.session_config.model,
+                model=model_id,
                 progress_tracker=progress_tracker,
             )
 
