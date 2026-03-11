@@ -37,35 +37,57 @@ from mellea_contribs.kg.utils import (
 )
 
 
-class KGUpdateConfig:
-    """Configuration for KG update operations."""
+class SessionConfig:
+    """Configuration for LLM session settings."""
+
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+    ):
+        """Initialize session configuration."""
+        self.model = model
+
+
+class UpdaterConfig:
+    """Configuration for KG updater settings."""
+
+    def __init__(
+        self,
+        num_workers: int = 64,
+        queue_size: int = 64,
+        extraction_loop_budget: int = 3,
+        alignment_loop_budget: int = 2,
+        align_topk: int = 10,
+        align_entity: bool = True,
+        merge_entity: bool = True,
+        align_relation: bool = True,
+        merge_relation: bool = True,
+    ):
+        """Initialize updater configuration."""
+        self.num_workers = num_workers
+        self.queue_size = queue_size
+        self.extraction_loop_budget = extraction_loop_budget
+        self.alignment_loop_budget = alignment_loop_budget
+        self.align_topk = align_topk
+        self.align_entity = align_entity
+        self.merge_entity = merge_entity
+        self.align_relation = align_relation
+        self.merge_relation = merge_relation
+
+
+class DatasetConfig:
+    """Configuration for dataset settings."""
 
     def __init__(
         self,
         dataset_path: Optional[str] = None,
         domain: str = "movie",
-        num_workers: int = 64,
-        queue_size: int = 64,
         progress_path: str = "results/update_kg_progress.json",
-        neo4j_uri: str = "bolt://localhost:7687",
-        neo4j_user: str = "neo4j",
-        neo4j_password: str = "password",
-        mock: bool = False,
-        model: str = "gpt-4o-mini",
-        verbose: bool = False,
     ):
-        """Initialize configuration."""
+        """Initialize dataset configuration."""
         self.dataset_path = dataset_path
         self.domain = domain
-        self.num_workers = num_workers
-        self.queue_size = queue_size
         self.progress_path = progress_path
-        self.neo4j_uri = neo4j_uri
-        self.neo4j_user = neo4j_user
-        self.neo4j_password = neo4j_password
-        self.mock = mock
-        self.model = model
-        self.verbose = verbose
 
     def validate(self) -> bool:
         """Validate configuration."""
@@ -81,6 +103,51 @@ class KGUpdateConfig:
             return False
 
         return True
+
+
+class KGUpdateConfig:
+    """Unified configuration for KG update operations."""
+
+    def __init__(
+        self,
+        dataset_path: Optional[str] = None,
+        domain: str = "movie",
+        num_workers: int = 64,
+        queue_size: int = 64,
+        progress_path: str = "results/update_kg_progress.json",
+        neo4j_uri: str = "bolt://localhost:7687",
+        neo4j_user: str = "neo4j",
+        neo4j_password: str = "password",
+        mock: bool = False,
+        model: str = "gpt-4o-mini",
+        extraction_loop_budget: int = 3,
+        alignment_loop_budget: int = 2,
+        align_topk: int = 10,
+        verbose: bool = False,
+    ):
+        """Initialize configuration."""
+        self.session_config = SessionConfig(model=model)
+        self.updater_config = UpdaterConfig(
+            num_workers=num_workers,
+            queue_size=queue_size,
+            extraction_loop_budget=extraction_loop_budget,
+            alignment_loop_budget=alignment_loop_budget,
+            align_topk=align_topk,
+        )
+        self.dataset_config = DatasetConfig(
+            dataset_path=dataset_path,
+            domain=domain,
+            progress_path=progress_path,
+        )
+        self.neo4j_uri = neo4j_uri
+        self.neo4j_user = neo4j_user
+        self.neo4j_password = neo4j_password
+        self.mock = mock
+        self.verbose = verbose
+
+    def validate(self) -> bool:
+        """Validate configuration."""
+        return self.dataset_config.validate()
 
 
 class KGProgressTracker:
@@ -240,6 +307,28 @@ Examples:
         help="LLM model to use (default: gpt-4o-mini)",
     )
 
+    # Alignment and merge configuration
+    parser.add_argument(
+        "--extraction-loop-budget",
+        type=int,
+        default=3,
+        help="Entity/relation extraction loop budget (default: 3)",
+    )
+
+    parser.add_argument(
+        "--alignment-loop-budget",
+        type=int,
+        default=2,
+        help="Alignment refinement loop budget (default: 2)",
+    )
+
+    parser.add_argument(
+        "--align-topk",
+        type=int,
+        default=10,
+        help="Number of top candidates for alignment (default: 10)",
+    )
+
     # Progress tracking
     parser.add_argument(
         "--progress-path",
@@ -369,14 +458,14 @@ async def process_dataset(
         neo4j_user=config.neo4j_user,
         neo4j_password=config.neo4j_password,
     )
-    session = create_session(model_id=config.model)
+    session = create_session(model_id=config.session_config.model)
 
     batch_result = UpdateBatchResult()
     results = []
     tasks = []
 
     # Semaphore to limit concurrent workers
-    semaphore = asyncio.Semaphore(config.num_workers)
+    semaphore = asyncio.Semaphore(config.updater_config.num_workers)
 
     async def process_with_semaphore(doc_id: str, text: str) -> UpdateResult:
         """Process document with semaphore for concurrency control."""
@@ -386,8 +475,8 @@ async def process_dataset(
                 text=text,
                 backend=backend,
                 session=session,
-                domain=config.domain,
-                model=config.model,
+                domain=config.dataset_config.domain,
+                model=config.session_config.model,
                 progress_tracker=progress_tracker,
             )
 
@@ -408,7 +497,7 @@ async def process_dataset(
             tasks.append(task)
 
         # Process all tasks concurrently
-        log_progress(f"Processing {len(tasks)} documents with {config.num_workers} workers...")
+        log_progress(f"Processing {len(tasks)} documents with {config.updater_config.num_workers} workers...")
         results = await asyncio.gather(*tasks)
 
         # Aggregate results
@@ -463,6 +552,9 @@ async def main() -> int:
         neo4j_password=args.neo4j_password,
         mock=args.mock,
         model=args.model,
+        extraction_loop_budget=args.extraction_loop_budget,
+        alignment_loop_budget=args.alignment_loop_budget,
+        align_topk=args.align_topk,
         verbose=args.verbose,
     )
 
@@ -472,19 +564,22 @@ async def main() -> int:
             return 1
 
         # Create progress tracker
-        progress_tracker = KGProgressTracker(config.progress_path)
+        progress_tracker = KGProgressTracker(config.dataset_config.progress_path)
 
         # Log configuration
         log_progress("=" * 60)
         log_progress("KG Update Configuration:")
         log_progress("=" * 60)
-        log_progress(f"Dataset: {config.dataset_path}")
-        log_progress(f"Domain: {config.domain}")
-        log_progress(f"Workers: {config.num_workers}")
-        log_progress(f"Queue size: {config.queue_size}")
-        log_progress(f"Model: {config.model}")
+        log_progress(f"Dataset: {config.dataset_config.dataset_path}")
+        log_progress(f"Domain: {config.dataset_config.domain}")
+        log_progress(f"Workers: {config.updater_config.num_workers}")
+        log_progress(f"Queue size: {config.updater_config.queue_size}")
+        log_progress(f"Extraction loop budget: {config.updater_config.extraction_loop_budget}")
+        log_progress(f"Alignment loop budget: {config.updater_config.alignment_loop_budget}")
+        log_progress(f"Top-K candidates: {config.updater_config.align_topk}")
+        log_progress(f"Model: {config.session_config.model}")
         log_progress(f"Backend: {'Mock' if config.mock else 'Neo4j'}")
-        log_progress(f"Progress: {config.progress_path}")
+        log_progress(f"Progress: {config.dataset_config.progress_path}")
         log_progress("=" * 60)
 
         # Ensure results directory exists
@@ -492,7 +587,7 @@ async def main() -> int:
 
         # Process dataset
         log_progress("Starting KG update...")
-        dataset_path = Path(config.dataset_path)
+        dataset_path = Path(config.dataset_config.dataset_path)
         batch_result = await process_dataset(dataset_path, config, progress_tracker)
 
         # Save progress
@@ -514,7 +609,7 @@ async def main() -> int:
         log_progress(
             f"Average time per doc: {batch_result.avg_time_per_document_ms:.2f}ms"
         )
-        log_progress(f"Progress saved to: {config.progress_path}")
+        log_progress(f"Progress saved to: {config.dataset_config.progress_path}")
         log_progress("=" * 60)
 
         # Print stats and output JSON
