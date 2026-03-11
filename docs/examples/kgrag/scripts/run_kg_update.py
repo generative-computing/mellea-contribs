@@ -21,6 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
+
 from mellea_contribs.kg.kgrag import orchestrate_kg_update
 from mellea_contribs.kg.updater_models import (
     UpdateBatchResult,
@@ -458,7 +460,22 @@ async def process_dataset(
         neo4j_user=config.neo4j_user,
         neo4j_password=config.neo4j_password,
     )
-    session = create_session(model_id=config.session_config.model)
+
+    # Create session with API configuration from environment
+    api_base = os.getenv("API_BASE")
+    api_key = os.getenv("API_KEY")
+    model_id = os.getenv("MODEL_NAME", config.session_config.model)
+
+    if api_base:
+        log_progress(f"Using API Base: {api_base}")
+        session = create_session(
+            model_id=model_id,
+            api_base=api_base,
+            api_key=api_key,
+        )
+    else:
+        log_progress(f"Using model: {config.session_config.model}")
+        session = create_session(model_id=config.session_config.model)
 
     batch_result = UpdateBatchResult()
     results = []
@@ -536,8 +553,24 @@ async def process_dataset(
     return batch_result
 
 
+def load_env_file() -> None:
+    """Load environment variables from .env file in parent directory."""
+    # Try to load .env from parent directory (kgrag root)
+    script_dir = Path(__file__).parent
+    env_path = script_dir.parent / ".env"
+
+    if env_path.exists():
+        log_progress(f"Loading environment from: {env_path}")
+        load_dotenv(env_path, override=False)
+    else:
+        log_progress(f"⚠️  .env not found at {env_path} (optional)")
+
+
 async def main() -> int:
     """Main async entry point."""
+    # Load environment variables from .env file
+    load_env_file()
+
     args = parse_arguments()
 
     # Create configuration
