@@ -443,4 +443,11 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,direnv,visualstudiocode,pycharm,macos,jetbrains
+
+# KG-RAG Example Data (Large Files - Keep Locally)
 docs/examples/kgrag/.env
+docs/examples/kgrag/dataset/*.jsonl.bz2
+docs/examples/kgrag/dataset/movie/*.json
+docs/examples/kgrag/dataset/movie/*.bz2
+docs/examples/kgrag/output/
+docs/examples/kgrag/data/
