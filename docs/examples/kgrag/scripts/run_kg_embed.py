@@ -578,13 +578,6 @@ Examples:
         )
         session = create_session(model_id="gpt-4o-mini")
 
-        # Create embedder
-        config = EmbeddingConfig(
-            model=args.model,
-            dimension=args.dimension,
-            batch_size=args.batch_size,
-        )
-
         embedder = KGEmbedder(
             session=session,
             model=args.model,

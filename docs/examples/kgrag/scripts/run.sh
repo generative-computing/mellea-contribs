@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # Change to the script's directory to ensure correct module paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -29,10 +30,31 @@ echo "KG Base directory: $KG_BASE_DIRECTORY"
 echo "Dataset directory: $KGRAG_ROOT/dataset"
 echo "=================================================="
 
+# Step 0: Create tiny dataset
+export MOVIE_DATASET="$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2"
+export TINY_DATASET="$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2"
+
+
+if [ ! -f "$TINY_DATASET" ]; then
+  if [ ! -f "$MOVIE_DATASET" ]; then
+    echo "⚠ No dataset found for KG update"
+    echo "  To enable: place crag_movie_dev.jsonl.bz2 or crag_movie_tiny.jsonl.bz2 in dataset/"
+    exit
+  else
+    echo "Step 0: Creating tiny dataset for testing"
+    python create_tiny_dataset.py \
+        --num-docs 10 \
+        --input "$MOVIE_DATASET" \
+        --output "$TINY_DATASET"
+      echo "✓ Knowledge Graph updated with documents"
+  fi
+else
+    echo " Find existing tiny dataset. Skipping step 0"
+fi
 # Step 1: Load predefined movie data into KG
 echo ""
 echo "Step 1: Loading predefined movie database into KG..."
-python run_kg_preprocess.py \
+uv run --with mellea-contribs[kg] run_kg_preprocess.py \
   --data-dir ../dataset/movie \
   --neo4j-uri "$NEO4J_URI" \
   --neo4j-user "$NEO4J_USER" \
@@ -43,7 +65,7 @@ echo "✓ Movie database loaded into Neo4j"
 # Step 2: Run KG embedding
 echo ""
 echo "Step 2: Running KG embedding on loaded entities..."
-python run_kg_embed.py \
+uv run --with mellea-contribs[kg] run_kg_embed.py \
   --neo4j-uri "$NEO4J_URI" \
   --neo4j-user "$NEO4J_USER" \
   --neo4j-password "$NEO4J_PASSWORD" \
@@ -55,27 +77,15 @@ echo ""
 echo "Step 3: Updating Knowledge Graph with documents..."
 
 # Check if tiny dataset exists (for quick testing)
-if [ -f "$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2" ]; then
-  python run_kg_update.py \
-    --dataset "$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2" \
-    --domain movie \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD" \
-    --num-workers 4 > "$KGRAG_ROOT/output/update_stats.json"
-  echo "✓ Knowledge Graph updated with documents"
-elif [ -f "$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2" ]; then
-  python run_kg_update.py \
-    --dataset "$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2" \
-    --domain movie \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD" > "$KGRAG_ROOT/output/update_stats.json"
-  echo "✓ Knowledge Graph updated with documents"
-else
-  echo "⚠ No dataset found for KG update (optional step)"
-  echo "  To enable: place crag_movie_dev.jsonl.bz2 or crag_movie_tiny.jsonl.bz2 in dataset/"
-fi
+uv run --with mellea-contribs[kg] run_kg_update.py \
+  --dataset "$TINY_DATASET" \
+  --domain movie \
+  --neo4j-uri "$NEO4J_URI" \
+  --neo4j-user "$NEO4J_USER" \
+  --neo4j-password "$NEO4J_PASSWORD" \
+  --num-workers 4 > "$KGRAG_ROOT/output/update_stats.json"
+echo "✓ Knowledge Graph updated with documents"
+
 
 # Step 4: Verify KG is complete
 echo ""
