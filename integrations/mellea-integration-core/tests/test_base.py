@@ -1,10 +1,20 @@
 """Tests for MelleaIntegrationBase."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from mellea_integration import BaseMessageConverter, MelleaIntegrationBase
+
+
+# Mock SamplingResult class for testing
+class MockSamplingResult:
+    """Mock SamplingResult class to simulate mellea.stdlib.sampling.SamplingResult."""
+
+    def __init__(self, success, result=None, sample_generations=None):
+        self.success = success
+        self.result = result
+        self.sample_generations = sample_generations or []
 
 
 class MockMessageConverter(BaseMessageConverter):
@@ -115,29 +125,32 @@ async def test_agenerate_with_mellea_instruct(integration, mock_session):
     mock_session.achat.assert_not_called()
 
 
+@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_success(integration):
     """Test handling successful sampling results."""
     mock_result = Mock(content="Success")
-    mock_response = Mock(success=True, result=mock_result)
+    mock_response = MockSamplingResult(success=True, result=mock_result)
 
     result = integration._handle_sampling_results(mock_response)
 
     assert result == mock_result
 
 
+@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_failure_with_samples(integration):
     """Test handling failed sampling with available samples."""
     mock_sample = Mock(content="Sample")
-    mock_response = Mock(success=False, result=None, sample_generations=[mock_sample])
+    mock_response = MockSamplingResult(success=False, result=None, sample_generations=[mock_sample])
 
     result = integration._handle_sampling_results(mock_response)
 
     assert result == mock_sample
 
 
+@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_failure_no_samples(integration):
     """Test handling failed sampling without samples raises error."""
-    mock_response = Mock(success=False, result=None, sample_generations=[])
+    mock_response = MockSamplingResult(success=False, result=None, sample_generations=[])
 
     with pytest.raises(ValueError, match="No samples generated"):
         integration._handle_sampling_results(mock_response)

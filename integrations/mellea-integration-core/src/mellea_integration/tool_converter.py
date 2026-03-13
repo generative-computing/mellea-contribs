@@ -1,6 +1,7 @@
 """Tool conversion utilities for Mellea integrations."""
 
 import ast
+import logging
 import re
 from typing import Any
 
@@ -9,6 +10,8 @@ try:
 except ImportError:
     # Fallback for type hints if mellea is not installed
     MelleaTool = Any  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 
 class BaseToolConverter:
@@ -41,9 +44,13 @@ class BaseToolConverter:
         if hasattr(tool, "args_schema") and tool.args_schema:
             try:
                 schema["function"]["parameters"] = tool.args_schema.schema()
-            except Exception:
+            except Exception as e:
                 # If schema extraction fails, use empty dict
-                pass
+                logger.warning(
+                    "Failed to extract schema from tool '%s': %s",
+                    schema["function"]["name"],
+                    str(e),
+                )
 
         return schema
 
