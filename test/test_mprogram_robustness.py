@@ -24,10 +24,7 @@ import yaml
 from pathlib import Path
 
 from mellea import start_session
-try:
-    from mellea.backends.types import ModelOption
-except ImportError:
-    from mellea.backends import ModelOption
+from mellea.backends import ModelOption
 from mellea_contribs.tools.benchdrift_runner import (
     run_benchdrift_pipeline,
     analyze_robustness,

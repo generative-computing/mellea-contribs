@@ -20,8 +20,8 @@ When should an agent use it?
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from mellea.backends.types import ModelOption
-from mellea.stdlib.requirement import req, simple_validate
+from mellea.backends import ModelOption
+from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 
 TOP_K_CACHE: dict[str, Any] = {}

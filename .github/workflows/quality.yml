@@ -27,8 +27,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
       # TODO: Enable pre-commit once code quality issues are fixed
       # - name: pre-commit cache key
       #   run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> "$GITHUB_ENV"
@@ -37,7 +35,7 @@ jobs:
       #     path: ~/.cache/pre-commit
       #     key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Install dependencies
-        run: uv sync --frozen --all-extras --group dev
+        run: uv sync --all-extras --group dev
       # - name: Check style and run tests
       #   run: pre-commit run --all-files
       # - name: Send failure message pre-commit

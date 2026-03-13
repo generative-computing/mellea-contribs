@@ -5,8 +5,8 @@ from urllib.parse import parse_qs, urljoin, urlparse
 import requests
 from citeurl import Citator
 from eyecite import get_citations
-from mellea.stdlib.base import Context
-from mellea.stdlib.requirement import Requirement, ValidationResult
+from mellea.stdlib.context import Context
+from mellea.stdlib.requirements import Requirement, ValidationResult
 from playwright.sync_api import sync_playwright
 
 # region citation_exists helpers

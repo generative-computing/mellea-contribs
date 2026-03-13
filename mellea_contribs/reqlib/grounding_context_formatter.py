@@ -19,7 +19,7 @@ When should an agent use it?
 import json
 from typing import Any
 
-from mellea.stdlib.base import Component, TemplateRepresentation
+from mellea.stdlib.components import Component, TemplateRepresentation
 
 
 class GroundingContextFormatter(Component):

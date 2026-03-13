@@ -1,5 +1,5 @@
 from mellea_contribs.reqlib.grounding_context_formatter import GroundingContextFormatter
-from mellea.stdlib.base import TemplateRepresentation
+from mellea.stdlib.components import TemplateRepresentation
 
 
 def print_header(title):
