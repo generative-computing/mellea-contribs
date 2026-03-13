@@ -8,6 +8,7 @@ This integration allows CrewAI users to leverage Mellea's structured approach to
 
 - ✅ **Standard LLM Calls**: Synchronous and asynchronous generation
 - ✅ **Requirements & Validation**: Mellea's requirements and sampling strategies
+- ✅ **Task Guardrails**: Convert Mellea requirements to CrewAI guardrails
 - ✅ **Tool Calling**: Function calling with CrewAI agents
 - ✅ **Multi-Backend**: Works with Ollama, OpenAI, WatsonX, and more
 - ✅ **Event Integration**: Full CrewAI event bus support
@@ -124,6 +125,45 @@ llm = MelleaLLM(
         req("Length between 100-500 characters",
             validation_fn=simple_validate(lambda x: 100 <= len(x) <= 500))
     ]
+
+### Task Guardrails with Mellea Requirements
+
+Convert Mellea requirements into CrewAI-compatible guardrails for task output validation:
+
+```python
+from mellea.stdlib.requirements import simple_validate
+from mellea_crewai import create_guardrail, create_guardrails, word_count_guardrail
+
+# Option 1: Convert Mellea requirement to guardrail
+word_count_req = simple_validate(
+    lambda x: 50 <= len(x.split()) <= 150,
+    "Must be between 50-150 words"
+)
+guardrail = create_guardrail(word_count_req)
+
+# Option 2: Use helper functions
+guardrails = [
+    word_count_guardrail(min_words=50, max_words=150),
+    contains_keywords_guardrail(["AI", "technology"]),
+]
+
+# Use in task with automatic retry on validation failure
+task = Task(
+    description="Write about AI",
+    expected_output="AI article",
+    agent=agent,
+    guardrails=guardrails,
+    guardrail_max_retries=3  # Retry up to 3 times if validation fails
+)
+```
+
+Available helper functions:
+- `word_count_guardrail(min_words, max_words)`: Validate word count
+- `contains_keywords_guardrail(keywords, case_sensitive)`: Check for required keywords
+- `no_profanity_guardrail(profanity_list)`: Filter inappropriate content
+- `format_output_guardrail(strip_whitespace, capitalize_first)`: Format output
+
+See [`examples/validator_usage_example.py`](examples/validator_usage_example.py) for complete examples.
 )
 ```
 
@@ -234,23 +274,29 @@ integrations/crewai/
 ├── README.md                          # This file
 ├── INTEGRATION_PLAN.md                # Detailed integration plan
 ├── GETTING_STARTED.md                 # Step-by-step guide
+├── VALIDATORS_IMPLEMENTATION_PLAN.md  # Validators implementation plan
 ├── pyproject.toml                     # Package configuration
 ├── src/
 │   └── mellea_crewai/
 │       ├── __init__.py               # Package exports
 │       ├── llm.py                    # MelleaLLM class (uses MelleaIntegrationBase)
 │       ├── message_conversion.py     # CrewAIMessageConverter
-│       └── tool_conversion.py        # CrewAIToolConverter
+│       ├── tool_conversion.py        # CrewAIToolConverter
+│       └── validators.py             # Task guardrail validators
 ├── tests/
 │   ├── test_llm.py                   # Core LLM tests
 │   ├── test_message_conversion.py    # Message conversion tests
 │   ├── test_tool_conversion.py       # Tool conversion tests
+│   ├── test_validators.py            # Validator tests
 │   ├── test_requirements.py          # Requirements feature tests
-│   └── test_sampling.py              # Sampling strategy tests
+│   ├── test_sampling.py              # Sampling strategy tests
+│   └── integration/
+│       └── test_validators_integration.py  # Validator integration tests
 └── examples/
     ├── basic_usage.py                # Simple agent example
     ├── tool_usage_example.py         # Tool calling example
     ├── requirements_example.py       # Requirements validation
+    ├── validator_usage_example.py    # Task guardrails with validators
     ├── async_usage_example.py        # Async/concurrent execution
     ├── multi_agent_crew_example.py   # Multi-agent crew collaboration
     └── streaming_example.py          # Streaming responses
@@ -379,6 +425,7 @@ See the `examples/` directory for complete examples:
 - [`basic_usage.py`](examples/basic_usage.py): Simple agent with Mellea
 - [`tool_usage_example.py`](examples/tool_usage_example.py): Tool calling with custom tools
 - [`requirements_example.py`](examples/requirements_example.py): Requirements validation
+- [`validator_usage_example.py`](examples/validator_usage_example.py): Task guardrails with validators
 - [`async_usage_example.py`](examples/async_usage_example.py): Async/concurrent execution
 - [`multi_agent_crew_example.py`](examples/multi_agent_crew_example.py): Multi-agent crew collaboration
 - [`streaming_example.py`](examples/streaming_example.py): Streaming responses (backend-dependent)
