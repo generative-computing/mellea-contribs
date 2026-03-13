@@ -137,6 +137,19 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
 
         self._return_sampling_results = return_sampling_results
 
+    def _get_tools_from_source(self, source: Any) -> list[Any] | None:
+        """Extract tools from a task or agent source if available.
+
+        Args:
+            source: A task or agent object that may have tools
+
+        Returns:
+            List of tools if available, None otherwise
+        """
+        if source and hasattr(source, "tools") and source.tools:
+            return source.tools
+        return None
+
     def call(
         self,
         messages: str | list["LLMMessage"],
@@ -234,11 +247,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                     # WORKAROUND: CrewAI doesn't always pass available_functions, so we build it
                     if not available_functions:
                         available_functions = {}
-                        tools_source = None
-                        if from_task and hasattr(from_task, "tools") and from_task.tools:
-                            tools_source = from_task.tools
-                        elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
-                            tools_source = from_agent.tools
+                        tools_source = self._get_tools_from_source(
+                            from_task
+                        ) or self._get_tools_from_source(from_agent)
 
                         if tools_source:
                             for tool in tools_source:
@@ -419,11 +430,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                     # WORKAROUND: CrewAI doesn't always pass available_functions, so we build it
                     if not available_functions:
                         available_functions = {}
-                        tools_source = None
-                        if from_task and hasattr(from_task, "tools") and from_task.tools:
-                            tools_source = from_task.tools
-                        elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
-                            tools_source = from_agent.tools
+                        tools_source = self._get_tools_from_source(
+                            from_task
+                        ) or self._get_tools_from_source(from_agent)
 
                         if tools_source:
                             for tool in tools_source:
