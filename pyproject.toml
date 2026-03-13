@@ -1,6 +1,6 @@
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "mellea-contribs"
@@ -26,6 +26,9 @@ dependencies = [
   "playwright",
   "markdown",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mellea_contribs"]
 
 [project.optional-dependencies]
 robustness = [
@@ -145,5 +148,16 @@ parser_angular_allowed_types = "build,chore,ci,docs,feat,fix,perf,style,refactor
 parser_angular_minor_types = "release"
 parser_angular_patch_types = "fix,perf,feat"
 
+[tool.uv]
+# Define workspace members
+[tool.uv.workspace]
+members = [
+    ".",
+    "integrations/mellea-integration-core",
+    "integrations/crewai",
+]
+
 [tool.uv.sources]
 benchdrift = { git = "https://github.com/IBM/BenchDrift.git", rev = "95db1c95b6abbc3b9f9bc177f6a7933c555c7175" }
+mellea-integration-core = { workspace = true }
+mellea-crewai = { workspace = true }

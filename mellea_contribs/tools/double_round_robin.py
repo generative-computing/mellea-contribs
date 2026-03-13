@@ -17,14 +17,14 @@ When should an agent use it?
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from mellea.backends.types import ModelOption
-from mellea.helpers.fancy_logger import FancyLogger
-from mellea.stdlib.requirement import req, simple_validate
+from mellea.backends import ModelOption
+from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 
-logger = FancyLogger.get_logger()
+logger = logging.getLogger(__name__)
 
 DRR_CACHE: dict[str, Any] = {}
 

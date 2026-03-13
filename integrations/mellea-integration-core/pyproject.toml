@@ -23,6 +23,9 @@ dependencies = [
     "mellea>=0.3.0",
 ]
 
+[tool.uv]
+# This package is part of the workspace
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",

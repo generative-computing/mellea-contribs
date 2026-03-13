@@ -2,7 +2,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from mellea.stdlib.base import Context
+from mellea.stdlib.context import Context
 from mellea_contribs.reqlib.citation_exists import *
 
 
