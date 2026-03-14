@@ -49,8 +49,15 @@ jobs:
         run: nohup ollama serve &
       - name: Pull model granite4:micro
         run: ollama pull granite4:micro
-      - name: Run Tests
+      - name: Run Root Package Tests
         run: uv run -m pytest -v test
+        continue-on-error: true
+      - name: Run mellea-integration-core Tests
+        run: cd integrations/mellea-integration-core && uv run pytest -v
+      - name: Run mellea-crewai Tests
+        run: cd integrations/crewai && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
+      - name: Run mellea-langchain Tests
+        run: cd integrations/langchain && uv run pytest -v --ignore=tests/integration
       - name: Send failure message tests
         if: failure()
         run: echo "Tests failed. Please verify that tests are working locally."

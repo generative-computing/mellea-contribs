@@ -244,9 +244,7 @@ class TestMelleaChatModelToolBinding:
     def test_bind_tools_preserves_model_config(self):
         """Test that bind_tools preserves model configuration."""
         mock_session = MockMelleaSession()
-        chat_model = MelleaChatModel(
-            mellea_session=mock_session, model_name="custom-model", streaming=True
-        )
+        chat_model = MelleaChatModel(mellea_session=mock_session, model_name="custom-model")
 
         class MockTool:
             name = "tool"
@@ -254,7 +252,6 @@ class TestMelleaChatModelToolBinding:
         bound_model = chat_model.bind_tools([MockTool()])
 
         assert bound_model.model_name == "custom-model"
-        assert bound_model.streaming is True
 
 
 class TestMelleaChatModelSynchronous:

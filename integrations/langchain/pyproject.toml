@@ -24,10 +24,13 @@ classifiers = [
 
 dependencies = [
     "mellea>=0.3.0",
-    "mellea-integration-core>=0.1.0",
+    "mellea-integration-core",
     "langchain-core>=0.3.0",
     "pydantic>=2.0.0",
 ]
+
+[tool.uv.sources]
+mellea-integration-core = { workspace = true }
 
 [project.optional-dependencies]
 dev = [
