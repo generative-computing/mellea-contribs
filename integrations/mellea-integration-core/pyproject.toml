@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mellea>=0.3.0",
+    "mellea>=0.3.2",
 ]
 
 [project.optional-dependencies]
