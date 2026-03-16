@@ -53,11 +53,11 @@ jobs:
         run: uv run -m pytest -v test
         continue-on-error: true
       - name: Run mellea-integration-core Tests
-        run: cd integrations/mellea-integration-core && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v
+        run: cd integrations/mellea-integration-core && uv sync && uv run pytest -v
       - name: Run mellea-crewai Tests
         run: cd integrations/crewai && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
       - name: Run mellea-langchain Tests
-        run: cd integrations/langchain && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
+        run: cd integrations/langchain && uv sync && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
       - name: Send failure message tests
         if: failure()
         run: echo "Tests failed. Please verify that tests are working locally."
