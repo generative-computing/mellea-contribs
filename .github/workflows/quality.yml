@@ -55,9 +55,9 @@ jobs:
       - name: Run mellea-integration-core Tests
         run: cd integrations/mellea-integration-core && uv sync && uv pip install git+https://github.com/generative-computing/mellea.git@main && PYTHONPATH=src uv run pytest -v
       - name: Run mellea-crewai Tests
-        run: cd integrations/crewai && uv sync && uv pip install git+https://github.com/generative-computing/mellea.git@main && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
+        run: cd integrations/crewai && uv sync && uv pip install git+https://github.com/generative-computing/mellea.git@main && uv pip install ../mellea-integration-core && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
       - name: Run mellea-langchain Tests
-        run: cd integrations/langchain && uv sync && uv pip install git+https://github.com/generative-computing/mellea.git@main && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
+        run: cd integrations/langchain && uv sync && uv pip install git+https://github.com/generative-computing/mellea.git@main && uv pip install ../mellea-integration-core && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
       - name: Send failure message tests
         if: failure()
         run: echo "Tests failed. Please verify that tests are working locally."
