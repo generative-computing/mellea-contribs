@@ -58,6 +58,8 @@ jobs:
         run: cd integrations/crewai && uv pip install git+https://github.com/generative-computing/mellea.git@main && uv pip install ../mellea-integration-core && uv pip install crewai pydantic pytest pytest-asyncio pytest-cov && PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v --ignore=tests/integration
       - name: Run mellea-langchain Tests
         run: cd integrations/langchain && uv pip install git+https://github.com/generative-computing/mellea.git@main && uv pip install ../mellea-integration-core && uv pip install langchain-core pydantic pytest pytest-asyncio pytest-cov && PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v --ignore=tests/integration
+      - name: Run mellea-dspy Tests
+        run: cd integrations/dspy && uv pip install git+https://github.com/generative-computing/mellea.git@main && uv pip install ../mellea-integration-core && uv pip install dspy pytest pytest-asyncio pytest-cov && PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v --ignore=tests/integration
       - name: Send failure message tests
         if: failure()
         run: echo "Tests failed. Please verify that tests are working locally."
