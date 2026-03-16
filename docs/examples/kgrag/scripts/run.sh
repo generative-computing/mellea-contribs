@@ -13,38 +13,54 @@ KGRAG_ROOT="$(cd .. && pwd)"
 # ---------------------------------------------------------------------------
 usage() {
   cat <<EOF
-Usage: $0 [STEPS...]
+Usage: $0 [--tiny|--full] [STEPS...]
 
 Run the full KG-RAG pipeline or individual steps.
 
-STEPS (space-separated, default: all):
-  0   Create tiny dataset
+Dataset mode (default: --tiny):
+  --tiny   Use the tiny dataset (10 docs); step 0 creates it if missing.
+  --full   Use the full dataset (crag_movie_dev.jsonl.bz2); skips step 0.
+
+STEPS (space-separated, default: all for the chosen mode):
+  0   Create tiny dataset       (tiny mode only)
   1   Load movie database into Neo4j
   2   Compute entity embeddings
   3   Update KG with documents
-  4   Run QA on tiny dataset
+  4   Run QA
+  5   Evaluate QA results (LLM judge)
 
 Examples:
-  $0              # run all steps
-  $0 1 2          # run only steps 1 and 2
-  $0 4            # run only the QA step
+  $0                  # tiny mode, run all steps
+  $0 --full           # full dataset, run steps 1-5
+  $0 --tiny 3 4 5     # tiny mode, run only steps 3-5
+  $0 --full 4 5       # full dataset, run only steps 4-5
+  $0 1 2              # tiny mode, run only steps 1 and 2
 EOF
   exit 0
 }
 
-# Parse arguments — collect requested steps (or default to all)
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+USE_TINY=true
 STEPS=()
 for arg in "$@"; do
   case "$arg" in
     -h|--help) usage ;;
-    [0-4]) STEPS+=("$arg") ;;
+    --tiny) USE_TINY=true ;;
+    --full) USE_TINY=false ;;
+    [0-5]) STEPS+=("$arg") ;;
     *) echo "Unknown argument: $arg"; usage ;;
   esac
 done
 
-# If no steps given, run all
+# Default steps based on mode
 if [ ${#STEPS[@]} -eq 0 ]; then
-  STEPS=(0 1 2 3 4)
+  if $USE_TINY; then
+    STEPS=(0 1 2 3 4 5)
+  else
+    STEPS=(1 2 3 4 5)
+  fi
 fi
 
 # Helper: check if a step is requested
@@ -73,6 +89,15 @@ export OTEL_SDK_DISABLED=true
 
 export MOVIE_DATASET="$KGRAG_ROOT/dataset/crag_movie_dev.jsonl.bz2"
 export TINY_DATASET="$KGRAG_ROOT/dataset/crag_movie_tiny.jsonl.bz2"
+
+# Set the active dataset based on mode
+if $USE_TINY; then
+  ACTIVE_DATASET="$TINY_DATASET"
+  DATASET_LABEL="tiny"
+else
+  ACTIVE_DATASET="$MOVIE_DATASET"
+  DATASET_LABEL="full"
+fi
 
 # LLM session — set API_BASE / API_KEY / MODEL_NAME before running this script:
 #   export API_BASE=https://your-rits-endpoint/v1
@@ -104,15 +129,18 @@ echo "KG-RAG Pipeline Execution"
 echo "=================================================="
 echo "Working directory: $(pwd)"
 echo "KG Base directory: $KG_BASE_DIRECTORY"
-echo "Dataset directory: $KGRAG_ROOT/dataset"
+echo "Dataset mode:      $DATASET_LABEL ($ACTIVE_DATASET)"
 echo "Steps to run:      ${STEPS[*]}"
 echo "=================================================="
 
 # ---------------------------------------------------------------------------
-# Step 0: Create tiny dataset
+# Step 0: Create tiny dataset (tiny mode only)
 # ---------------------------------------------------------------------------
 if run_step 0; then
-  if [ ! -f "$TINY_DATASET" ]; then
+  if ! $USE_TINY; then
+    echo ""
+    echo "Step 0: Skipped — running in full dataset mode"
+  elif [ ! -f "$TINY_DATASET" ]; then
     if [ ! -f "$MOVIE_DATASET" ]; then
       echo "⚠ No dataset found for KG update"
       echo "  To enable: place crag_movie_dev.jsonl.bz2 or crag_movie_tiny.jsonl.bz2 in dataset/"
@@ -166,9 +194,9 @@ fi
 # ---------------------------------------------------------------------------
 if run_step 3; then
   echo ""
-  echo "Step 3: Updating Knowledge Graph with documents..."
+  echo "Step 3: Updating Knowledge Graph with documents ($DATASET_LABEL)..."
   uv run --with mellea-contribs[kg] run_kg_update.py \
-    --dataset "$TINY_DATASET" \
+    --dataset "$ACTIVE_DATASET" \
     --domain movie \
     --neo4j-uri "$NEO4J_URI" \
     --neo4j-user "$NEO4J_USER" \
@@ -179,13 +207,13 @@ if run_step 3; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4: Run QA on tiny dataset
+# Step 4: Run QA
 # ---------------------------------------------------------------------------
 if run_step 4; then
   echo ""
-  echo "Step 4: Running QA on tiny dataset..."
+  echo "Step 4: Running QA ($DATASET_LABEL)..."
   uv run --with mellea-contribs[kg] run_qa.py \
-    --dataset "$TINY_DATASET" \
+    --dataset "$ACTIVE_DATASET" \
     --output "$KGRAG_ROOT/output/qa_results.jsonl" \
     --progress "$KGRAG_ROOT/output/qa_progress.json" \
     --reset-progress \
@@ -200,6 +228,19 @@ if run_step 4; then
 fi
 
 # ---------------------------------------------------------------------------
+# Step 5: Evaluate QA results
+# ---------------------------------------------------------------------------
+if run_step 5; then
+  echo ""
+  echo "Step 5: Evaluating QA results with LLM judge..."
+  uv run --with mellea-contribs[kg] run_eval.py \
+    --input "$KGRAG_ROOT/output/qa_results.jsonl" \
+    --output "$KGRAG_ROOT/output/eval_results.json" \
+    --metrics "$KGRAG_ROOT/output/eval_metrics.json"
+  echo "✓ Evaluation completed"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
@@ -207,6 +248,7 @@ echo "=================================================="
 echo "✅ KG-RAG Pipeline Execution Completed!"
 echo "=================================================="
 echo "Steps run: ${STEPS[*]}"
+echo "Dataset:   $DATASET_LABEL ($ACTIVE_DATASET)"
 echo ""
 echo "Neo4j is running at: $NEO4J_URI"
 echo "Logs saved to: $KGRAG_ROOT/output/"
@@ -215,4 +257,6 @@ echo "  - embedding_stats.json   (step 2)"
 echo "  - update_stats.json      (step 3)"
 echo "  - qa_results.jsonl       (step 4)"
 echo "  - qa_progress.json       (step 4)"
+echo "  - eval_results.json      (step 5)"
+echo "  - eval_metrics.json      (step 5)"
 echo "=================================================="

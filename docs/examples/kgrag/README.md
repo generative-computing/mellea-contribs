@@ -4,18 +4,18 @@ A complete example system demonstrating how to build intelligent retrieval-augme
 
 ## Overview
 
-This example demonstrates a three-stage KG-RAG pipeline:
+This example demonstrates a five-stage KG-RAG pipeline:
 
-1. **Preprocessing**: Load predefined structured data into Neo4j knowledge graph
+1. **Preprocessing**: Load predefined structured data into a Neo4j knowledge graph
 2. **Embedding**: Generate and store vector embeddings for entities and relations
 3. **Updating**: Process documents to extract and merge new entities/relations into the KG
-4. **QA** (optional): Answer questions using multi-hop reasoning over the KG
+4. **QA**: Answer questions using multi-hop Think-on-Graph reasoning over the KG
+5. **Evaluation**: Score predictions with an LLM judge and compute CRAG metrics
 
 **Tech Stack**:
 - **Neo4j**: Graph database (localhost:7687)
 - **RITS**: Cloud LLM service (llama-3-3-70b-instruct model)
-- **LiteLLM**: LLM routing and API abstraction
-- **Mellea**: LLM orchestration framework
+- **Mellea**: LLM orchestration framework with `OpenAIBackend`
 
 **Domain Example:** Movie & Entertainment domain with 64K+ movies, 373K+ persons, and 1M+ relations.
 
@@ -23,22 +23,24 @@ This example demonstrates a three-stage KG-RAG pipeline:
 
 ```
 docs/examples/kgrag/
-├── README.md (this file)
+├── README.md                          (this file)
+├── .env_template                      # Copy to .env and fill in credentials
+├── dataset/
+│   └── README.md                      # Dataset acquisition instructions
 ├── models/
-│   └── movie_domain_models.py     # Movie entity classes (MovieEntity, PersonEntity, AwardEntity)
+│   └── movie_domain_models.py         # Movie entity classes (MovieEntity, PersonEntity, AwardEntity)
 ├── preprocessor/
-│   └── movie_preprocessor.py      # Domain-specific preprocessing (extract entities/relations from movie text)
+│   └── movie_preprocessor.py          # Domain-specific preprocessing
 ├── rep/
-│   └── movie_rep.py               # Movie-specific representations (formatting for LLM prompts)
+│   └── movie_rep.py                   # Movie-specific representations for LLM prompts
 └── scripts/
-    ├── create_demo_dataset.py     # Generate 20 synthetic movie Q&A pairs
-    ├── create_tiny_dataset.py     # Generate 5 Q&A pairs (quick testing)
-    ├── create_truncated_dataset.py # Truncate existing dataset to N examples
-    ├── run_kg_preprocess.py       # Extract entities/relations from documents
-    ├── run_kg_embed.py            # Generate embeddings for entities
-    ├── run_kg_update.py           # Update KG with new documents
-    ├── run_qa.py                  # Run QA retrieval over questions
-    └── run_eval.py                # Evaluate QA results with metrics
+    ├── run.sh                         # Pipeline orchestration (all 5 steps)
+    ├── create_tiny_dataset.py         # Slice a small dataset for testing
+    ├── run_kg_preprocess.py           # Step 1: Load predefined data into Neo4j
+    ├── run_kg_embed.py                # Step 2: Generate embeddings for entities
+    ├── run_kg_update.py               # Step 3: Update KG with new documents
+    ├── run_qa.py                      # Step 4: Run QA retrieval over questions
+    └── run_eval.py                    # Step 5: Evaluate QA results (LLM judge + CRAG metrics)
 ```
 
 ## Quick Start
@@ -48,68 +50,83 @@ docs/examples/kgrag/
 1. **Start Neo4j Server**
    ```bash
    # Neo4j should be running on localhost:7687
-   # Verify connection:
    docker ps | grep neo4j  # If using Docker
-   # OR check neo4j process
    ```
 
-2. **Configure RITS LLM Service**
+2. **Configure credentials**
    ```bash
-   # Copy environment template
+   cd docs/examples/kgrag
    cp .env_template .env
-
-   # Edit .env and add your RITS API key:
-   # RITS_API_KEY=your_actual_rits_api_key
+   # Edit .env and set: API_BASE, RITS_API_KEY, MODEL_NAME
    ```
 
-3. **Verify Setup**
-   ```bash
-   cd scripts
-   # Test Neo4j connection
-   python -c "from neo4j import GraphDatabase; driver = GraphDatabase.driver('bolt://localhost:7687', auth=('neo4j', 'password')); print('✓ Neo4j connected')"
-   ```
+3. **Place dataset files** in `dataset/` (see `dataset/README.md` for instructions)
 
-### Complete Pipeline (3-Stage)
+### Running the Pipeline
 
-Run the full pipeline with `run.sh`:
+Use `run.sh` to run the full pipeline or individual steps.
+
+#### Dataset mode
+
+| Flag | Description |
+|------|-------------|
+| `--tiny` (default) | Uses the tiny test dataset (~10 docs). Step 0 creates it if missing. |
+| `--full` | Uses the full dataset (`crag_movie_dev.jsonl.bz2`). Skips step 0. |
 
 ```bash
 cd scripts
+
+# Run all steps on the tiny dataset (default)
 bash run.sh
+
+# Run all steps on the full dataset
+bash run.sh --full
+
+# Run specific steps only
+bash run.sh --tiny 3 4 5     # update + QA + eval on tiny set
+bash run.sh --full 4 5       # QA + eval on full set
+bash run.sh 1 2              # reload Neo4j + recompute embeddings
 ```
 
-This orchestrates:
-1. **Step 1**: Preprocess - Load 64K movies + 373K persons into Neo4j
-2. **Step 2**: Embed - Generate and store vector embeddings
-3. **Step 3**: Update - Process documents and merge entities (if dataset available)
+#### Step reference
 
-Output files:
-- `../output/preprocess_stats.json` - Preprocessing statistics
-- `../output/embedding_stats.json` - Embedding statistics
-- `../output/update_stats.json` - Update statistics (if documents processed)
+| Step | Script | Description |
+|------|--------|-------------|
+| 0 | `create_tiny_dataset.py` | Create tiny dataset from full set (tiny mode only) |
+| 1 | `run_kg_preprocess.py` | Load 64K movies + 373K persons into Neo4j |
+| 2 | `run_kg_embed.py` | Compute and store entity/relation embeddings |
+| 3 | `run_kg_update.py` | Extract entities from documents and merge into KG |
+| 4 | `run_qa.py` | Answer questions via Think-on-Graph retrieval |
+| 5 | `run_eval.py` | Score predictions with LLM judge; compute CRAG metrics |
 
-### Individual Pipeline Steps
+Output files (written to `output/`):
 
-#### Step 1: Preprocessing (Load Predefined Data)
+| File | Produced by |
+|------|-------------|
+| `preprocess_stats.json` | Step 1 |
+| `embedding_stats.json` | Step 2 |
+| `update_stats.json` | Step 3 |
+| `qa_results.jsonl` | Step 4 |
+| `qa_progress.json` | Step 4 (resumption state) |
+| `eval_results.json` | Step 5 (annotated per-item results) |
+| `eval_metrics.json` | Step 5 (aggregate CRAG metrics) |
 
-Load movie and person data into Neo4j:
+## Individual Scripts
+
+### Step 1: Preprocessing
+
+Load predefined movie/person data into Neo4j:
 
 ```bash
-# Load predefined movie database (64K movies, 373K persons)
 python run_kg_preprocess.py \
   --data-dir ../dataset/movie \
   --neo4j-uri bolt://localhost:7687 \
   --neo4j-user neo4j \
   --neo4j-password password \
   --batch-size 500
-
-# Or test with mock backend (no database required)
-python run_kg_preprocess.py \
-  --data-dir ../dataset/movie \
-  --mock
 ```
 
-Output: `../output/preprocess_stats.json` with statistics:
+Output (`preprocess_stats.json`):
 ```json
 {
   "total_documents": 1,
@@ -119,564 +136,258 @@ Output: `../output/preprocess_stats.json` with statistics:
 }
 ```
 
-#### Step 2: Embedding (Generate Vector Embeddings)
+### Step 2: Embedding
 
 Compute embeddings for entities and relations:
 
 ```bash
-# Generate embeddings using default model (text-embedding-3-small)
 python run_kg_embed.py \
   --neo4j-uri bolt://localhost:7687 \
   --neo4j-user neo4j \
   --neo4j-password password \
   --batch-size 100
-
-# With custom embedding model
-python run_kg_embed.py \
-  --model text-embedding-3-large \
-  --dimension 3072 \
-  --batch-size 50
 ```
 
-Output: `../output/embedding_stats.json` with embedding statistics
+Set `EMB_API_BASE` / `EMB_MODEL_NAME` in `.env` to use a custom embedding endpoint.
 
-#### Step 3: Update (Process Documents & Extract Entities)
+### Step 3: KG Update
 
-Update KG by processing new documents with RITS LLM:
+Extract entities/relations from documents and merge them into the KG:
 
 ```bash
-# Update with tiny dataset (for testing)
+# Tiny dataset (testing)
 python run_kg_update.py \
   --dataset ../dataset/crag_movie_tiny.jsonl.bz2 \
   --domain movie \
-  --neo4j-uri bolt://localhost:7687 \
-  --neo4j-user neo4j \
-  --neo4j-password password \
-  --num-workers 1 \
-  --extraction-loop-budget 3 \
-  --alignment-loop-budget 2
+  --num-workers 10
 
-# Or with full dataset
+# Full dataset
 python run_kg_update.py \
   --dataset ../dataset/crag_movie_dev.jsonl.bz2 \
   --domain movie \
   --num-workers 64
 ```
 
-Configuration via `.env`:
-- `API_BASE`: RITS endpoint
-- `MODEL_NAME`: Model to use (default: llama-3-3-70b-instruct)
-- `RITS_API_KEY`: RITS authentication
+LLM configuration is read from `.env` (`API_BASE`, `MODEL_NAME`, `RITS_API_KEY`).
 
-Output: `../output/update_stats.json` with update results
+### Step 4: QA
 
-## Domain-Specific Components
-
-### Movie Domain Models
-
-File: `models/movie_domain_models.py`
-
-Defines domain-specific entity classes:
-- `MovieEntity`: Movies with properties like genre, release_year, budget, box_office
-- `PersonEntity`: People (directors, actors) with birth_year, nationality
-- `AwardEntity`: Awards with category, year, ceremony
-
-Example usage:
-```python
-from models.movie_domain_models import MovieEntity, PersonEntity
-
-avatar = MovieEntity(
-    id="movie-1",
-    name="Avatar",
-    description="Science fiction epic film",
-    genre=["Science Fiction", "Epic"],
-    release_year=2009,
-    budget=237000000,
-    box_office=2923706026
-)
-
-cameron = PersonEntity(
-    id="person-1",
-    name="James Cameron",
-    birth_year=1954,
-    nationality="Canada"
-)
-```
-
-### Movie Domain Preprocessor
-
-File: `preprocessor/movie_preprocessor.py`
-
-Extends `KGPreprocessor` for movie domain:
-- Extracts movie, person, and award entities
-- Recognizes relations: DIRECTED, STARRED_IN, WON, NOMINATED_FOR
-- Movie-specific entity type hints for LLM
-- Post-processing to standardize entity types
-
-Example usage:
-```python
-from preprocessor.movie_preprocessor import MovieKGPreprocessor
-from mellea import start_session
-
-async def preprocess_movie_document():
-    session = start_session(backend_name="litellm", model_id="gpt-4o-mini")
-    backend = MockGraphBackend()
-
-    preprocessor = MovieKGPreprocessor(session=session, backend=backend)
-
-    result = await preprocessor.process_document(
-        doc_id="doc-1",
-        doc_text="""
-        Avatar was directed by James Cameron and released in 2009.
-        It stars Sam Worthington and Zoe Saldana.
-        The film won Best Cinematography and Best Art Direction at the Academy Awards.
-        """
-    )
-
-    print(f"Extracted {len(result.entities_extracted)} entities")
-    print(f"Extracted {len(result.relations_extracted)} relations")
-```
-
-### Movie Domain Representation
-
-File: `rep/movie_rep.py`
-
-Movie-specific utilities for formatting data for LLM consumption:
-- `movie_entity_to_text()`: Format movie entity as natural language
-- `person_entity_to_text()`: Format person entity
-- `format_movie_context()`: Format context for QA prompts
-- `movie_relation_to_text()`: Format relations for LLM
-
-Example usage:
-```python
-from rep.movie_rep import format_movie_context, movie_entity_to_text
-
-# Format entity
-movie_text = movie_entity_to_text(avatar_entity)
-# Output: "Avatar (2009) is a Science Fiction, Epic film directed by..."
-
-# Format context for QA
-context = format_movie_context(
-    entities=[avatar_entity, cameron_entity],
-    relations=[directed_relation],
-    question="Who directed Avatar?"
-)
-# Used to build LLM prompt with formatted context
-```
-
-## Complete Workflow Example
-
-Here's a complete end-to-end example with real Neo4j and RITS:
+Answer questions using Think-on-Graph multi-hop retrieval:
 
 ```bash
-#!/bin/bash
-set -e
-
-cd scripts
-
-# Prerequisite: .env configured with RITS credentials
-if [ ! -f ../.env ]; then
-    echo "Error: .env not found. Copy .env_template and configure RITS_API_KEY"
-    exit 1
-fi
-
-echo "========================================================"
-echo "KG-RAG Pipeline - Complete Workflow"
-echo "========================================================"
-
-# Step 1: Preprocess - Load predefined movie data
-echo ""
-echo "Step 1: Preprocessing - Load 64K movies + 373K persons into Neo4j"
-python run_kg_preprocess.py \
-    --data-dir ../dataset/movie \
-    --neo4j-uri bolt://localhost:7687 \
-    --neo4j-user neo4j \
-    --neo4j-password password \
-    --batch-size 500 \
-    > ../output/preprocess_stats.json
-echo "✓ Entities loaded and Neo4j database populated"
-
-# Step 2: Embedding - Generate embeddings
-echo ""
-echo "Step 2: Embedding - Generate entity/relation embeddings"
-python run_kg_embed.py \
-    --neo4j-uri bolt://localhost:7687 \
-    --neo4j-user neo4j \
-    --neo4j-password password \
-    --batch-size 100 \
-    > ../output/embedding_stats.json
-echo "✓ Embeddings computed and stored in Neo4j"
-
-# Step 3: Update - Process documents with RITS LLM
-echo ""
-echo "Step 3: Updating - Extract entities from documents using RITS"
-python run_kg_update.py \
-    --dataset ../dataset/crag_movie_tiny.jsonl.bz2 \
-    --domain movie \
-    --neo4j-uri bolt://localhost:7687 \
-    --neo4j-user neo4j \
-    --neo4j-password password \
-    --num-workers 2 \
-    > ../output/update_stats.json
-echo "✓ Documents processed and KG updated"
-
-echo ""
-echo "========================================================"
-echo "✅ Pipeline Complete!"
-echo "========================================================"
-echo "Output files:"
-echo "  - ../output/preprocess_stats.json"
-echo "  - ../output/embedding_stats.json"
-echo "  - ../output/update_stats.json"
-echo "========================================================"
+python run_qa.py \
+  --dataset ../dataset/crag_movie_tiny.jsonl.bz2 \
+  --output ../output/qa_results.jsonl \
+  --progress ../output/qa_progress.json \
+  --domain movie \
+  --routes 3 \
+  --width 30 \
+  --depth 3
 ```
 
-Or run the simplified `run.sh`:
-```bash
-cd scripts
-bash run.sh
+Key options:
+- `--routes N` — number of independent solving routes (default: 3)
+- `--width N` — max candidate relations per traversal step (default: 30)
+- `--depth N` — max traversal depth (default: 3)
+- `--reset-progress` — ignore previous progress and reprocess all questions
+- `--workers N` — parallel async workers (default: 1)
+
+Output JSONL format:
+```json
+{
+  "id": "q_0",
+  "query": "Who directed Inception?",
+  "predicted": "Christopher Nolan",
+  "answer": "Christopher Nolan",
+  "answer_aliases": ["Christopher Nolan", "Nolan"],
+  "elapsed_ms": 1234.5
+}
 ```
 
-## Using the Validation Suite
+### Step 5: Evaluation
 
-The `sun.sh` script at the project root validates all implementations end-to-end:
+Evaluate predictions using LLM judge + CRAG-style scoring:
 
 ```bash
-# Full validation (Phase 0-4)
-./sun.sh
+python run_eval.py \
+  --input ../output/qa_results.jsonl \
+  --output ../output/eval_results.json \
+  --metrics ../output/eval_metrics.json
 
-# Quick validation (skip slower tests)
-./sun.sh --quick
-
-# Unit tests only
-./sun.sh --unit-only
+# Skip LLM calls (fuzzy match only, for testing)
+python run_eval.py \
+  --input ../output/qa_results.jsonl \
+  --metrics ../output/eval_metrics.json \
+  --mock
 ```
 
-This validates:
-- Phase 0: Environment setup
-- Phase 1: Core KG modules
-- Phase 2: All run scripts
-- Phase 3: Utility modules (95 tests)
-- Phase 4: Configuration
+The evaluator runs each prediction through:
+1. Exact match against `answer_aliases`
+2. Fuzzy match (rapidfuzz token_set_ratio ≥ 0.8)
+3. LLM judge (for cases not resolved by string matching)
 
-## Creating a Custom Domain
-
-To create a custom domain (e.g., sports, finance, healthcare):
-
-### 1. Create Domain Models
-
-Create `models/[domain]_models.py`:
-```python
-from mellea_contribs.kg.models import Entity, Relation
-
-class TeamEntity(Entity):
-    """Sports team entity."""
-    league: str
-    founded_year: int
-    # ... other domain-specific fields
-
-class AthleteEntity(Entity):
-    """Sports athlete entity."""
-    position: str
-    jersey_number: int
-    # ... other domain-specific fields
+Output (`eval_metrics.json`):
+```json
+{
+  "total": 100,
+  "n_correct": 72,
+  "n_miss": 5,
+  "n_hallucination": 23,
+  "accuracy": 72.0,
+  "score": 49.0,
+  "hallucination": 23.0,
+  "missing": 5.0,
+  "eval_model": "meta-llama/llama-3-3-70b-instruct"
+}
 ```
 
-### 2. Create Domain Preprocessor
+**CRAG score formula**: `((2 × correct + missing) / total − 1) × 100`
+— penalises hallucination more than unanswered questions.
 
-Create `preprocessor/[domain]_preprocessor.py`:
-```python
-from mellea_contribs.kg.preprocessor import KGPreprocessor
-
-class SportsKGPreprocessor(KGPreprocessor):
-    """Domain-specific preprocessor for sports."""
-
-    def get_hints(self) -> str:
-        """Return domain-specific extraction hints."""
-        return """
-        Extract sports entities:
-        - Teams (league, founded year, stadium)
-        - Athletes (position, jersey number, achievements)
-        - Competitions (tournament, year, winner)
-
-        Relations:
-        - PLAYS_FOR: athlete plays for team
-        - WON: team won competition
-        - DEFEATED: team defeated another team
-        """
-
-    def post_process_extraction(self, result):
-        """Domain-specific post-processing."""
-        # Standardize team names, normalize dates, etc.
-        return result
-```
-
-### 3. Create Domain Representation
-
-Create `rep/[domain]_rep.py`:
-```python
-def team_entity_to_text(entity) -> str:
-    """Format team as natural language."""
-    return f"{entity.name} (founded {entity.founded_year}) plays in {entity.league}"
-```
-
-### 4. Run Scripts for Custom Domain
-
-```bash
-python scripts/run_kg_preprocess.py \
-    --input sports_documents.jsonl \
-    --mock \
-    --domain sports  # Use custom domain
-
-python scripts/run_qa.py \
-    --input sports_questions.jsonl \
-    --mock \
-    --domain sports
-```
+Use a separate eval model by setting `EVAL_API_BASE` / `EVAL_MODEL_NAME` / `EVAL_RITS_API_KEY`
+in `.env`; the script falls back to the main session if these are not set.
 
 ## Configuration
 
-### Environment Setup (.env)
-
-Create `.env` file from template:
+### .env file
 
 ```bash
 cp .env_template .env
 ```
 
-Configure your `.env` with:
-
 ```bash
-# Neo4j Configuration
+# Neo4j
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password
 
-# RITS Cloud LLM Configuration (Primary)
-API_BASE=https://inference-3scale-apicast-production.apps.rits.fmaas.res.ibm.com/llama-3-3-70b-instruct/v1
-MODEL_NAME=openai/llama-3-3-70b-instruct
+# Primary LLM (RITS or any OpenAI-compatible endpoint)
+API_BASE=https://your-rits-endpoint/v1
+MODEL_NAME=meta-llama/llama-3-3-70b-instruct
 API_KEY=dummy
-RITS_API_KEY=your_rits_api_key_here
+RITS_API_KEY=your_rits_api_key
 
-# Optional: Embedding Configuration
-EMB_API_BASE=https://inference-3scale-apicast-production.apps.rits.fmaas.res.ibm.com/slate-125m-english-rtrvr-v2/v1
-EMB_API_KEY=dummy
-EMB_MODEL_NAME=ibm/slate-125m-english-rtrvr-v2
+# Optional: separate eval model
+EVAL_API_BASE=https://your-eval-endpoint/v1
+EVAL_MODEL_NAME=meta-llama/llama-3-3-70b-instruct
+# EVAL_RITS_API_KEY=  # falls back to RITS_API_KEY if unset
 
-# Request Configuration
-MAX_RETRIES=3
-TIME_OUT=1800
+# Optional: embedding model
+EMB_API_BASE=https://your-embedding-endpoint/v1
+EMB_MODEL_NAME=text-embedding-3-small
+
+# Misc
 OTEL_SDK_DISABLED=true
 ```
 
-### Command-Line Arguments
+The Python scripts load this file automatically via `python-dotenv` (`override=False`),
+so values already exported in the shell take precedence.
 
-All scripts support configuration via command-line arguments:
+### Session architecture
 
-```bash
-# Neo4j configuration
-python run_kg_update.py \
-    --neo4j-uri bolt://localhost:7687 \
-    --neo4j-user neo4j \
-    --neo4j-password password
+All scripts create sessions using `create_session_from_env` from
+`mellea_contribs.kg.utils`, which wires up `MelleaSession(backend=OpenAIBackend(...))`
+directly — no LiteLLM proxy needed. The `RITS_API_KEY` is forwarded as a custom HTTP
+header that RITS requires for authentication.
 
-# Model configuration
-python run_kg_update.py \
-    --model openai/llama-3-3-70b-instruct \
-    --extraction-loop-budget 3 \
-    --alignment-loop-budget 2
+## Domain-Specific Components
 
-# Processing configuration
-python run_kg_update.py \
-    --dataset data.jsonl \
-    --num-workers 64 \
-    --batch-size 100
-```
+### Movie Domain Models (`models/movie_domain_models.py`)
 
-See `--help` on each script for all available options:
-```bash
-python run_kg_preprocess.py --help
-python run_kg_embed.py --help
-python run_kg_update.py --help
-```
+Defines domain-specific entity classes extending the core `Entity`/`Relation` models:
+- `MovieEntity`: genre, release_year, budget, box_office
+- `PersonEntity`: birth_year, nationality
+- `AwardEntity`: category, year, ceremony
+
+### Movie Domain Preprocessor (`preprocessor/movie_preprocessor.py`)
+
+Extends `KGPreprocessor` with movie-specific extraction hints and post-processing
+(entity type standardisation, relation normalisation).
+
+### Movie Domain Representation (`rep/movie_rep.py`)
+
+Formatting utilities for LLM prompts: `movie_entity_to_text`, `person_entity_to_text`,
+`format_movie_context`, `movie_relation_to_text`.
+
+## Creating a Custom Domain
+
+1. **Models** — create `models/[domain]_models.py` extending `Entity`/`Relation`
+2. **Preprocessor** — create `preprocessor/[domain]_preprocessor.py` extending `KGPreprocessor`;
+   implement `get_hints()` and optionally `post_process_extraction()`
+3. **Representation** — create `rep/[domain]_rep.py` with domain-specific text formatters
+4. **Run** — pass `--domain [domain]` to `run_kg_update.py` and `run_qa.py`
 
 ## Testing
 
-Run the validation suite to test everything:
-
 ```bash
-# From project root
-./sun.sh
-
-# Or run specific tests
+# Run all KG utility tests from the project root
 pytest test/kg/ -v
 pytest test/kg/utils/ -v
+
+# Test scripts without Neo4j or LLM (mock mode)
+cd scripts
+python run_kg_update.py --dataset ../dataset/crag_movie_tiny.jsonl.bz2 --mock
+python run_qa.py --dataset ../dataset/crag_movie_tiny.jsonl.bz2 --mock
+python run_eval.py --input ../output/qa_results.jsonl --mock
 ```
-
-## API Reference
-
-### Dataset Creation Scripts
-
-All return JSONL files with questions and optional answers:
-
-```python
-# Format: {"question": "...", "answer": "...", "domain": "..."}
-```
-
-### Preprocessing Script
-
-Input: JSONL with `{"id": "...", "text": "..."}`
-Output: JSON with `UpdateStats`
-
-### QA Script
-
-Input: JSONL with questions
-Output: JSONL with `QAResult` per question
-
-### Evaluation Script
-
-Input: JSONL with `QAResult` items
-Output: JSON with `QAStats`
 
 ## Troubleshooting
 
-### Environment & Installation
+### Neo4j connection
 
-**ImportError: No module named 'mellea_contribs'**
 ```bash
-# Install in development mode
-cd /path/to/mellea-contribs
-pip install -e .
+# Verify Neo4j is reachable
+nc -zv localhost 7687
 ```
 
-**Missing python-dotenv**
+### LLM / RITS authentication
+
+- Ensure `.env` exists and `RITS_API_KEY` is set (not just the template placeholder)
+- Do **not** `export API_BASE` / `RITS_API_KEY` as empty strings in the shell before
+  running `run.sh` — empty exports prevent `load_dotenv` from filling them in
+- The scripts log `create_session_from_env(prefix=...): api_base=set/MISSING, rits_api_key=set/MISSING`
+  at `INFO` level to help diagnose missing credentials
+
+### Resuming an interrupted QA run
+
+Step 4 writes a progress file (`qa_progress.json`). Re-running without
+`--reset-progress` picks up where it left off. Use `--reset-progress` to start fresh.
+
+### Dataset not found
+
 ```bash
-pip install python-dotenv
-```
-
-### Neo4j Issues
-
-**Neo4j Connection Failed**
-```bash
-# Verify Neo4j is running
-docker ps | grep neo4j
-# OR check service
-nc -zv localhost 7687  # Should say 'succeeded'
-```
-
-**OTEL Connection Errors**
-Already disabled in `.env_template`:
-```bash
-OTEL_SDK_DISABLED=true
-```
-
-### RITS/LLM Configuration
-
-**LLM API calls failing with litellm_chat_response error**
-- Verify `.env` file exists: `ls -la .env`
-- Check RITS_API_KEY is configured (not just template value)
-- Verify API_BASE endpoint is accessible
-- Check API_KEY and RITS_API_KEY values in `.env`
-
-**Using wrong model**
-- Verify `MODEL_NAME` in `.env` matches your intent
-- Session output should show: `Starting Mellea session: model=openai/llama-3-3-70b-instruct`
-- JSON output should show: `"model_used": "openai/llama-3-3-70b-instruct"`
-
-**Switch to local vLLM (Alternative)**
-```bash
-# Edit .env - uncomment local vLLM section:
-# API_BASE=http://localhost:7878/v1
-# MODEL_NAME=/path/to/local/model
-
-# Or use mock for testing (no LLM calls):
-python run_kg_update.py --dataset data.jsonl --mock
-```
-
-### Script Issues
-
-**Dataset file not found**
-```bash
-# Check file exists
 ls -lh ../dataset/crag_movie_tiny.jsonl.bz2
-
-# Use correct path
-python run_kg_update.py --dataset ../dataset/crag_movie_tiny.jsonl.bz2
-```
-
-**Run all tests to diagnose**
-```bash
-cd /path/to/mellea-contribs
-pytest test/kg/utils/ -v  # Run all KG tests
+# If missing, run step 0 first:
+bash run.sh 0
 ```
 
 ## Architecture
 
-The KG-RAG pipeline is organized into three independent stages:
-
 ```
-Stage 1: Preprocessing          Stage 2: Embedding           Stage 3: Updating
-(run_kg_preprocess.py)          (run_kg_embed.py)            (run_kg_update.py)
-         │                               │                            │
-         ├─ Load predefined data    ├─ Fetch entities          ├─ Load documents
-         ├─ Batch insert into Neo4j ├─ Compute embeddings      ├─ Extract entities/relations
-         └─ Track statistics        └─ Store in Neo4j          └─ Align & merge with KG
+Step 1: Preprocessing       Step 2: Embedding        Step 3: Updating
+run_kg_preprocess.py        run_kg_embed.py          run_kg_update.py
+        │                          │                         │
+        ├─ Load predefined data    ├─ Fetch entities    ├─ Load documents
+        ├─ Batch insert Neo4j      ├─ Compute embeddings├─ Extract entities/relations
+        └─ Output stats            └─ Store + index     └─ Align & merge with KG
 
-                          Neo4j Knowledge Graph
-                         (bolt://localhost:7687)
-                    437,890 entities + 1,045,369 relations
+                         Neo4j Knowledge Graph
+                        (bolt://localhost:7687)
+
+Step 4: QA                            Step 5: Evaluation
+run_qa.py                             run_eval.py
+        │                                     │
+        ├─ Decompose question            ├─ Exact / fuzzy match
+        ├─ Align entities (embed+fuzzy)  ├─ LLM judge
+        ├─ Think-on-Graph traversal      └─ CRAG metrics (accuracy, score,
+        ├─ Prune + synthesise answer          hallucination, missing)
+        └─ Output JSONL results
 ```
-
-**Backend Architecture**:
-- **MockGraphBackend**: For testing without database
-- **Neo4jBackend**: Production graph database
-- **LiteLLM**: Abstracts LLM routing to RITS cloud service
 
 ## See Also
 
 - **Core Library**: [mellea_contribs/kg/README.md](../../mellea_contribs/kg/README.md)
-- **Utility Modules**: [mellea_contribs/kg/utils/README.md](../../mellea_contribs/kg/utils/README.md)
-- **Pipeline Architecture**: [KG_PIPELINE_ARCHITECTURE.md](../../KG_PIPELINE_ARCHITECTURE.md)
-- **KG Update Architecture**: [KG_UPDATE_IMPROVEMENT_SUMMARY.md](../../KG_UPDATE_IMPROVEMENT_SUMMARY.md)
-- **Preprocessing Summary**: [PREPROCESSING_REWRITE_SUMMARY.md](../../PREPROCESSING_REWRITE_SUMMARY.md)
-- **Configuration Guide**: [PHASE4_CONFIGURATION.md](../../PHASE4_CONFIGURATION.md)
 - **Mellea Framework**: https://github.com/generative-computing/mellea
-- **Original PR#3**: https://github.com/ydzhu98/mellea/pull/3
-
-## Key Concepts
-
-### Multi-Route QA
-
-Break complex questions into multiple solving paths and reach consensus:
-1. Route 1: Direct entity matching
-2. Route 2: Relation traversal
-3. Route 3: Alternative reasoning
-→ Validate consensus across routes
-
-### Entity/Relation Alignment
-
-When processing new documents:
-1. Extract entities and relations
-2. Align with existing KG entities
-3. Decide merge strategy (merge or create new)
-4. Update KG with merged data
-
-### Domain-Specific Processing
-
-Each domain can customize:
-- Entity types and properties
-- Relation types
-- Extraction hints
-- Post-processing rules
-- LLM prompt formatting
-
-## Implementation Details
-
-- **Backend**: MockGraphBackend (testing) or Neo4jBackend (production)
-- **Models**: Pydantic for validation and serialization
-- **Async**: Full async/await throughout for scalability
-- **LLM**: Mellea @generative decorators for all decisions
-- **JSONL I/O**: Pipeline-friendly line-delimited JSON format
 
 ## License
 
