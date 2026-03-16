@@ -30,12 +30,13 @@ from mellea_contribs.kg.updater_models import (
     UpdateStats,
 )
 from mellea_contribs.kg.utils import (
-    create_session,
     create_backend,
+    create_session_from_env,
     load_jsonl,
     log_progress,
     output_json,
     print_stats,
+    setup_logging,
 )
 
 
@@ -378,6 +379,7 @@ async def process_document(
         UpdateResult with processing details
     """
     start_time = time.perf_counter()
+    log_progress(f"[{doc_id[:12]}] Starting...")
 
     try:
         # Call orchestrate_kg_update
@@ -409,6 +411,11 @@ async def process_document(
             model_used=model,
         )
 
+        log_progress(
+            f"[{doc_id[:12]}] Done — {entities_found} entities, "
+            f"{relations_found} relations ({elapsed_time * 1000:.0f}ms)"
+        )
+
         # Track progress
         progress_tracker.add_stat(
             {
@@ -424,8 +431,10 @@ async def process_document(
         return result
 
     except Exception as e:
+        import traceback
         elapsed_time = time.perf_counter() - start_time
-        log_progress(f"[{doc_id}] ERROR: {e}")
+        log_progress(f"[{doc_id[:12]}] ERROR: {type(e).__name__}: {e}", level="ERROR")
+        log_progress(traceback.format_exc(), level="DEBUG")
 
         result = UpdateResult(
             document_id=doc_id,
@@ -462,22 +471,8 @@ async def process_dataset(
     )
 
     # Create session with API configuration from environment
-    api_base = os.getenv("API_BASE")
-    api_key = os.getenv("API_KEY")
-    model_id = os.getenv("MODEL_NAME", config.session_config.model)
-
-    if api_base:
-        # Set environment variables for LiteLLM to use
-        os.environ["OPENAI_API_BASE"] = api_base
-        os.environ["OPENAI_API_KEY"] = api_key or "dummy"
-        log_progress(f"Using API Base: {api_base}")
-        log_progress(f"Using Model: {model_id}")
-        session = create_session(model_id=model_id)
-    else:
-        # Use default model if no API_BASE configured
-        model_id = config.session_config.model
-        log_progress(f"Using model: {model_id}")
-        session = create_session(model_id=model_id)
+    session, model_id = create_session_from_env(default_model=config.session_config.model)
+    log_progress(f"Using model: {model_id}, API base: {os.getenv('API_BASE') or '(default)'}")
 
     batch_result = UpdateBatchResult()
     results = []
@@ -515,9 +510,19 @@ async def process_dataset(
             task = process_with_semaphore(doc_id, text)
             tasks.append(task)
 
-        # Process all tasks concurrently
-        log_progress(f"Processing {len(tasks)} documents with {config.updater_config.num_workers} workers...")
-        results = await asyncio.gather(*tasks)
+        total_tasks = len(tasks)
+        completed_count = 0
+
+        async def _tracked(coro: Any) -> UpdateResult:
+            nonlocal completed_count
+            result = await coro
+            completed_count += 1
+            status = "✓" if result.success else "✗"
+            log_progress(f"[{completed_count}/{total_tasks}] {status} {result.document_id[:12]}")
+            return result
+
+        log_progress(f"Processing {total_tasks} documents with {config.updater_config.num_workers} workers...")
+        results = list(await asyncio.gather(*[_tracked(t) for t in tasks]))
 
         # Aggregate results
         for result in results:
@@ -546,11 +551,14 @@ async def process_dataset(
             stats.entities_new += result.entities_added
             stats.relations_new += result.relations_added
 
-        batch_result.stats = stats
         batch_result.total_time_ms = sum(r.processing_time_ms for r in results)
         batch_result.avg_time_per_document_ms = (
             batch_result.total_time_ms / len(results)
         )
+        # Mirror timing into UpdateStats so print_stats shows real values
+        stats.total_processing_time_ms = batch_result.total_time_ms
+        stats.average_processing_time_per_doc_ms = batch_result.avg_time_per_document_ms
+        batch_result.stats = stats
 
     return batch_result
 
@@ -568,8 +576,13 @@ def load_env_file() -> None:
         log_progress(f"⚠️  .env not found at {env_path} (optional)")
 
 
+
+
 async def main() -> int:
     """Main async entry point."""
+    # Initialise logging early so all log_progress calls are visible
+    setup_logging(log_level="INFO")
+
     # Load environment variables from .env file
     load_env_file()
 

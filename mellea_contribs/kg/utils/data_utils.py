@@ -4,12 +4,14 @@ Provides reusable functions for reading/writing JSONL files, batch processing,
 and dataset manipulation.
 """
 
+import asyncio
 import bz2
 import json
 import random
 import sys
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterator, List, Dict, Any, Callable, Optional
+from typing import Any, Callable, Dict, Generator, Iterator, List, Optional, Set
 
 
 def load_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
@@ -219,3 +221,118 @@ def validate_jsonl_schema(
         errors.append(f"Error validating file: {e}")
 
     return len(errors) == 0, errors
+
+
+class BaseDatasetLoader(ABC):
+    """Abstract base class for async dataset loaders with worker-pool support.
+
+    Subclasses implement :meth:`iter_items` to yield raw dataset records.
+    :meth:`run` feeds those records through a configurable number of async
+    workers, skipping IDs that appear in ``skip_ids``.
+
+    Usage::
+
+        class MyLoader(BaseDatasetLoader):
+            def iter_items(self):
+                for item in load_jsonl(self.dataset_path):
+                    yield item
+
+        loader = MyLoader(dataset_path="data.jsonl", num_workers=4)
+        results = await loader.run(
+            process_fn=my_async_fn,
+            id_key="id",
+            skip_ids=already_done,
+        )
+    """
+
+    def __init__(
+        self,
+        dataset_path: str,
+        num_workers: int = 1,
+        queue_size: int = 100,
+    ) -> None:
+        """Initialise the loader.
+
+        Args:
+            dataset_path: Path to the dataset file.
+            num_workers: Number of parallel async workers (default: ``1``).
+            queue_size: Internal asyncio queue capacity (default: ``100``).
+        """
+        self.dataset_path = dataset_path
+        self.num_workers = num_workers
+        self.queue_size = queue_size
+
+    @abstractmethod
+    def iter_items(self) -> Generator[Dict[str, Any], None, None]:
+        """Yield raw dataset items one by one.
+
+        Subclasses must implement this method.  It is called synchronously
+        from the producer coroutine inside :meth:`run`.
+
+        Yields:
+            Dict representing a single dataset record.
+        """
+
+    async def run(
+        self,
+        process_fn: Callable,
+        id_key: str = "id",
+        skip_ids: Optional[Set[str]] = None,
+        on_result: Optional[Callable] = None,
+    ) -> List[Any]:
+        """Process all items through an async worker pool.
+
+        Args:
+            process_fn: ``async (item) -> result`` coroutine called for each
+                item.  Should return *None* to discard results.
+            id_key: Key in each item dict used as the unique ID for
+                ``skip_ids`` matching (default: ``"id"``).
+            skip_ids: Set of item IDs to skip (for resumption).
+            on_result: Optional async or sync callback ``(item_id, result)``
+                invoked after each item is processed successfully.
+
+        Returns:
+            List of non-None results collected from ``process_fn``.
+        """
+        skip_ids = skip_ids or set()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_size)
+        results: List[Any] = []
+        _sentinel = object()
+
+        async def _producer() -> None:
+            for item in self.iter_items():
+                item_id = str(item.get(id_key, ""))
+                if item_id and item_id in skip_ids:
+                    continue
+                await queue.put(item)
+            # Send one sentinel per worker to signal end-of-stream
+            for _ in range(self.num_workers):
+                await queue.put(_sentinel)
+
+        async def _worker() -> None:
+            while True:
+                item = await queue.get()
+                if item is _sentinel:
+                    queue.task_done()
+                    break
+                try:
+                    result = await process_fn(item)
+                    if result is not None:
+                        results.append(result)
+                        if on_result is not None:
+                            item_id = str(item.get(id_key, ""))
+                            if asyncio.iscoroutinefunction(on_result):
+                                await on_result(item_id, result)
+                            else:
+                                on_result(item_id, result)
+                except Exception as exc:
+                    print(
+                        f"Worker error on item {item.get(id_key, '?')}: {exc}",
+                        file=sys.stderr,
+                    )
+                finally:
+                    queue.task_done()
+
+        workers = [asyncio.create_task(_worker()) for _ in range(self.num_workers)]
+        await asyncio.gather(_producer(), *workers)
+        return results

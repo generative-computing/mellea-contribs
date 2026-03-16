@@ -3,7 +3,7 @@
 Provides functions for computing evaluation metrics and aggregating results.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 try:
     from rapidfuzz import fuzz
@@ -182,6 +182,111 @@ def aggregate_qa_results(qa_results: List[QAResult]) -> QAStats:
     stats.models_used = list(models)
 
     return stats
+
+
+async def evaluate_predictions(
+    session: Any,
+    predictions: List[Dict[str, Any]],
+    query_key: str = "query",
+    answer_key: str = "answer",
+    gold_key: str = "answer_aliases",
+) -> List[Dict[str, Any]]:
+    """Evaluate a list of QA predictions with LLM-based judgement.
+
+    For each prediction the function checks whether the predicted answer
+    matches the gold answer using a combination of fast heuristics (exact
+    match, fuzzy match) and, for borderline cases, LLM judgement via a
+    ``@generative`` function.
+
+    Args:
+        session: Mellea session used for LLM-based evaluation calls.
+        predictions: List of dicts, each containing at least ``query_key``
+            and ``answer_key`` fields plus an optional ``gold_key`` list of
+            acceptable answers.
+        query_key: Dict key for the question text (default: ``"query"``).
+        answer_key: Dict key for the predicted answer (default: ``"answer"``).
+        gold_key: Dict key for the list of gold answers
+            (default: ``"answer_aliases"``).
+
+    Returns:
+        Same list with an added ``"correct"`` (bool) and
+        ``"eval_method"`` (str) field on every item.
+    """
+    try:
+        from mellea import generative
+        from pydantic import BaseModel
+
+        class _EvalResult(BaseModel):
+            correct: bool
+            reason: str
+
+        @generative
+        async def _llm_judge(
+            query: str,
+            predicted: str,
+            gold_answers: str,
+        ) -> _EvalResult:
+            """Judge whether a predicted answer is correct.
+
+            Question: {query}
+            Predicted answer: {predicted}
+            Acceptable answers: {gold_answers}
+
+            Respond with a JSON object:
+            {{"correct": true/false, "reason": "brief explanation"}}
+            """
+            pass
+
+        _generative_available = True
+    except Exception:
+        _generative_available = False
+
+    results = []
+    for item in predictions:
+        pred = str(item.get(answer_key, "")).strip()
+        golds = item.get(gold_key, [])
+        if isinstance(golds, str):
+            golds = [golds]
+
+        correct = False
+        method = "none"
+
+        # 1. Exact match
+        for gold in golds:
+            if exact_match(pred, str(gold)):
+                correct = True
+                method = "exact"
+                break
+
+        # 2. Fuzzy match
+        if not correct:
+            for gold in golds:
+                if fuzzy_match(pred, str(gold)):
+                    correct = True
+                    method = "fuzzy"
+                    break
+
+        # 3. LLM judgement for uncertain cases
+        if not correct and _generative_available and golds:
+            try:
+                gold_str = " | ".join(str(g) for g in golds)
+                judge = await _llm_judge(
+                    session,
+                    query=str(item.get(query_key, "")),
+                    predicted=pred,
+                    gold_answers=gold_str,
+                )
+                correct = judge.correct
+                method = "llm"
+            except Exception:
+                pass
+
+        result = dict(item)
+        result["correct"] = correct
+        result["eval_method"] = method
+        results.append(result)
+
+    return results
 
 
 def aggregate_update_results(update_results: List[UpdateResult]) -> UpdateStats:

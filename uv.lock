@@ -3170,6 +3170,7 @@ dependencies = [
     { name = "eyecite" },
     { name = "markdown" },
     { name = "mellea", extra = ["litellm"] },
+    { name = "neo4j" },
     { name = "playwright" },
     { name = "rapidfuzz" },
 ]
@@ -3217,6 +3218,7 @@ requires-dist = [
     { name = "eyecite" },
     { name = "markdown" },
     { name = "mellea", extras = ["litellm"], specifier = ">=0.3.0" },
+    { name = "neo4j", specifier = ">=6.1.0" },
     { name = "playwright" },
     { name = "rapidfuzz", specifier = ">=3.14.3" },
 ]

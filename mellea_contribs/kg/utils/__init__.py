@@ -8,36 +8,44 @@ This package provides reusable utilities extracted from run scripts:
 """
 
 from .data_utils import (
-    load_jsonl,
-    save_jsonl,
+    BaseDatasetLoader,
     append_jsonl,
     batch_iterator,
+    load_jsonl,
+    save_jsonl,
+    shuffle_jsonl,
     stream_batch_process,
     truncate_jsonl,
-    shuffle_jsonl,
     validate_jsonl_schema,
 )
-from .session_manager import (
-    create_session,
-    create_backend,
-    MelleaResourceManager,
-)
-from .progress import (
-    setup_logging,
-    log_progress,
-    output_json,
-    print_stats,
-    ProgressTracker,
-)
 from .eval_utils import (
+    aggregate_qa_results,
+    aggregate_update_results,
+    evaluate_predictions,
     exact_match,
+    f1_score,
     fuzzy_match,
     mean_reciprocal_rank,
     precision,
     recall,
-    f1_score,
-    aggregate_qa_results,
-    aggregate_update_results,
+)
+from .progress import (
+    BaseProgressLogger,
+    ProgressTracker,
+    QAProgressLogger,
+    log_progress,
+    output_json,
+    print_stats,
+    setup_logging,
+)
+from .session_manager import (
+    MelleaResourceManager,
+    create_backend,
+    create_embedding_client,
+    create_openai_session,
+    create_session,
+    create_session_from_env,
+    generate_embeddings,
 )
 
 __all__ = [
@@ -50,9 +58,14 @@ __all__ = [
     "truncate_jsonl",
     "shuffle_jsonl",
     "validate_jsonl_schema",
+    "BaseDatasetLoader",
     # session_manager
     "create_session",
+    "create_openai_session",
+    "create_session_from_env",
     "create_backend",
+    "create_embedding_client",
+    "generate_embeddings",
     "MelleaResourceManager",
     # progress
     "setup_logging",
@@ -60,6 +73,8 @@ __all__ = [
     "output_json",
     "print_stats",
     "ProgressTracker",
+    "BaseProgressLogger",
+    "QAProgressLogger",
     # eval_utils
     "exact_match",
     "fuzzy_match",
@@ -69,4 +84,5 @@ __all__ = [
     "f1_score",
     "aggregate_qa_results",
     "aggregate_update_results",
+    "evaluate_predictions",
 ]

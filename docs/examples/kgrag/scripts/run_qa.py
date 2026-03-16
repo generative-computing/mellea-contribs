@@ -1,184 +1,252 @@
 #!/usr/bin/env python3
-"""Run QA on questions via orchestrate_qa_retrieval.
+"""Run QA on CRAG movie questions via the Think-on-Graph pipeline.
 
-Reads questions from a JSONL file and runs QA using the orchestration function.
-Produces QAResult written to output JSONL file. Optionally prints running accuracy
-if ground truth answers are present.
+Reads questions from a JSONL file, answers each one using
+``orchestrate_qa_retrieval``, and writes per-question results to an output
+JSONL file.  Progress is persisted so interrupted runs can resume from where
+they left off.
 
-Input format: Each line is JSON with 'question' field and optional 'answer' field.
-Output format: QAResult fields as JSON per line.
+Three independent sessions are created:
 
-Example::
+* **main session** — question decomposition, entity alignment, relation /
+  triplet pruning.
+* **eval session** — knowledge sufficiency evaluation, consensus validation,
+  direct-answer fallback.  Defaults to the main session when not configured.
+* **embedding client** — async OpenAI-compatible client for vector-based
+  entity alignment.  Optional; falls back to fuzzy name search only.
 
-    python run_qa.py --input data/questions.jsonl --output /tmp/qa_results.jsonl --mock
+Configuration is driven by environment variables so the script works
+transparently in containerised / RITS environments.  The variable names
+mirror those used by ``run_kg_update.py``:
+
+.. code-block:: bash
+
+    # Required — RITS (or any OpenAI-compatible) endpoint
+    export API_BASE=https://your-rits-endpoint/v1
+    export API_KEY=your-rits-api-key
+    export MODEL_NAME=meta-llama/llama-3-70b-instruct   # or gpt-4o-mini etc.
+
+    # Optional — separate eval model (defaults to main session)
+    export EVAL_API_BASE=...
+    export EVAL_API_KEY=...
+    export EVAL_MODEL_NAME=...
+
+    # Optional — embedding model for vector entity alignment
+    export EMB_API_BASE=...
+    export EMB_API_KEY=...
+    export EMB_MODEL_NAME=text-embedding-3-small
+
+When ``API_BASE`` is set the session uses ``OpenAIBackend`` directly, which
+works for any OpenAI-compatible endpoint (RITS, vLLM, Azure, etc.) regardless
+of model ID.  Use ``--mock`` to skip LLM calls entirely during local testing.
+
+    python run_qa.py \\
+        --dataset ../dataset/crag_movie_tiny.jsonl.bz2 \\
+        --output /tmp/qa_results.jsonl \\
+        --progress /tmp/qa_progress.json \\
+        --mock
+
+Output JSONL format (one JSON object per line)::
+
+    {
+        "id": "q_0",
+        "query": "Who directed Inception?",
+        "query_time": "2024-03-05",
+        "predicted": "Christopher Nolan",
+        "answer": "Christopher Nolan",
+        "answer_aliases": ["Christopher Nolan", "Nolan"],
+        "correct": true,
+        "eval_method": "exact",
+        "elapsed_ms": 1234.5
+    }
 """
+
+from __future__ import annotations
 
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------------------------
+# Project imports
+# ---------------------------------------------------------------------------
 from mellea_contribs.kg.kgrag import orchestrate_qa_retrieval
-from mellea_contribs.kg.qa_models import QAResult, QAStats
 from mellea_contribs.kg.utils import (
-    create_session,
+    QAProgressLogger,
     create_backend,
-    load_jsonl,
+    create_embedding_client,
+    create_session_from_env,
+    evaluate_predictions,
     log_progress,
-    output_json,
-    print_stats,
+    setup_logging,
 )
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from dataset.movie_dataset_loader import MovieDatasetLoader
 
-async def run_qa_on_questions(
-    input_path: Path,
+# ---------------------------------------------------------------------------
+# Session / config helpers
+# ---------------------------------------------------------------------------
+
+_HINTS = (
+    "This is a movie-domain knowledge graph containing Movies, Persons, Awards, "
+    "and Year nodes.  Common relation types: acted_in, directed_by, produced_by, "
+    "nominated_for, won, released_in."
+)
+
+_DEFAULT_MODEL = "gpt-4o-mini"
+
+
+
+
+def create_emb_client_optional():
+    """Create an embedding client if ``EMB_API_BASE`` is set."""
+    api_base = os.getenv("EMB_API_BASE")
+    if not api_base:
+        return None
+    return create_embedding_client(
+        api_base=api_base,
+        api_key=os.getenv("EMB_API_KEY", "dummy"),
+        model_name=os.getenv("EMB_MODEL_NAME", "text-embedding-3-small"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-question processing
+# ---------------------------------------------------------------------------
+
+
+async def process_question(
+    item: Dict[str, Any],
+    *,
     backend,
     session,
-    model: str,
+    eval_session,
+    emb_client,
     domain: str,
     num_routes: int,
-    format_style: str,
-) -> tuple[list[QAResult], QAStats]:
-    """Run QA on questions from JSONL file."""
-    qa_results = []
-    stats = QAStats()
-    times = []
-    confidences = []
-    matches = 0
+    width: int,
+    depth: int,
+) -> Dict[str, Any]:
+    """Answer one QA item and return a result dict.
+
+    Args:
+        item: Normalised QA item from ``MovieDatasetLoader``.
+        backend: Graph database backend.
+        session: Primary Mellea session.
+        eval_session: Eval Mellea session (may equal ``session``).
+        emb_client: Optional embedding client.
+        domain: Domain hint string.
+        num_routes: Number of solving routes.
+        width: ToG traversal width.
+        depth: ToG traversal depth.
+
+    Returns:
+        Result dict with ``id``, ``query``, ``predicted``, timing, and
+        correctness fields.
+    """
+    t0 = time.perf_counter()
+    error: Optional[str] = None
+    predicted = ""
 
     try:
-        for line_num, item in enumerate(load_jsonl(input_path), 1):
-            question = item.get("question", "")
-            ground_truth = item.get("answer")
+        predicted = await orchestrate_qa_retrieval(
+            session=session,
+            backend=backend,
+            query=item["query"],
+            query_time=item.get("query_time", ""),
+            domain=domain,
+            num_routes=num_routes,
+            hints=_HINTS,
+            eval_session=eval_session,
+            emb_client=emb_client,
+            width=width,
+            depth=depth,
+        )
+    except Exception as exc:
+        error = str(exc)
+        log_progress(f"  ERROR [{item['id']}]: {exc}", level="WARNING")
 
-            if not question:
-                log_progress(f"[{line_num}] WARNING: Empty question")
-                continue
+    elapsed_ms = (time.perf_counter() - t0) * 1000
 
-            q_start = time.time()
-
-            try:
-                # Call orchestrate_qa_retrieval
-                answer = await orchestrate_qa_retrieval(
-                    session=session,
-                    backend=backend,
-                    query=question,
-                    query_time="",
-                    domain=domain,
-                    num_routes=num_routes,
-                    hints="",
-                )
-
-                q_elapsed = time.time() - q_start
-
-                # Create QAResult
-                result = QAResult(
-                    question=question,
-                    answer=answer,
-                    confidence=0.7,  # Default confidence
-                    processing_time_ms=q_elapsed * 1000,
-                    model_used=model,
-                )
-                qa_results.append(result)
-                times.append(q_elapsed)
-                confidences.append(result.confidence)
-                stats.successful_answers += 1
-
-                # Check if answer matches ground truth
-                if ground_truth and answer.lower() == ground_truth.lower():
-                    matches += 1
-                    log_progress(
-                        f"[{line_num}] ✓ {question} ({q_elapsed:.2f}s)"
-                    )
-                else:
-                    log_progress(
-                        f"[{line_num}] ? {question} ({q_elapsed:.2f}s)"
-                    )
-
-            except Exception as inner_e:
-                log_progress(f"[{line_num}] ERROR in QA: {inner_e}")
-                result = QAResult(
-                    question=question,
-                    answer="",
-                    confidence=0.0,
-                    error=str(inner_e),
-                    processing_time_ms=(time.time() - q_start) * 1000,
-                    model_used=model,
-                )
-                qa_results.append(result)
-                stats.failed_answers += 1
-
-    except Exception as e:
-        log_progress(f"ERROR: Failed to read input file: {e}")
-        return qa_results, stats
-
-    # Compute aggregate stats
-    stats.total_questions = len(qa_results)
-    if times:
-        stats.average_processing_time_ms = sum(times) / len(times) * 1000
-        stats.min_processing_time_ms = min(times) * 1000
-        stats.max_processing_time_ms = max(times) * 1000
-    if confidences:
-        stats.average_confidence = sum(confidences) / len(confidences)
-    if ground_truth is not None:
-        stats.exact_match_count = matches
-    stats.models_used = [model]
-
-    return qa_results, stats
+    return {
+        "id": item["id"],
+        "query": item["query"],
+        "query_time": item.get("query_time", ""),
+        "predicted": predicted,
+        "answer": item.get("answer", ""),
+        "answer_aliases": item.get("answer_aliases", []),
+        "elapsed_ms": round(elapsed_ms, 1),
+        "error": error,
+    }
 
 
-async def main():
-    """Main entry point."""
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+async def main() -> None:
+    """Entry point."""
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
     parser = argparse.ArgumentParser(
-        description="Run QA on questions via orchestrate_qa_retrieval"
+        description="Run Think-on-Graph QA on CRAG movie questions"
     )
     parser.add_argument(
-        "--input",
+        "--dataset",
         type=str,
-        required=True,
-        help="Input JSONL file path (each line: {\"question\": \"...\", \"answer\": \"...\"})",
+        default=str(
+            Path(__file__).parent.parent / "dataset" / "crag_movie_tiny.jsonl.bz2"
+        ),
+        help="Input dataset path (.jsonl or .jsonl.bz2)",
     )
     parser.add_argument(
         "--output",
         type=str,
-        help="Output JSONL file for QAResult (optional)",
+        default="",
+        help="Output JSONL file for predictions (default: stdout only)",
     )
     parser.add_argument(
-        "--neo4j-uri",
+        "--progress",
         type=str,
-        default="bolt://localhost:7687",
-        help="Neo4j connection URI (default: bolt://localhost:7687)",
-    )
-    parser.add_argument(
-        "--neo4j-user",
-        type=str,
-        default="neo4j",
-        help="Neo4j username (default: neo4j)",
-    )
-    parser.add_argument(
-        "--neo4j-password",
-        type=str,
-        default="password",
-        help="Neo4j password (default: password)",
+        default="",
+        help="JSON file for progress tracking / resumption",
     )
     parser.add_argument(
         "--mock",
         action="store_true",
-        help="Use MockGraphBackend instead of Neo4j",
+        help="Use MockGraphBackend (no Neo4j required)",
     )
     parser.add_argument(
-        "--model",
+        "--neo4j-uri",
         type=str,
-        default="gpt-4o-mini",
-        help="LLM model to use (default: gpt-4o-mini)",
+        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+    )
+    parser.add_argument(
+        "--neo4j-user",
+        type=str,
+        default=os.getenv("NEO4J_USER", "neo4j"),
+    )
+    parser.add_argument(
+        "--neo4j-password",
+        type=str,
+        default=os.getenv("NEO4J_PASSWORD", "password"),
     )
     parser.add_argument(
         "--domain",
         type=str,
-        default="general",
-        help="Domain for QA hints (default: general)",
+        default="movie",
+        help="Knowledge domain hint (default: movie)",
     )
     parser.add_argument(
         "--routes",
@@ -187,59 +255,201 @@ async def main():
         help="Number of solving routes (default: 3)",
     )
     parser.add_argument(
-        "--format-style",
+        "--width",
+        type=int,
+        default=30,
+        help="ToG traversal width (default: 30)",
+    )
+    parser.add_argument(
+        "--depth",
+        type=int,
+        default=3,
+        help="ToG traversal depth (default: 3)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Parallel async workers (default: 1)",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=int,
+        default=0,
+        help="First dataset item index to process (default: 0)",
+    )
+    parser.add_argument(
+        "--postfix",
+        type=int,
+        default=None,
+        help="Exclusive upper bound on dataset items (default: all)",
+    )
+    parser.add_argument(
+        "--no-eval",
+        action="store_true",
+        help="Skip post-hoc correctness evaluation",
+    )
+    parser.add_argument(
+        "--reset-progress",
+        action="store_true",
+        help="Delete any existing progress file and re-process all questions",
+    )
+    parser.add_argument(
+        "--log-level",
         type=str,
-        default="natural",
-        help="Result format style (default: natural)",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
     )
     args = parser.parse_args()
 
-    # Validate input file
-    input_path = Path(args.input)
-    if not input_path.exists():
-        log_progress(f"ERROR: Input file not found: {input_path}")
+    setup_logging(log_level=args.log_level)
+
+    if args.log_level == "DEBUG":
+        import litellm
+        litellm.set_verbose = True
+
+    # ------------------------------------------------------------------
+    # RITS / LLM configuration check
+    # ------------------------------------------------------------------
+    # LiteLLM is the transport layer; RITS (or any OpenAI-compatible endpoint)
+    # is configured via API_BASE + API_KEY.  Without API_BASE, LiteLLM falls
+    # back to direct OpenAI, which fails without a valid OpenAI key.
+    if not args.mock and not os.getenv("API_BASE"):
+        log_progress(
+            "WARNING: API_BASE is not set. LiteLLM will attempt to use the "
+            "OpenAI API directly. Set API_BASE (and API_KEY / MODEL_NAME) to "
+            "point to your RITS endpoint, or pass --mock for local testing.",
+            level="WARNING",
+        )
+
+    # ------------------------------------------------------------------
+    # Dataset
+    # ------------------------------------------------------------------
+    dataset_path = Path(args.dataset)
+    if not dataset_path.exists():
+        log_progress(f"Dataset not found: {dataset_path}", level="ERROR")
         sys.exit(1)
 
-    # Initialize backend and session using utilities
+    # ------------------------------------------------------------------
+    # Progress / resumption
+    # ------------------------------------------------------------------
+    progress_path = args.progress or ""
+    if progress_path and args.reset_progress and Path(progress_path).exists():
+        Path(progress_path).unlink()
+        log_progress("Progress file deleted; starting fresh.")
+    progress = QAProgressLogger(progress_path) if progress_path else None
+    if progress:
+        progress.load()
+        skipped = progress.num_processed
+        if skipped:
+            log_progress(f"Resuming: {skipped} questions already processed.")
+
+    skip_ids = progress.processed_ids if progress else set()
+
+    # ------------------------------------------------------------------
+    # Backend & sessions
+    # ------------------------------------------------------------------
     backend = create_backend(
-        backend_type="neo4j" if not args.mock else "mock",
+        backend_type="mock" if args.mock else "neo4j",
         neo4j_uri=args.neo4j_uri,
         neo4j_user=args.neo4j_user,
         neo4j_password=args.neo4j_password,
     )
-    session = create_session(model_id=args.model)
 
-    try:
-        # Run QA
-        qa_results, stats = await run_qa_on_questions(
-            input_path=input_path,
+    # Main session — uses API_BASE / API_KEY / MODEL_NAME
+    session, model_id = create_session_from_env()
+    log_progress(f"Using model: {model_id}, API base: {os.getenv('API_BASE') or '(default)'}")
+
+    # Eval session — uses EVAL_* env vars if set, otherwise reuses main session
+    eval_session, _ = (
+        create_session_from_env(default_model=model_id, env_prefix="EVAL_")
+        if os.getenv("EVAL_API_BASE")
+        else (session, model_id)
+    )
+
+    emb_client = create_emb_client_optional()
+
+    # ------------------------------------------------------------------
+    # Output file
+    # ------------------------------------------------------------------
+    output_fh = None
+    if args.output:
+        out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        output_fh = open(out_path, "a", encoding="utf-8")
+
+    results: list = []
+
+    async def _process(item: Dict[str, Any]):
+        result = await process_question(
+            item,
             backend=backend,
             session=session,
-            model=args.model,
+            eval_session=eval_session,
+            emb_client=emb_client,
             domain=args.domain,
             num_routes=args.routes,
-            format_style=args.format_style,
+            width=args.width,
+            depth=args.depth,
         )
+        # Emit immediately
+        line = json.dumps(result, ensure_ascii=False, default=str)
+        print(line)
+        if output_fh:
+            output_fh.write(line + "\n")
+            output_fh.flush()
+        # Update progress
+        if progress:
+            progress.add_result(item["id"], result)
+            progress.save()
+        return result
 
-        # Print summary using utility
-        log_progress("\n=== QA Summary ===")
-        print_stats(stats, to_stderr=True)
-
-        # Write results to output file if requested
-        if args.output:
-            output_path = Path(args.output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w") as f:
-                for result in qa_results:
-                    f.write(json.dumps(result.model_dump()) + "\n")
-            log_progress(f"Results saved to: {output_path}")
-
-        # Write results to stdout as JSONL
-        for result in qa_results:
-            print(json.dumps(result.model_dump()))
-
+    # ------------------------------------------------------------------
+    # Run via loader worker pool
+    # ------------------------------------------------------------------
+    try:
+        loader = MovieDatasetLoader(
+            dataset_path=str(dataset_path),
+            num_workers=args.workers,
+            prefix=args.prefix,
+            postfix=args.postfix,
+        )
+        results = await loader.run(
+            process_fn=_process,
+            id_key="id",
+            skip_ids=skip_ids,
+        )
     finally:
         await backend.close()
+        if output_fh:
+            output_fh.close()
+
+    log_progress(f"Done. {len(results)} questions answered.")
+
+    # ------------------------------------------------------------------
+    # Post-hoc evaluation
+    # ------------------------------------------------------------------
+    if results and not args.no_eval:
+        log_progress("Running correctness evaluation...")
+        evaluated = await evaluate_predictions(
+            session=eval_session,
+            predictions=results,
+            query_key="query",
+            answer_key="predicted",
+            gold_key="answer_aliases",
+        )
+        n_correct = sum(1 for r in evaluated if r.get("correct"))
+        accuracy = n_correct / len(evaluated) if evaluated else 0.0
+        log_progress(
+            f"Accuracy: {n_correct}/{len(evaluated)} = {accuracy:.1%}"
+        )
+
+    # ------------------------------------------------------------------
+    # Update progress metadata
+    # ------------------------------------------------------------------
+    if progress:
+        progress.update_meta(total_answered=len(results))
+        progress.save()
 
 
 if __name__ == "__main__":
