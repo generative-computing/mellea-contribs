@@ -222,15 +222,22 @@ class MelleaIntegrationBase(ABC):
         Raises:
             ValueError: If validation failed and no samples were generated
         """
-        # Check if this is a SamplingResult object
-        if SamplingResult is not None and isinstance(response, SamplingResult):
+        # Check if this is a SamplingResult object (duck-typing for test compatibility)
+        if hasattr(response, "success") and hasattr(response, "result"):
             if response.success:
                 # Use the successful result
                 return response.result
             else:
                 # Use the first sample if validation failed
                 if hasattr(response, "sample_generations") and response.sample_generations:
-                    return response.sample_generations[0]
+                    # Get content from sample generation
+                    sample = response.sample_generations[0]
+                    # Handle both .content and .value attributes
+                    if hasattr(sample, "content"):
+                        return type("obj", (), {"content": sample.content})()
+                    elif hasattr(sample, "value"):
+                        return type("obj", (), {"content": sample.value})()
+                    return sample
                 else:
                     raise ValueError("No samples generated during validation")
 
