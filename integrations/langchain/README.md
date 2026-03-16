@@ -11,6 +11,7 @@ This integration allows LangChain users to leverage Mellea's structured approach
 - ✅ **Tool Calling**: Function calling with LangChain agents
 - ✅ **Chains**: Integration with LangChain chains
 - ✅ **Agents**: Support for LangChain agents
+- ✅ **Output Parsers & Guardrails**: Validate outputs with Mellea requirements
 
 **Note**: Streaming is not currently supported. The `stream()` and `astream()` methods will return the full response as a single chunk.
 
@@ -152,6 +153,149 @@ model_with_requirements = chat_model.bind(
 
 chain = prompt | model_with_requirements | StrOutputParser()
 result = chain.invoke({"name": "Dr. Smith", "topic": "conference"})
+<<<<<<< HEAD
+=======
+
+## Output Parsers and Guardrails
+
+The integration provides two components for validating LLM outputs using Mellea's requirements system:
+
+### MelleaOutputParser
+
+A LangChain `BaseOutputParser` that validates outputs using deterministic validation functions. Perfect for use in chains with automatic validation.
+
+```python
+from mellea_langchain import MelleaOutputParser
+from mellea.stdlib.requirements import simple_validate
+
+# Create parser with validation requirements
+parser = MelleaOutputParser(
+    requirements=[
+        simple_validate(
+            lambda x: len(x.split()) < 100,
+            "Must be under 100 words"
+        ),
+        simple_validate(
+            lambda x: "AI" in x,
+            "Must mention AI"
+        ),
+    ]
+)
+
+# Use in a chain
+chain = prompt | model | parser
+result = chain.invoke({"topic": "artificial intelligence"})
+```
+
+**Key Features:**
+- Stateless design (no session required)
+- Fast, deterministic validation
+- Raises `OutputParserException` on failure (strict mode)
+- Returns text anyway in non-strict mode
+- Provides format instructions for LLM
+
+### MelleaGuardrail
+
+An independent validation component that can be used standalone or composed with other guardrails.
+
+```python
+from mellea_langchain import MelleaGuardrail
+
+# Create guardrail
+guardrail = MelleaGuardrail(
+    requirements=[
+        simple_validate(lambda x: len(x) > 50, "At least 50 chars"),
+        simple_validate(lambda x: len(x) < 500, "Under 500 chars"),
+    ],
+    name="length_check"
+)
+
+# Validate output
+result = guardrail.validate(text)
+if not result.passed:
+    print(f"Validation failed: {result.errors}")
+```
+
+**Key Features:**
+- Independent validation (not tied to chains)
+- Returns detailed `ValidationResult`
+- Composable with other guardrails
+- Supports `&` operator for composition
+
+### Composing Guardrails
+
+```python
+# Create specialized guardrails
+tone_guard = MelleaGuardrail(
+    requirements=[simple_validate(lambda x: x.islower(), "Lowercase only")]
+)
+length_guard = MelleaGuardrail(
+    requirements=[simple_validate(lambda x: len(x) < 100, "Under 100 chars")]
+)
+
+# Compose using & operator
+combined = tone_guard & length_guard
+
+# Validate with combined requirements
+result = combined.validate(text)
+```
+
+### Integration with OutputFixingParser
+
+For automatic repair of validation failures:
+
+```python
+from langchain.output_parsers import OutputFixingParser
+
+# Create base parser
+base_parser = MelleaOutputParser(
+    requirements=[
+        simple_validate(lambda x: x.startswith("{"), "Must be JSON"),
+    ]
+)
+
+# Wrap with OutputFixingParser for auto-repair
+fixing_parser = OutputFixingParser.from_llm(
+    parser=base_parser,
+    llm=model
+)
+
+# Will automatically retry and fix on validation failure
+chain = prompt | model | fixing_parser
+result = chain.invoke({"topic": "AI"})
+```
+
+### LLM vs Deterministic Validation
+
+**Deterministic Validation (Output Parser):**
+- Use `simple_validate()` with custom functions
+- Fast (<1ms), predictable
+- No LLM calls required
+- Perfect for format, length, pattern checks
+
+**LLM Validation (During Generation):**
+- Use `req()` or `check()` in `MelleaChatModel`
+- Validates during generation
+- Better for semantic requirements
+- Uses Mellea's sampling strategies
+
+```python
+# Combine both approaches
+model = MelleaChatModel(
+    mellea_session=m,
+    requirements=[req("Must be professional")]  # LLM validation
+)
+
+parser = MelleaOutputParser(
+    requirements=[
+        simple_validate(lambda x: len(x) < 500, "Under 500 chars")  # Deterministic
+    ]
+)
+
+chain = prompt | model | parser  # Both validations applied
+```
+
+>>>>>>> aaec38e (adding missing changes)
 print(result)
 ```
 
@@ -275,17 +419,21 @@ langchain/
 │       ├── __init__.py               # Package exports
 │       ├── chat_model.py             # MelleaChatModel class
 │       ├── message_conversion.py     # Message format conversion
-│       └── tool_conversion.py        # Tool calling utilities
+│       ├── tool_conversion.py        # Tool calling utilities
+│       └── guardrails.py             # Output parsers and guardrails
 ├── tests/
 │   ├── test_chat_model.py            # Chat model tests
 │   ├── test_message_conversion.py    # Message conversion tests
-│   └── test_tool_conversion.py       # Tool conversion tests
+│   ├── test_tool_conversion.py       # Tool conversion tests
+│   └── test_guardrails.py            # Guardrails tests
 └── examples/
     ├── basic_usage.py                # Basic example
     ├── async_example.py              # Sync and async example
     ├── tools_example.py              # Tool calling example
     ├── langchain_chain.py            # Chain example
-    └── requirements_strategy_example.py  # Requirements/validation example
+    ├── requirements_strategy_example.py  # Requirements/validation example
+    ├── output_parser_basic.py        # Output parser examples
+    └── guardrail_usage.py            # Guardrail examples
 ```
 
 ## Features
@@ -298,6 +446,12 @@ langchain/
 - Requirements and validation strategies
 - Sampling results and retry logic
 - LangChain chain integration
+<<<<<<< HEAD
+=======
+- **Output parsers with requirement validation**
+- **Guardrails for independent validation**
+- **Requirement composition and reuse**
+>>>>>>> aaec38e (adding missing changes)
 - Comprehensive test coverage
 
 ### 📋 Future Enhancements
@@ -469,11 +623,16 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](../LIC
 
 See the `examples/` directory for complete examples:
 
+**Chat Model:**
 - [`basic_usage.py`](examples/basic_usage.py): Simple chat completion
 - [`async_example.py`](examples/async_example.py): Synchronous and asynchronous usage
 - [`tools_example.py`](examples/tools_example.py): Function calling with agents
 - [`langchain_chain.py`](examples/langchain_chain.py): Using with chains
 - [`requirements_strategy_example.py`](examples/requirements_strategy_example.py): Requirements and validation
+
+**Output Parsers & Guardrails:**
+- [`output_parser_basic.py`](examples/output_parser_basic.py): Basic output parser usage
+- [`guardrail_usage.py`](examples/guardrail_usage.py): Guardrail validation and composition
 
 ## Acknowledgments
 
