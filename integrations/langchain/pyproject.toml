@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
     "mellea>=0.3.0",
     "mellea-integration-core",
-    "langchain-core>=0.3.0",
+    "langchain-core>=0.3.2",
     "pydantic>=2.0.0",
 ]
 

@@ -53,7 +53,7 @@ jobs:
         run: uv run -m pytest -v test
         continue-on-error: true
       - name: Run mellea-integration-core Tests
-        run: cd integrations/mellea-integration-core && uv sync && uv run pytest -v
+        run: cd integrations/mellea-integration-core && uv sync && PYTHONPATH=src uv run pytest -v
       - name: Run mellea-crewai Tests
         run: cd integrations/crewai && PYTHONPATH=src:../mellea-integration-core/src uv run pytest -v --ignore=tests/integration
       - name: Run mellea-langchain Tests
