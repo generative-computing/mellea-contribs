@@ -13,6 +13,14 @@ class GraphTraversal(Component):
     Represents a multi-hop traversal intent that can be converted to a
     backend-specific query (e.g. Cypher) and formatted for LLM consumption.
 
+    .. note::
+
+        ``GraphTraversal`` and its ``to_cypher()`` method are **planned future
+        functionality**.  The current pipeline (``kgrag.py``) builds all Cypher
+        queries directly via ``@generative`` functions.  ``GraphTraversal`` will
+        be integrated as a structured intermediate representation in a future
+        release.
+
     Supported patterns:
     - "multi_hop": Follow all relationships up to max_depth hops
     - "shortest_path": Find the shortest path between two node sets

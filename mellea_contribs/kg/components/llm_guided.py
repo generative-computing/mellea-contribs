@@ -2,6 +2,14 @@
 
 Uses Mellea's @generative pattern to convert natural language into graph queries
 and to explain/repair query results.
+
+.. note::
+
+    ``natural_language_to_cypher``, ``explain_query_result``, and
+    ``suggest_query_improvement`` are **planned future functionality**.  They
+    are fully implemented ``@generative`` functions but are not yet wired into
+    the main orchestration pipeline (``kgrag.py``).  They will be integrated in
+    a future release as an optional Layer 3 query-construction step.
 """
 
 from typing import Any

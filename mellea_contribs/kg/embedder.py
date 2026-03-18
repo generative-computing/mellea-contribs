@@ -113,7 +113,7 @@ class KGEmbedder:
         self.embedding_dimension = dimension
         self.api_base = api_base
         self.api_key = api_key
-        self.batch_size_value = batch_size
+        self.batch_size = batch_size
         self.backend = backend
 
     async def embed_entity(
@@ -367,13 +367,12 @@ class KGEmbedder:
                 records = [r async for r in result]
             return [
                 Relation(
+                    source_entity=f"Source_{r.get('rel_id', i)}",
                     relation_type=r.get("relation_type", "UNKNOWN"),
-                    source_entity_type="Node",
-                    source_entity_name=f"Relation_{r.get('rel_id')}",
-                    target_entity_type="Node",
-                    target_entity_name="Target",
+                    target_entity="Target",
+                    description=f"Relation of type {r.get('relation_type', 'UNKNOWN')}",
                 )
-                for r in records
+                for i, r in enumerate(records)
             ]
         except Exception as exc:
             logger.warning(f"Failed to fetch relations from Neo4j: {exc}")

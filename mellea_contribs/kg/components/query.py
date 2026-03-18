@@ -300,6 +300,13 @@ class SparqlQuery(GraphQuery):
     """Component for SPARQL queries (RDF/triple stores).
 
     Extends GraphQuery with SPARQL-specific formatting.
+
+    .. note::
+
+        ``SparqlQuery`` is **planned future functionality** for RDF/triple-store
+        backends.  The current production backend is Neo4j (``CypherQuery``).
+        ``SparqlQuery`` is exported for completeness but has no callers in the
+        current pipeline.
     """
 
     def format_for_llm(self) -> TemplateRepresentation:

@@ -53,6 +53,11 @@ from mellea_contribs.kg.base import GraphEdge, GraphNode, GraphPath
 # Optional imports from mellea components (requires mellea to be installed)
 try:
     from mellea_contribs.kg.components import (
+        CypherQuery,
+        GeneratedQuery,
+        GraphResult,
+        GraphTraversal,
+        SparqlQuery,
         align_entity_with_kg,
         align_relation_with_kg,
         align_topic_entities,
@@ -69,6 +74,11 @@ try:
     )
 except ImportError:
     # These functions are optional - mellea may not be installed
+    CypherQuery = None  # type: ignore[assignment]
+    GeneratedQuery = None  # type: ignore[assignment]
+    GraphResult = None  # type: ignore[assignment]
+    GraphTraversal = None  # type: ignore[assignment]
+    SparqlQuery = None  # type: ignore[assignment]
     align_entity_with_kg = None
     align_relation_with_kg = None
     align_topic_entities = None
@@ -220,6 +230,16 @@ _all = [
     # Other Utilities
     "format_schema",
 ]
+
+# Add component classes if they were successfully imported
+if CypherQuery is not None:
+    _all.extend([
+        "CypherQuery",
+        "GeneratedQuery",
+        "GraphResult",
+        "GraphTraversal",
+        "SparqlQuery",
+    ])
 
 # Add generative functions only if they were successfully imported
 if extract_entities_and_relations is not None:

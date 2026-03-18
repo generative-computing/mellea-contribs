@@ -96,10 +96,12 @@ class Entity(BaseModel):
     type: str = Field(description="Entity type (e.g., Person, Movie, Organization)")
     name: str = Field(description="Entity name")
     description: str = Field(description="Brief description of the entity")
-    paragraph_start: str = Field(
-        description="First 5-30 chars of supporting paragraph"
+    paragraph_start: Optional[str] = Field(
+        default=None, description="First 5-30 chars of supporting paragraph"
     )
-    paragraph_end: str = Field(description="Last 5-30 chars of supporting paragraph")
+    paragraph_end: Optional[str] = Field(
+        default=None, description="Last 5-30 chars of supporting paragraph"
+    )
     properties: Dict[str, Any] = Field(
         default_factory=dict, description="Additional properties"
     )
@@ -141,10 +143,12 @@ class Relation(BaseModel):
     relation_type: str = Field(description="Relation type (e.g., acted_in, directed)")
     target_entity: str = Field(description="Target entity name")
     description: str = Field(description="Description of the relation")
-    paragraph_start: str = Field(
-        description="First 5-30 chars of supporting paragraph"
+    paragraph_start: Optional[str] = Field(
+        default=None, description="First 5-30 chars of supporting paragraph"
     )
-    paragraph_end: str = Field(description="Last 5-30 chars of supporting paragraph")
+    paragraph_end: Optional[str] = Field(
+        default=None, description="Last 5-30 chars of supporting paragraph"
+    )
     properties: Dict[str, Any] = Field(
         default_factory=dict, description="Additional properties"
     )
@@ -162,6 +166,9 @@ class Relation(BaseModel):
     )
     valid_until: Optional[str] = Field(
         default=None, description="ISO date when relation ceased to be valid"
+    )
+    embedding: Optional[List[float]] = Field(
+        default=None, description="Vector embedding for similarity search"
     )
 
 
