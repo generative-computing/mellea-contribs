@@ -4,14 +4,14 @@
 Generates and stores embeddings for all graph components:
 - Entity nodes (Movie, Person, Genre)
 - Relations (ACTED_IN, DIRECTED, BELONGS_TO_GENRE)
-- Stores embeddings back to Neo4j with vector indices
+- Stores embeddings back to the graph database with vector indices
 
 Delegates to :class:`~mellea_contribs.kg.embedder.KGEmbedder` which handles
 fetch / embed / store / create-index in a single
 :meth:`~mellea_contribs.kg.embedder.KGEmbedder.embed_and_store_all` call.
 
 Usage:
-    python run_kg_embed.py --neo4j-uri bolt://localhost:7687
+    python run_kg_embed.py --db-uri bolt://localhost:7687
     python run_kg_embed.py --mock  # Mock backend (no actual embedding)
     python run_kg_embed.py --batch-size 100 --model text-embedding-3-large
 """
@@ -39,7 +39,7 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --neo4j-uri bolt://localhost:7687
+  %(prog)s --db-uri bolt://localhost:7687
   %(prog)s --batch-size 500 --model text-embedding-3-large
   %(prog)s --mock  # Mock backend (no actual embedding)
         """,
@@ -47,27 +47,27 @@ Examples:
 
     # Backend configuration
     parser.add_argument(
-        "--neo4j-uri",
+        "--db-uri",
         type=str,
         default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-        help="Neo4j connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
+        help="Graph database connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
     )
     parser.add_argument(
-        "--neo4j-user",
+        "--db-user",
         type=str,
         default=os.getenv("NEO4J_USER", "neo4j"),
-        help="Neo4j username (default: $NEO4J_USER or neo4j)",
+        help="Graph database username (default: $NEO4J_USER or neo4j)",
     )
     parser.add_argument(
-        "--neo4j-password",
+        "--db-password",
         type=str,
         default=os.getenv("NEO4J_PASSWORD", "password"),
-        help="Neo4j password (default: $NEO4J_PASSWORD or password)",
+        help="Graph database password (default: $NEO4J_PASSWORD or password)",
     )
     parser.add_argument(
         "--mock",
         action="store_true",
-        help="Use MockGraphBackend (no Neo4j needed)",
+        help="Use MockGraphBackend (no graph database needed)",
     )
 
     # Embedding configuration
@@ -100,9 +100,9 @@ Examples:
 
     backend = create_backend(
         backend_type="neo4j" if not args.mock else "mock",
-        neo4j_uri=args.neo4j_uri,
-        neo4j_user=args.neo4j_user,
-        neo4j_password=args.neo4j_password,
+        neo4j_uri=args.db_uri,
+        neo4j_user=args.db_user,
+        neo4j_password=args.db_password,
     )
     session = create_session(model_id="gpt-4o-mini")
 

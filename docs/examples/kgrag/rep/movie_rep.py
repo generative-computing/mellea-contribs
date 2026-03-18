@@ -9,7 +9,6 @@ from typing import Optional
 from docs.examples.kgrag.models import MovieEntity, PersonEntity, AwardEntity
 from mellea_contribs.kg.models import Entity, Relation
 from mellea_contribs.kg.rep import entity_to_text as base_entity_to_text
-from mellea_contribs.kg.rep import format_kg_context as base_format_kg_context
 from mellea_contribs.kg.rep import relation_to_text as base_relation_to_text
 
 

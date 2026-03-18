@@ -1,4 +1,11 @@
 #!/bin/bash
+# run.sh — Orchestrates the five-stage KG-RAG pipeline for the movie domain.
+#
+# Before running, configure your LLM and graph database:
+#   cp ../env_template ../.env && editor ../.env
+#
+# Requires: Python env with mellea-contribs[kg] installed, and a running
+# graph database (or pass --mock for local testing without any database).
 set -e  # Exit the script (not the terminal) on any command failure
 
 # Change to the script's directory to ensure correct module paths
@@ -23,7 +30,7 @@ Dataset mode (default: --tiny):
 
 STEPS (space-separated, default: all for the chosen mode):
   0   Create tiny dataset       (tiny mode only)
-  1   Load movie database into Neo4j
+  1   Load movie database into the graph database
   2   Compute entity embeddings
   3   Update KG with documents
   4   Run QA
@@ -99,22 +106,10 @@ else
   DATASET_LABEL="full"
 fi
 
-# LLM session — set API_BASE / API_KEY / MODEL_NAME before running this script:
-#   export API_BASE=https://your-rits-endpoint/v1
-#   export API_KEY=your-api-key
-#   export MODEL_NAME=meta-llama/llama-3-70b-instruct
-# Or place them in docs/examples/kgrag/.env (loaded automatically by the scripts).
-#
-# NOTE: Do NOT export API_BASE/API_KEY/MODEL_NAME as empty strings here.
-# Exporting a value (even an empty one) would prevent the scripts' dotenv
-# loader from filling them in from the .env file (load_dotenv uses
-# override=False by default).  Leave these unset so that the .env file
-# (at docs/examples/kgrag/.env) is the authoritative source.
-#
-# The Python scripts fall back to 'gpt-4o-mini' when MODEL_NAME is unset.
-#
-# Optional separate eval model: EVAL_API_BASE / EVAL_API_KEY / EVAL_MODEL_NAME
-# Optional embeddings:          EMB_API_BASE  / EMB_API_KEY  / EMB_MODEL_NAME
+# LLM endpoint: set API_BASE / API_KEY / MODEL_NAME in ../.env (or export them
+# before running).  Do NOT export these as empty strings — empty exports shadow
+# the .env values.  The scripts fall back to 'gpt-4o-mini' when MODEL_NAME is
+# unset.  Optional: EVAL_API_BASE/EVAL_MODEL_NAME, EMB_API_BASE/EMB_MODEL_NAME.
 
 if [ -z "${API_BASE:-}" ]; then
   echo "⚠  WARNING: API_BASE is not set in the environment."
@@ -161,18 +156,18 @@ if run_step 0; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 1: Load predefined movie data into Neo4j
+# Step 1: Load predefined movie data into the graph database
 # ---------------------------------------------------------------------------
 if run_step 1; then
   echo ""
   echo "Step 1: Loading predefined movie database into KG..."
   uv run --with mellea-contribs[kg] run_kg_preprocess.py \
     --data-dir ../dataset/movie \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD" \
+    --db-uri "$NEO4J_URI" \
+    --db-user "$NEO4J_USER" \
+    --db-password "$NEO4J_PASSWORD" \
     --batch-size 500 > "$KGRAG_ROOT/output/preprocess_stats.json"
-  echo "✓ Movie database loaded into Neo4j"
+  echo "✓ Movie database loaded"
 fi
 
 # ---------------------------------------------------------------------------
@@ -182,9 +177,9 @@ if run_step 2; then
   echo ""
   echo "Step 2: Running KG embedding on loaded entities..."
   uv run --with mellea-contribs[kg] run_kg_embed.py \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD" \
+    --db-uri "$NEO4J_URI" \
+    --db-user "$NEO4J_USER" \
+    --db-password "$NEO4J_PASSWORD" \
     --batch-size 100 > "$KGRAG_ROOT/output/embedding_stats.json"
   echo "✓ Entity embeddings computed"
 fi
@@ -198,9 +193,9 @@ if run_step 3; then
   uv run --with mellea-contribs[kg] run_kg_update.py \
     --dataset "$ACTIVE_DATASET" \
     --domain movie \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD" \
+    --db-uri "$NEO4J_URI" \
+    --db-user "$NEO4J_USER" \
+    --db-password "$NEO4J_PASSWORD" \
     --num-workers 10 \
     --verbose > "$KGRAG_ROOT/output/update_stats.json"
   echo "✓ Knowledge Graph updated with documents"
@@ -221,9 +216,9 @@ if run_step 4; then
     --routes 3 \
     --width 30 \
     --depth 3 \
-    --neo4j-uri "$NEO4J_URI" \
-    --neo4j-user "$NEO4J_USER" \
-    --neo4j-password "$NEO4J_PASSWORD"
+    --db-uri "$NEO4J_URI" \
+    --db-user "$NEO4J_USER" \
+    --db-password "$NEO4J_PASSWORD"
   echo "✓ QA completed"
 fi
 
@@ -250,7 +245,7 @@ echo "=================================================="
 echo "Steps run: ${STEPS[*]}"
 echo "Dataset:   $DATASET_LABEL ($ACTIVE_DATASET)"
 echo ""
-echo "Neo4j is running at: $NEO4J_URI"
+echo "Graph DB is running at: $NEO4J_URI"
 echo "Logs saved to: $KGRAG_ROOT/output/"
 echo "  - preprocess_stats.json  (step 1)"
 echo "  - embedding_stats.json   (step 2)"

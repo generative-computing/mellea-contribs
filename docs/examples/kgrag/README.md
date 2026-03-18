@@ -60,7 +60,7 @@ docs/examples/kgrag/
    # Edit .env and set: API_BASE, RITS_API_KEY, MODEL_NAME
    ```
 
-3. **Place dataset files** in `dataset/` (see `dataset/README.md` for instructions)
+3. **Place dataset files** in `dataset/` (see [Dataset Files](#dataset-files) below)
 
 ### Running the Pipeline
 
@@ -382,6 +382,41 @@ run_qa.py                             run_eval.py
         ├─ Think-on-Graph traversal      └─ CRAG metrics (accuracy, score,
         ├─ Prune + synthesise answer          hallucination, missing)
         └─ Output JSONL results
+```
+
+## Dataset Files
+
+Large data files are **not tracked in git** to keep repository size manageable.
+
+| File | Size | Used by |
+|------|------|---------|
+| `dataset/crag_movie_dev.jsonl.bz2` | ~140 MB | Step 3 (full mode) |
+| `dataset/movie/movie_db.json` | ~181 MB | Step 1 |
+| `dataset/movie/person_db.json` | ~44 MB | Step 1 |
+
+### Generating a tiny test dataset
+
+```bash
+cd scripts
+python create_tiny_dataset.py --output ../dataset/crag_movie_tiny.jsonl
+# Or truncate from the full set:
+python create_truncated_dataset.py --max-examples 100
+```
+
+### Acquiring the full dataset
+
+- Full CRAG dataset: contact project maintainers for access to `crag_movie_dev.jsonl.bz2`
+- Movie/person databases: sourced from the TMDB dataset
+
+### Testing without any data files
+
+Use `--mock` to test all scripts without a database or dataset:
+
+```bash
+cd scripts
+python run_kg_update.py --dataset ../dataset/crag_movie_tiny.jsonl.bz2 --mock
+python run_qa.py --dataset ../dataset/crag_movie_tiny.jsonl.bz2 --mock
+python run_eval.py --input ../output/qa_results.jsonl --mock
 ```
 
 ## See Also

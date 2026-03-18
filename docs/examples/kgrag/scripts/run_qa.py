@@ -16,14 +16,14 @@ Three independent sessions are created:
   entity alignment.  Optional; falls back to fuzzy name search only.
 
 Configuration is driven by environment variables so the script works
-transparently in containerised / RITS environments.  The variable names
+transparently in any containerised environment.  The variable names
 mirror those used by ``run_kg_update.py``:
 
 .. code-block:: bash
 
-    # Required — RITS (or any OpenAI-compatible) endpoint
-    export API_BASE=https://your-rits-endpoint/v1
-    export API_KEY=your-rits-api-key
+    # Required — any OpenAI-compatible endpoint (OpenAI, vLLM, Ollama, Azure, etc.)
+    export API_BASE=https://your-llm-endpoint/v1
+    export API_KEY=your-api-key
     export MODEL_NAME=meta-llama/llama-3-70b-instruct   # or gpt-4o-mini etc.
 
     # Optional — separate eval model (defaults to main session)
@@ -37,8 +37,9 @@ mirror those used by ``run_kg_update.py``:
     export EMB_MODEL_NAME=text-embedding-3-small
 
 When ``API_BASE`` is set the session uses ``OpenAIBackend`` directly, which
-works for any OpenAI-compatible endpoint (RITS, vLLM, Azure, etc.) regardless
-of model ID.  Use ``--mock`` to skip LLM calls entirely during local testing.
+works for any OpenAI-compatible endpoint (OpenAI, vLLM, Azure, Ollama, etc.)
+regardless of model ID.  Use ``--mock`` to skip LLM calls entirely during
+local testing.
 
     python run_qa.py \\
         --dataset ../dataset/crag_movie_tiny.jsonl.bz2 \\
@@ -225,20 +226,20 @@ async def main() -> None:
     parser.add_argument(
         "--mock",
         action="store_true",
-        help="Use MockGraphBackend (no Neo4j required)",
+        help="Use MockGraphBackend (no graph database required)",
     )
     parser.add_argument(
-        "--neo4j-uri",
+        "--db-uri",
         type=str,
         default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
     )
     parser.add_argument(
-        "--neo4j-user",
+        "--db-user",
         type=str,
         default=os.getenv("NEO4J_USER", "neo4j"),
     )
     parser.add_argument(
-        "--neo4j-password",
+        "--db-password",
         type=str,
         default=os.getenv("NEO4J_PASSWORD", "password"),
     )
@@ -309,16 +310,16 @@ async def main() -> None:
         litellm.set_verbose = True
 
     # ------------------------------------------------------------------
-    # RITS / LLM configuration check
+    # LLM configuration check
     # ------------------------------------------------------------------
-    # LiteLLM is the transport layer; RITS (or any OpenAI-compatible endpoint)
-    # is configured via API_BASE + API_KEY.  Without API_BASE, LiteLLM falls
-    # back to direct OpenAI, which fails without a valid OpenAI key.
+    # Any OpenAI-compatible endpoint is configured via API_BASE + API_KEY.
+    # Without API_BASE, the session falls back to direct OpenAI, which
+    # requires a valid OPENAI_API_KEY.
     if not args.mock and not os.getenv("API_BASE"):
         log_progress(
-            "WARNING: API_BASE is not set. LiteLLM will attempt to use the "
+            "WARNING: API_BASE is not set. The session will attempt to use the "
             "OpenAI API directly. Set API_BASE (and API_KEY / MODEL_NAME) to "
-            "point to your RITS endpoint, or pass --mock for local testing.",
+            "point to your LLM endpoint, or pass --mock for local testing.",
             level="WARNING",
         )
 
@@ -351,9 +352,9 @@ async def main() -> None:
     # ------------------------------------------------------------------
     backend = create_backend(
         backend_type="mock" if args.mock else "neo4j",
-        neo4j_uri=args.neo4j_uri,
-        neo4j_user=args.neo4j_user,
-        neo4j_password=args.neo4j_password,
+        neo4j_uri=args.db_uri,
+        neo4j_user=args.db_user,
+        neo4j_password=args.db_password,
     )
 
     # Main session — uses API_BASE / API_KEY / MODEL_NAME

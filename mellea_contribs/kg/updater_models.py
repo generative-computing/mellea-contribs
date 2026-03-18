@@ -338,6 +338,65 @@ class UpdateBatchResult(BaseModel):
     )
 
 
+class KGUpdateRunConfig(BaseModel):
+    """Aggregated run-time configuration for the KG update pipeline.
+
+    Collects all settings needed by a KG update run script: session (LLM model),
+    updater (concurrency, loop budgets), dataset (path, domain, progress), and
+    graph backend (connection, mock flag).
+
+    Typical usage::
+
+        config = KGUpdateRunConfig(
+            model="gpt-4o-mini",
+            num_workers=32,
+            domain="movie",
+            dataset_path="data/corpus.jsonl.bz2",
+        )
+    """
+
+    # Session
+    model: str = Field(default="gpt-4o-mini", description="LLM model for extraction and alignment.")
+
+    # Updater concurrency
+    num_workers: int = Field(default=64, description="Max concurrent async workers.")
+    queue_size: int = Field(default=64, description="Async queue capacity for document loading.")
+
+    # Loop budgets (passed to orchestrate_kg_update)
+    extraction_loop_budget: int = Field(
+        default=3, description="Retry budget for entity/relation extraction."
+    )
+    alignment_loop_budget: int = Field(
+        default=2, description="Retry budget for entity alignment."
+    )
+    align_topk: int = Field(
+        default=10, description="Number of top candidates considered during alignment."
+    )
+    align_entity: bool = Field(default=True, description="Whether to align entities.")
+    merge_entity: bool = Field(default=True, description="Whether to merge aligned entities.")
+    align_relation: bool = Field(default=True, description="Whether to align relations.")
+    merge_relation: bool = Field(default=True, description="Whether to merge aligned relations.")
+
+    # Dataset
+    dataset_path: Optional[str] = Field(default=None, description="Path to input JSONL dataset.")
+    domain: str = Field(default="movie", description="Knowledge domain label.")
+    progress_path: str = Field(
+        default="results/update_kg_progress.json",
+        description="Path to the progress checkpoint file.",
+    )
+
+    # Graph backend
+    db_uri: str = Field(
+        default="bolt://localhost:7687", description="Graph database connection URI."
+    )
+    db_user: str = Field(default="neo4j", description="Graph database username.")
+    db_password: str = Field(default="password", description="Graph database password.")
+    mock: bool = Field(default=False, description="Use in-memory mock backend instead of real DB.")
+
+    # Misc
+    verbose: bool = Field(default=False, description="Enable verbose logging.")
+
+
 __all__ = [
     "UpdateConfig",
     "UpdateSessionConfig",
@@ -345,4 +404,5 @@ __all__ = [
     "MergeConflict",
     "UpdateResult",
     "UpdateBatchResult",
+    "KGUpdateRunConfig",
 ]

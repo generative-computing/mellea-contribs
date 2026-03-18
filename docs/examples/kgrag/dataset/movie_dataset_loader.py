@@ -23,8 +23,6 @@ Each yielded item contains:
 * ``_raw``          — the original dict from the file.
 """
 
-from __future__ import annotations
-
 from typing import Any, Dict, Generator
 
 from mellea_contribs.kg.utils.data_utils import BaseDatasetLoader, load_jsonl

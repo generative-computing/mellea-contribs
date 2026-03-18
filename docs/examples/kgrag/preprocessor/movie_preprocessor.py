@@ -16,10 +16,10 @@ Example::
         processor = MovieKGPreprocessor(backend=backend, session=session)
 
         # Process a movie document
-        doc_text = \"\"\"Avatar is a 2009 science fiction film directed by James Cameron.
+        doc_text = '''Avatar is a 2009 science fiction film directed by James Cameron.
         It stars Sam Worthington, Zoe Saldana, and Sigourney Weaver.
         The film was nominated for multiple Academy Awards.
-        \"\"\"
+        '''
 
         result = await processor.process_document(
             doc_text=doc_text,
@@ -31,10 +31,17 @@ Example::
     asyncio.run(main())
 """
 
-from typing import Optional
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+from mellea_contribs.kg.components.query import CypherQuery
+from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.models import Entity, ExtractionResult
 from mellea_contribs.kg.preprocessor import KGPreprocessor
+from mellea_contribs.kg.utils import log_progress
 
 
 class MovieKGPreprocessor(KGPreprocessor):
@@ -232,4 +239,336 @@ FORMATTING NOTES:
         return entity
 
 
-__all__ = ["MovieKGPreprocessor"]
+@dataclass
+class PreprocessingStats:
+    """Statistics for a predefined-data preprocessing run."""
+
+    domain: str
+    start_time: datetime
+    end_time: datetime
+    duration_seconds: float
+    entities_loaded: int
+    entities_inserted: int
+    relations_loaded: int
+    relations_inserted: int
+    success: bool
+    error_message: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON output."""
+        return {
+            "domain": self.domain,
+            "start_time": self.start_time.isoformat(),
+            "end_time": self.end_time.isoformat(),
+            "duration_seconds": self.duration_seconds,
+            "entities_loaded": self.entities_loaded,
+            "entities_inserted": self.entities_inserted,
+            "relations_loaded": self.relations_loaded,
+            "relations_inserted": self.relations_inserted,
+            "success": self.success,
+            "error_message": self.error_message,
+        }
+
+    def __str__(self) -> str:
+        """Format statistics for display."""
+        status = "✓ SUCCESS" if self.success else "✗ FAILED"
+        lines = [
+            f"Domain: {self.domain}",
+            f"Status: {status}",
+            f"Duration: {self.duration_seconds:.2f}s",
+            f"Entities loaded: {self.entities_loaded}",
+            f"Entities inserted: {self.entities_inserted}",
+            f"Relations loaded: {self.relations_loaded}",
+            f"Relations inserted: {self.relations_inserted}",
+        ]
+        if self.error_message:
+            lines.append(f"Error: {self.error_message}")
+        return "\n".join(lines)
+
+
+class PredefinedDataPreprocessor:
+    """Loads predefined movie/person JSON databases into the knowledge graph.
+
+    Reads ``movie_db.json`` and ``person_db.json`` from *data_dir* and inserts
+    entities and relations via the graph backend's Cypher execution API.
+
+    Args:
+        backend: Graph database backend.
+        data_dir: Directory containing ``movie_db.json`` and ``person_db.json``.
+        batch_size: Number of records per Cypher batch (default: 50).
+    """
+
+    def __init__(
+        self,
+        backend: GraphBackend,
+        data_dir: Path,
+        batch_size: int = 50,
+    ):
+        """Initialize preprocessor."""
+        self.backend = backend
+        self.data_dir = Path(data_dir)
+        self.batch_size = batch_size
+        self.movie_db: Dict[str, Dict] = {}
+        self.person_db: Dict[str, Dict] = {}
+
+    async def preprocess(self) -> PreprocessingStats:
+        """Run the full preprocessing pipeline.
+
+        Returns:
+            PreprocessingStats with counts and timing.
+        """
+        start_time = datetime.now()
+        try:
+            log_progress("Loading movie database...")
+            self.movie_db = self._load_json_file("movie_db.json")
+            log_progress(f"✓ Loaded {len(self.movie_db)} movies")
+
+            log_progress("Loading person database...")
+            self.person_db = self._load_json_file("person_db.json")
+            log_progress(f"✓ Loaded {len(self.person_db)} persons")
+
+            log_progress("\nInserting movie entities...")
+            movies_inserted = await self._insert_movies()
+            log_progress("Inserting person entities...")
+            persons_inserted = await self._insert_persons()
+            log_progress("\nInserting movie-person relations...")
+            relations_inserted = await self._insert_movie_relations()
+
+            end_time = datetime.now()
+            return PreprocessingStats(
+                domain="movie",
+                start_time=start_time,
+                end_time=end_time,
+                duration_seconds=(end_time - start_time).total_seconds(),
+                entities_loaded=len(self.movie_db) + len(self.person_db),
+                entities_inserted=movies_inserted + persons_inserted,
+                relations_loaded=0,
+                relations_inserted=relations_inserted,
+                success=True,
+            )
+        except Exception as e:
+            end_time = datetime.now()
+            log_progress(f"✗ Preprocessing failed: {e}")
+            return PreprocessingStats(
+                domain="movie",
+                start_time=start_time,
+                end_time=end_time,
+                duration_seconds=(end_time - start_time).total_seconds(),
+                entities_loaded=0,
+                entities_inserted=0,
+                relations_loaded=0,
+                relations_inserted=0,
+                success=False,
+                error_message=str(e),
+            )
+        finally:
+            await self.backend.close()
+
+    def _load_json_file(self, filename: str) -> Dict[str, Any]:
+        """Load a JSON file from the data directory."""
+        file_path = self.data_dir / filename
+        if not file_path.exists():
+            raise FileNotFoundError(f"Data file not found: {file_path}")
+        with open(file_path, "r") as f:
+            return json.load(f)
+
+    async def _execute_cypher_batch(self, cypher_query: str, batch: List[Dict]) -> None:
+        """Execute a parameterised Cypher query with a batch of items."""
+        if not batch:
+            return
+        try:
+            query = CypherQuery(cypher_query, parameters={"batch": batch})
+            await self.backend.execute_query(query)
+        except Exception as e:
+            log_progress(f"  Warning: Batch insert failed: {e}")
+
+    async def _insert_movies(self) -> int:
+        """Insert movie entities. Returns count inserted."""
+        count = 0
+        batch: List[Dict] = []
+        for movie_id, movie_data in self.movie_db.items():
+            batch.append({
+                "name": movie_data.get("title", f"Movie_{movie_id}").upper(),
+                "release_date": movie_data.get("release_date"),
+                "original_language": movie_data.get("original_language"),
+                "budget": str(movie_data.get("budget")) if movie_data.get("budget") else None,
+                "revenue": str(movie_data.get("revenue")) if movie_data.get("revenue") else None,
+                "rating": str(movie_data.get("rating")) if movie_data.get("rating") else None,
+            })
+            count += 1
+            if len(batch) >= self.batch_size:
+                await self._execute_cypher_batch(
+                    """
+                    UNWIND $batch AS movie
+                    MERGE (m:Movie {name: movie.name})
+                    SET m.release_date = movie.release_date,
+                        m.original_language = movie.original_language,
+                        m.budget = movie.budget,
+                        m.revenue = movie.revenue,
+                        m.rating = movie.rating
+                    """,
+                    batch,
+                )
+                log_progress(f"  Inserted {count} movies...")
+                batch = []
+        if batch:
+            await self._execute_cypher_batch(
+                """
+                UNWIND $batch AS movie
+                MERGE (m:Movie {name: movie.name})
+                SET m.release_date = movie.release_date,
+                    m.original_language = movie.original_language,
+                    m.budget = movie.budget,
+                    m.revenue = movie.revenue,
+                    m.rating = movie.rating
+                """,
+                batch,
+            )
+        log_progress(f"✓ Inserted {count} movie entities")
+        return count
+
+    async def _insert_persons(self) -> int:
+        """Insert person entities. Returns count inserted."""
+        count = 0
+        batch: List[Dict] = []
+        for person_id, person_data in self.person_db.items():
+            batch.append({
+                "name": person_data.get("name", f"Person_{person_id}").upper(),
+                "birthday": person_data.get("birthday"),
+            })
+            count += 1
+            if len(batch) >= self.batch_size:
+                await self._execute_cypher_batch(
+                    """
+                    UNWIND $batch AS person
+                    MERGE (p:Person {name: person.name})
+                    SET p.birthday = person.birthday
+                    """,
+                    batch,
+                )
+                log_progress(f"  Inserted {count} persons...")
+                batch = []
+        if batch:
+            await self._execute_cypher_batch(
+                """
+                UNWIND $batch AS person
+                MERGE (p:Person {name: person.name})
+                SET p.birthday = person.birthday
+                """,
+                batch,
+            )
+        log_progress(f"✓ Inserted {count} person entities")
+        return count
+
+    async def _insert_movie_relations(self) -> int:
+        """Insert relations between movies and persons. Returns count inserted."""
+        count = 0
+        cast_batch: List[Dict] = []
+        director_batch: List[Dict] = []
+        genre_batch: List[Dict] = []
+
+        for movie_id, movie_data in self.movie_db.items():
+            movie_name = movie_data.get("title", f"Movie_{movie_id}").upper()
+
+            for cast_member in movie_data.get("cast") or []:
+                if not isinstance(cast_member, dict):
+                    continue
+                person_name = cast_member.get("name", "").upper()
+                if not person_name:
+                    continue
+                cast_batch.append({
+                    "person_name": person_name,
+                    "movie_name": movie_name,
+                    "character": cast_member.get("character", ""),
+                    "order": cast_member.get("order", 0),
+                })
+                count += 1
+                if len(cast_batch) >= self.batch_size:
+                    await self._execute_cypher_batch(
+                        """
+                        UNWIND $batch AS item
+                        MATCH (m:Movie {name: item.movie_name})
+                        MATCH (p:Person {name: item.person_name})
+                        MERGE (p)-[:ACTED_IN {character: item.character, order: item.order}]->(m)
+                        """,
+                        cast_batch,
+                    )
+                    cast_batch = []
+
+            for crew_member in movie_data.get("crew") or []:
+                if not isinstance(crew_member, dict):
+                    continue
+                person_name = crew_member.get("name", "").upper()
+                job = crew_member.get("job", "").lower()
+                if not person_name or not job:
+                    continue
+                if "director" in job:
+                    director_batch.append({"person_name": person_name, "movie_name": movie_name})
+                    if len(director_batch) >= self.batch_size:
+                        await self._execute_cypher_batch(
+                            """
+                            UNWIND $batch AS item
+                            MATCH (m:Movie {name: item.movie_name})
+                            MATCH (p:Person {name: item.person_name})
+                            MERGE (p)-[:DIRECTED]->(m)
+                            """,
+                            director_batch,
+                        )
+                        director_batch = []
+                count += 1
+
+            for genre in movie_data.get("genres") or []:
+                genre_name = (genre.get("name", "") if isinstance(genre, dict) else str(genre)).upper()
+                if not genre_name:
+                    continue
+                genre_batch.append({"movie_name": movie_name, "genre_name": genre_name})
+                count += 1
+                if len(genre_batch) >= self.batch_size:
+                    await self._execute_cypher_batch(
+                        """
+                        UNWIND $batch AS item
+                        MATCH (m:Movie {name: item.movie_name})
+                        MERGE (g:Genre {name: item.genre_name})
+                        MERGE (m)-[:BELONGS_TO_GENRE]->(g)
+                        """,
+                        genre_batch,
+                    )
+                    genre_batch = []
+
+        # Flush remaining batches
+        if cast_batch:
+            await self._execute_cypher_batch(
+                """
+                UNWIND $batch AS item
+                MATCH (m:Movie {name: item.movie_name})
+                MATCH (p:Person {name: item.person_name})
+                MERGE (p)-[:ACTED_IN {character: item.character, order: item.order}]->(m)
+                """,
+                cast_batch,
+            )
+        if director_batch:
+            await self._execute_cypher_batch(
+                """
+                UNWIND $batch AS item
+                MATCH (m:Movie {name: item.movie_name})
+                MATCH (p:Person {name: item.person_name})
+                MERGE (p)-[:DIRECTED]->(m)
+                """,
+                director_batch,
+            )
+        if genre_batch:
+            await self._execute_cypher_batch(
+                """
+                UNWIND $batch AS item
+                MATCH (m:Movie {name: item.movie_name})
+                MERGE (g:Genre {name: item.genre_name})
+                MERGE (m)-[:BELONGS_TO_GENRE]->(g)
+                """,
+                genre_batch,
+            )
+
+        log_progress(f"✓ Inserted {count} relations")
+        return count
+
+
+__all__ = ["MovieKGPreprocessor", "PredefinedDataPreprocessor", "PreprocessingStats"]
