@@ -295,6 +295,3 @@ class TestStrategyConfiguration:
         strategy2 = MultiTurnStrategy(loop_budget=2)
         response2 = lm2.forward(prompt="Test 2", strategy=strategy2)
         assert response2 is not None
-
-
-# Made with Bob

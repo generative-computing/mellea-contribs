@@ -307,6 +307,3 @@ class TestStrategyScenarios:
             call_kwargs = mock_gen.call_args[1]
             assert call_kwargs["strategy"] == adaptive_strategy
             assert call_kwargs["strategy"].confidence_threshold == 0.8
-
-
-# Made with Bob

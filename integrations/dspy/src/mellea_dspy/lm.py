@@ -5,6 +5,7 @@ enabling DSPy applications to use Mellea's generative programming
 capabilities through the standard DSPy interface.
 """
 
+import copy
 from typing import Any
 
 import dspy
@@ -99,6 +100,55 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
 
         self.provider = "mellea"
 
+    def __deepcopy__(self, memo: dict[int, Any]) -> "MelleaLM":
+        """Custom deepcopy to handle non-picklable objects.
+
+        DSPy's BestOfN and Refine use deepcopy to create independent copies
+        of the LM. Since MelleaSession contains thread locks that can't be
+        pickled, we need to handle the copy manually by reusing the same
+        session reference.
+
+        Args:
+            memo: Memoization dictionary for deepcopy
+
+        Returns:
+            A new MelleaLM instance sharing the same MelleaSession
+        """
+        # Create a new instance with the same mellea_session (shared reference)
+        # This is safe because MelleaSession is designed to be thread-safe
+
+        # Get temperature and max_tokens with proper type handling
+        temperature = self.kwargs.get("temperature", 0.0)
+        max_tokens = self.kwargs.get("max_tokens", 1000)
+
+        # Ensure max_tokens is an int
+        if isinstance(max_tokens, float):
+            max_tokens = int(max_tokens)
+
+        # Get requirements and strategy from base class if available
+        requirements = getattr(self, "_requirements", None)
+        strategy = getattr(self, "_strategy", None)
+
+        new_instance = MelleaLM(
+            mellea_session=self.mellea_session,
+            model=self.model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            requirements=requirements,
+            strategy=strategy,
+            **{
+                k: v
+                for k, v in self.kwargs.items()
+                if k not in ["temperature", "max_tokens"]
+            },
+        )
+
+        # Copy the history if it exists
+        if hasattr(self, "history"):
+            new_instance.history = copy.deepcopy(self.history, memo)
+
+        return new_instance
+
     def generate(self, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
         """Generate response using Mellea (sync version).
 
@@ -129,27 +179,21 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
         """
         return await self.aforward(messages=messages, **kwargs)
 
-    def forward(
-        self,
-        prompt: str | None = None,
-        messages: list[dict[str, Any]] | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        """Forward pass for the language model.
-
-        This method implements the DSPy LM interface and returns a response
-        in OpenAI-compatible format.
+    def _prepare_forward_params(
+        self, prompt: str | None, messages: list[dict[str, Any]] | None, **kwargs: Any
+    ) -> tuple[str, dict[str, Any], Any, Any]:
+        """Prepare parameters for forward/aforward methods.
 
         Args:
-            prompt: Optional prompt string (used if messages not provided)
+            prompt: Optional prompt string
             messages: Optional list of message dictionaries
-            **kwargs: Additional generation parameters including:
-                - requirements: List of requirement strings for validation
-                - strategy: Sampling strategy for validated generation
-                - model_options: Additional Mellea model options
+            **kwargs: Additional generation parameters
 
         Returns:
-            OpenAI-compatible response object
+            Tuple of (prompt_text, merged_options, requirements, strategy)
+
+        Raises:
+            ValueError: If neither prompt nor messages is provided
         """
         # Determine what to send to Mellea
         if messages:
@@ -174,6 +218,51 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
         merged_options.pop("cache", None)
         merged_options.pop("model_type", None)
 
+        return prompt_text, merged_options, requirements, strategy
+
+    def _process_response(self, response: Any) -> Any:
+        """Process Mellea response into OpenAI-compatible format.
+
+        Args:
+            response: Raw Mellea response
+
+        Returns:
+            OpenAI-compatible response object with updated model name
+        """
+        # Convert response using message converter
+        openai_response = self.message_converter.from_mellea(response)
+
+        # Update model name in response
+        openai_response.model = self.model
+
+        return openai_response
+
+    def forward(
+        self,
+        prompt: str | None = None,
+        messages: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Forward pass for the language model.
+
+        This method implements the DSPy LM interface and returns a response
+        in OpenAI-compatible format.
+
+        Args:
+            prompt: Optional prompt string (used if messages not provided)
+            messages: Optional list of message dictionaries
+            **kwargs: Additional generation parameters including:
+                - requirements: List of requirement strings for validation
+                - strategy: Sampling strategy for validated generation
+                - model_options: Additional Mellea model options
+
+        Returns:
+            OpenAI-compatible response object
+        """
+        prompt_text, merged_options, requirements, strategy = (
+            self._prepare_forward_params(prompt, messages, **kwargs)
+        )
+
         # Generate with Mellea using base class method
         response = self._generate_with_mellea(
             prompt_text,
@@ -183,13 +272,7 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
             strategy=strategy,
         )
 
-        # Convert response using message converter
-        openai_response = self.message_converter.from_mellea(response)
-
-        # Update model name in response
-        openai_response.model = self.model
-
-        return openai_response
+        return self._process_response(response)
 
     async def aforward(
         self,
@@ -213,28 +296,9 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
         Returns:
             OpenAI-compatible response object
         """
-        # Determine what to send to Mellea
-        if messages:
-            prompt_text, model_options, _ = self._prepare_generation(
-                messages, None, **kwargs
-            )
-        else:
-            prompt_text = prompt
-            model_options = kwargs.get("model_options", {})
-
-        if not prompt_text:
-            raise ValueError("Either prompt or messages must be provided")
-
-        # Extract Mellea-specific parameters
-        requirements = kwargs.get("requirements")
-        strategy = kwargs.get("strategy")
-
-        # Merge kwargs into model_options (temperature, max_tokens, etc.)
-        merged_options = {**self.kwargs, **model_options}
-
-        # Remove DSPy-specific parameters that Mellea doesn't need
-        merged_options.pop("cache", None)
-        merged_options.pop("model_type", None)
+        prompt_text, merged_options, requirements, strategy = (
+            self._prepare_forward_params(prompt, messages, **kwargs)
+        )
 
         # Generate with Mellea using base class async method
         response = await self._agenerate_with_mellea(
@@ -245,13 +309,4 @@ class MelleaLM(dspy.BaseLM, MelleaIntegrationBase):
             strategy=strategy,
         )
 
-        # Convert response using message converter
-        openai_response = self.message_converter.from_mellea(response)
-
-        # Update model name in response
-        openai_response.model = self.model
-
-        return openai_response
-
-
-# Made with Bob
+        return self._process_response(response)

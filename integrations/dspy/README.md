@@ -123,7 +123,130 @@ Improve program performance:
 
 ```bash
 uv run examples/06_optimization.py
+### [07. Ollama with Granite](examples/07_ollama_granite.py)
+Configure specific models:
+- OllamaBackend setup
+- Custom model configuration
+- Backend vs model parameter
+
+```bash
+uv run examples/07_ollama_granite.py
 ```
+
+### [08. BestOfN Verification](examples/08_bestofn_verification.py) ⭐ NEW
+Runtime verification with BestOfN:
+- Generate N candidates, select best
+- Automatic requirement-to-reward conversion
+- Multiple requirement types
+- Custom callable requirements
+- Combination strategies
+
+```bash
+uv run examples/08_bestofn_verification.py
+```
+
+### [09. Refine Verification](examples/09_refine_verification.py) ⭐ NEW
+
+Iterative refinement with requirements:
+- Iterative output improvement
+- Requirement-guided refinement
+- Quality-focused strategies
+- Custom refinement criteria
+- Comparison with BestOfN
+
+```bash
+uv run examples/09_refine_verification.py
+```
+
+### [10. Hybrid Approach](examples/10_hybrid_approach.py) ⭐ NEW
+
+Two ways to use Mellea requirements with DSPy:
+- High-level wrappers (MelleaBestOfN, MelleaRefine)
+- Direct DSPy with create_reward_fn()
+- Side-by-side comparisons
+- When to use each approach
+
+```bash
+uv run examples/10_hybrid_approach.py
+```
+
+### Runtime Verification with BestOfN and Refine ⭐ NEW
+
+Two approaches for using Mellea requirements with DSPy verification:
+
+**Approach 1: High-Level Wrappers (Recommended)**
+
+```python
+from mellea_dspy import MelleaBestOfN, MelleaRefine
+
+# BestOfN: Generate N candidates, select best
+qa = dspy.Predict("question -> answer")
+best_of_5 = MelleaBestOfN(
+    module=qa,
+    N=5,
+    requirements=[
+        "Must be one word",
+        "Must be a proper noun"
+    ],
+    threshold=0.8
+)
+result = best_of_5(question="What is the capital of Belgium?")
+# Returns: "Brussels"
+
+# Refine: Iteratively improve output
+refiner = MelleaRefine(
+    module=qa,
+    N=3,
+    requirements=[
+        "Must be under 50 words",
+        "Must be professional"
+    ],
+    threshold=0.9
+)
+result = refiner(question="What is Python?")
+# Iteratively refines until requirements are met
+```
+
+**Approach 2: Direct DSPy with create_reward_fn() (Advanced)**
+
+```python
+import dspy
+from mellea_dspy import create_reward_fn
+
+# Create reward function from requirements
+reward_fn = create_reward_fn(
+    requirements=["Must be one word", "Must be a proper noun"],
+    strategy="average"
+)
+
+# Use with native DSPy
+qa = dspy.Predict("question -> answer")
+best_of_5 = dspy.BestOfN(
+    module=qa,
+    N=5,
+    reward_fn=reward_fn,
+    threshold=0.8
+)
+result = best_of_5(question="What is the capital of Belgium?")
+```
+
+**When to Use Each Approach:**
+- **Wrappers**: Simple API, Mellea-native, recommended for most users
+- **Direct DSPy**: Advanced customization, fine-grained control, complex pipelines
+
+**Key Features:**
+- Automatic requirement-to-reward conversion
+- Support for string and callable requirements
+- Multiple combination strategies (average, min, product)
+- Configurable thresholds and iterations
+- Works with any DSPy module
+
+**Requirement Types:**
+- Length constraints: "Must be under 50 words"
+- Content checks: "Must mention AI"
+- Format requirements: "Must be in bullet points"
+- Quality criteria: "Must be professional"
+- Custom callables: `lambda args, pred: len(pred.answer) < 100`
 
 **See [examples/README.md](examples/README.md) for detailed documentation.**
 
