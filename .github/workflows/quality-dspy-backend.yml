@@ -37,7 +37,7 @@ jobs:
         run: |
           cd mellea_contribs/dspy_backend
           uv sync --dev
-          uv run pytest -v tests/
+          uv run -- pytest -v tests/
       - name: Send failure message
         if: failure()
         run: echo "DSPy backend tests failed. Please verify that tests are working locally."

@@ -28,7 +28,7 @@ jobs:
         run: |
           cd mellea_contribs/reqlib_package
           uv sync --dev
-          uv run pytest -v test/
+          uv run -- pytest -v test/
       - name: Send failure message
         if: failure()
         run: echo "Reqlib package tests failed. Please verify that tests are working locally."
