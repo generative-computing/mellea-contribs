@@ -24,14 +24,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
-      - name: Run mellea-integration-core Tests
+      - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/mellea-integration-core
-          uv sync
-          uv pip install git+https://github.com/generative-computing/mellea.git@main
-          PYTHONPATH=src uv run pytest -v tests/
+          uv sync --dev
+          uv run pytest -v tests/
       - name: Send failure message
         if: failure()
         run: echo "mellea-integration-core tests failed. Please verify that tests are working locally."
