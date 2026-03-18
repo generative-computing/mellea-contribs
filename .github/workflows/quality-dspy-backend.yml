@@ -27,20 +27,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
       - name: Install Ollama
         run: curl -fsSL https://ollama.com/install.sh | sh
       - name: Start serving ollama
         run: nohup ollama serve &
       - name: Pull model granite4:micro
         run: ollama pull granite4:micro
-      - name: Run DSPy Backend Tests (includes integration tests with Ollama)
+      - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/dspy_backend
-          uv pip install git+https://github.com/generative-computing/mellea.git@main
-          uv pip install ../mellea-integration-core
-          uv pip install dspy pytest pytest-asyncio pytest-cov
+          uv pip install -e ../mellea-integration-core
+          uv pip install -e .
+          uv pip install pytest pytest-asyncio pytest-cov
           PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v tests/
       - name: Send failure message
         if: failure()

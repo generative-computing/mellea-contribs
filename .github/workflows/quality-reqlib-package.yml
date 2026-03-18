@@ -24,13 +24,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
-      - name: Run Reqlib Package Tests
+      - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/reqlib_package
-          uv pip install git+https://github.com/generative-computing/mellea.git@main
-          uv pip install eyecite citeurl playwright pytest pytest-asyncio pytest-cov
+          uv pip install -e .
+          uv pip install pytest pytest-asyncio pytest-cov
           PYTHONPATH=src python -m pytest -v test/
       - name: Send failure message
         if: failure()

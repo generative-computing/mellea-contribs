@@ -24,12 +24,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
-      - name: Run Tools Package Tests
+      - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/tools_package
-          uv pip install git+https://github.com/generative-computing/mellea.git@main
+          uv pip install -e .
           uv pip install pytest pytest-asyncio pytest-cov
           PYTHONPATH=src python -m pytest -v test/test_double_round_robin.py test/test_top_k.py
       - name: Send failure message
