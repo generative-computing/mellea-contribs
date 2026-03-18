@@ -22,10 +22,12 @@ import json
 import os
 import sys
 
+from dotenv import load_dotenv
+
 from mellea_contribs.kg.embedder import KGEmbedder
 from mellea_contribs.kg.utils import (
     create_backend,
-    create_session,
+    create_session_from_env,
     log_progress,
     output_json,
     print_stats,
@@ -98,18 +100,33 @@ Examples:
 
     args = parser.parse_args()
 
+    # Load .env from the parent directory (docs/examples/kgrag/.env)
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    load_dotenv(env_path, override=False)
+
     backend = create_backend(
         backend_type="neo4j" if not args.mock else "mock",
         neo4j_uri=args.db_uri,
         neo4j_user=args.db_user,
         neo4j_password=args.db_password,
     )
-    session = create_session(model_id="gpt-4o-mini")
+    session, _ = create_session_from_env()
+
+    emb_api_base = os.getenv("EMB_API_BASE")
+    emb_api_key = os.getenv("EMB_API_KEY")
+    emb_model = os.getenv("EMB_MODEL_NAME", args.model)
+    emb_dimension = int(os.getenv("VECTOR_DIMENSIONS", str(args.dimension)))
+    # RITS authenticates via a custom header; fall back to the primary key.
+    rits_api_key = os.getenv("EMB_RITS_API_KEY") or os.getenv("RITS_API_KEY")
+    extra_headers = {"RITS_API_KEY": rits_api_key} if rits_api_key else {}
 
     embedder = KGEmbedder(
         session=session,
-        model=args.model,
-        dimension=args.dimension,
+        model=emb_model,
+        dimension=emb_dimension,
+        api_base=emb_api_base,
+        api_key=emb_api_key,
+        extra_headers=extra_headers,
         batch_size=args.batch_size,
         backend=backend,
     )

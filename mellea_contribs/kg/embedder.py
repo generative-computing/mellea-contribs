@@ -52,6 +52,7 @@ Example::
 """
 
 import logging
+import asyncio
 import math
 import time
 from datetime import datetime
@@ -86,6 +87,7 @@ class KGEmbedder:
         dimension: int = 1536,
         api_base: Optional[str] = None,
         api_key: Optional[str] = None,
+        extra_headers: Optional[dict] = None,
         batch_size: int = 10,
         backend: Optional[GraphBackend] = None,
     ):
@@ -102,17 +104,36 @@ class KGEmbedder:
                 Default: 1536 (OpenAI's embedding size)
             api_base: Optional API base URL for custom embedding service.
                 If None, uses default LiteLLM routing
-            api_key: Optional API key for embedding service
+            api_key: Optional API key for embedding service. When api_base is
+                set and no key is provided, defaults to "dummy" so that
+                OpenAI-compatible endpoints that authenticate via custom
+                headers (e.g. RITS) do not raise an auth error.
+            extra_headers: Optional dict of extra HTTP headers forwarded to
+                the embedding endpoint (e.g. {"RITS_API_KEY": "..."}).
             batch_size: Number of entities to embed in parallel per batch.
                 Default: 10
             backend: Optional GraphBackend for persisting embeddings
         """
 
         self.session = session
+        # When routing through a custom OpenAI-compatible endpoint (api_base
+        # is set) and the model name doesn't already carry a LiteLLM provider
+        # prefix (e.g. "openai/", "huggingface/", "azure/"), prepend "openai/"
+        # so LiteLLM routes to the correct adapter instead of raising
+        # "LLM Provider NOT provided".
+        _LITELLM_PROVIDERS = {
+            "openai", "azure", "huggingface", "ollama", "cohere",
+            "anthropic", "replicate", "together_ai", "vertex_ai",
+        }
+        if api_base and model.split("/")[0] not in _LITELLM_PROVIDERS:
+            model = f"openai/{model}"
         self.embedding_model = model
         self.embedding_dimension = dimension
         self.api_base = api_base
-        self.api_key = api_key
+        # Default to "dummy" when a custom endpoint is in use — services like
+        # RITS authenticate via extra_headers rather than a bearer token.
+        self.api_key = api_key or ("dummy" if api_base else None)
+        self.extra_headers = extra_headers or {}
         self.batch_size = batch_size
         self.backend = backend
 
@@ -290,22 +311,75 @@ class KGEmbedder:
             # Use LiteLLM's embedding API through litellm.embedding()
             import litellm
 
-            response = await litellm.aembedding(
-                model=self.embedding_model,
-                input=text,
-            )
+            kwargs: dict = {
+                "model": self.embedding_model,
+                "input": text,
+                "encoding_format": "float",
+            }
+            if self.api_base:
+                kwargs["api_base"] = self.api_base
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.extra_headers:
+                kwargs["extra_headers"] = self.extra_headers
+            response = await litellm.aembedding(**kwargs)
 
-            # Extract embedding from response
+            # LiteLLM returns an EmbeddingResponse object with a .data list.
+            # Items may be Embedding objects (.embedding) or plain dicts.
+            if hasattr(response, "data"):
+                item = response.data[0]
+                return item["embedding"] if isinstance(item, dict) else item.embedding
+            # Fallback for plain dict responses
             if isinstance(response, dict) and "data" in response:
-                embedding = response["data"][0]["embedding"]
-            else:
-                # Handle different response formats
-                embedding = response[0]["embedding"] if isinstance(response, list) else response
-
-            return embedding
+                return response["data"][0]["embedding"]
+            # Fallback for plain list responses
+            if isinstance(response, list):
+                return response[0]["embedding"]
+            return response
         except Exception as e:
             logger.error(f"Embedding API error: {e}")
             raise
+
+    async def _get_embeddings_batch(self, texts: list[str]) -> list[list[float]]:
+        """Embed a list of texts in a single API call.
+
+        OpenAI-compatible endpoints accept a list as the ``input`` field,
+        which is far more efficient than one call per text.
+
+        Args:
+            texts: List of strings to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+
+        Raises:
+            Exception: If the embedding API call fails.
+        """
+        import litellm
+
+        kwargs: dict = {
+            "model": self.embedding_model,
+            "input": texts,
+            "encoding_format": "float",
+        }
+        if self.api_base:
+            kwargs["api_base"] = self.api_base
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        if self.extra_headers:
+            kwargs["extra_headers"] = self.extra_headers
+
+        response = await litellm.aembedding(**kwargs)
+
+        if hasattr(response, "data"):
+            items = response.data
+            return [
+                item["embedding"] if isinstance(item, dict) else item.embedding
+                for item in items
+            ]
+        if isinstance(response, dict) and "data" in response:
+            return [item["embedding"] for item in response["data"]]
+        raise ValueError(f"Unexpected embedding response format: {type(response)}")
 
     # ------------------------------------------------------------------
     # Neo4j pipeline: fetch / store / index
@@ -525,19 +599,56 @@ class KGEmbedder:
         vector_indices = 0
 
         try:
+            try:
+                from tqdm import tqdm as _tqdm
+            except ImportError:
+                _tqdm = None
+
             # --- entities ---------------------------------------------------
             logger.info("Embedding pipeline: fetching entities…")
             entities = await self.fetch_entities_from_neo4j()
             logger.info(f"  Fetched {len(entities)} entities")
 
-            for i, entity in enumerate(entities):
-                try:
-                    await self.embed_entity(entity)
-                    entities_embedded += 1
-                except Exception:
-                    entities_failed += 1
-                if (i + 1) % batch_size == 0:
-                    logger.info(f"  Embedded {i + 1}/{len(entities)} entities…")
+            semaphore = asyncio.Semaphore(16)  # max concurrent batch requests
+
+            async def _embed_entity_batch(batch: list) -> tuple[int, int]:
+                """Embed one batch via a single API call; return (ok, failed)."""
+                texts = []
+                for ent in batch:
+                    parts = []
+                    if ent.name:
+                        parts.append(f"Name: {ent.name}")
+                    if ent.description:
+                        parts.append(f"Description: {ent.description}")
+                    texts.append(" ".join(parts) or ent.name or "")
+                async with semaphore:
+                    try:
+                        embeddings = await self._get_embeddings_batch(texts)
+                        for ent, emb in zip(batch, embeddings):
+                            ent.embedding = emb
+                        return len(batch), 0
+                    except Exception as exc:
+                        logger.error(f"Batch embed error: {exc}")
+                        return 0, len(batch)
+
+            entity_batches = [
+                entities[i : i + batch_size]
+                for i in range(0, len(entities), batch_size)
+            ]
+            pbar = _tqdm(total=len(entities), desc="Embedding entities", unit="ent") if _tqdm else None
+            tasks = [_embed_entity_batch(b) for b in entity_batches]
+            for coro in asyncio.as_completed(tasks):
+                ok, failed = await coro
+                entities_embedded += ok
+                entities_failed += failed
+                if pbar:
+                    pbar.update(ok + failed)
+                else:
+                    done = entities_embedded + entities_failed
+                    if done % (batch_size * 10) == 0:
+                        logger.info(f"  Embedded {done}/{len(entities)} entities…")
+            if pbar:
+                pbar.close()
 
             if entities_embedded:
                 entities_stored = await self.store_entity_embeddings(entities)
@@ -548,15 +659,36 @@ class KGEmbedder:
             relations = await self.fetch_relations_from_neo4j()
             logger.info(f"  Fetched {len(relations)} relations")
 
-            for i, relation in enumerate(relations):
-                try:
-                    text = f"Relation: {relation.relation_type}"
-                    relation.embedding = await self._get_embedding(text)  # type: ignore[attr-defined]
-                    relations_embedded += 1
-                except Exception:
-                    relations_failed += 1
-                if (i + 1) % batch_size == 0:
-                    logger.info(f"  Embedded {i + 1}/{len(relations)} relations…")
+            async def _embed_relation_batch(batch: list) -> tuple[int, int]:
+                texts = [f"Relation: {r.relation_type}" for r in batch]
+                async with semaphore:
+                    try:
+                        embeddings = await self._get_embeddings_batch(texts)
+                        for rel, emb in zip(batch, embeddings):
+                            rel.embedding = emb  # type: ignore[attr-defined]
+                        return len(batch), 0
+                    except Exception as exc:
+                        logger.error(f"Relation batch embed error: {exc}")
+                        return 0, len(batch)
+
+            relation_batches = [
+                relations[i : i + batch_size]
+                for i in range(0, len(relations), batch_size)
+            ]
+            pbar = _tqdm(total=len(relations), desc="Embedding relations", unit="rel") if _tqdm else None
+            tasks = [_embed_relation_batch(b) for b in relation_batches]
+            for coro in asyncio.as_completed(tasks):
+                ok, failed = await coro
+                relations_embedded += ok
+                relations_failed += failed
+                if pbar:
+                    pbar.update(ok + failed)
+                else:
+                    done = relations_embedded + relations_failed
+                    if done % (batch_size * 10) == 0:
+                        logger.info(f"  Embedded {done}/{len(relations)} relations…")
+            if pbar:
+                pbar.close()
 
             if relations_embedded:
                 relations_stored = await self.store_relation_embeddings(relations)
