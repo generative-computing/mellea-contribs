@@ -24,14 +24,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
-      - name: Install mellea from main branch
-        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
-      - name: Run LangChain Backend Tests (unit tests only)
+      - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/langchain_backend
-          uv pip install git+https://github.com/generative-computing/mellea.git@main
-          uv pip install ../mellea-integration-core
-          uv pip install langchain-core pydantic pytest pytest-asyncio pytest-cov
+          uv pip install -e ../mellea-integration-core
+          uv pip install -e .
+          uv pip install pytest pytest-asyncio pytest-cov
           PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v tests/ --ignore=tests/integration
       - name: Send failure message
         if: failure()
