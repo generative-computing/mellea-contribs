@@ -1,5 +1,6 @@
-from mellea_contribs.reqlib.grounding_context_formatter import GroundingContextFormatter
-from mellea.stdlib.base import TemplateRepresentation
+from mellea.stdlib.components import TemplateRepresentation
+
+from reqlib.grounding_context_formatter import GroundingContextFormatter
 
 
 def print_header(title):
@@ -52,7 +53,7 @@ def test_returns_template_representation():
 
     content = getattr(result, "template", "")
     if not content and hasattr(result, "args"):
-        content = list(result.args.values())[0]
+        content = next(iter(result.args.values()))
 
     print("TEMPLATE:\n", content)
     print("PASS?", isinstance(result, TemplateRepresentation) and "ok!" in content)
@@ -73,14 +74,14 @@ def _test_long_user_prompt_and_context(user_prompt, grounding_context, example_n
     if isinstance(result, TemplateRepresentation):
         content = getattr(result, "template", "")
         if not content and hasattr(result, "args"):
-            content = list(result.args.values())[0]
+            content = next(iter(result.args.values()))
     elif isinstance(result, str):
         content = result
 
     print("OUTPUT TYPE:", type(result))
     print("TEMPLATE / CONTENT (first 500 chars):\n", content[:500], "...\n")
 
-    context_key_check = list(grounding_context.keys())[0] if grounding_context else ""
+    context_key_check = next(iter(grounding_context.keys())) if grounding_context else ""
     pass_condition = (user_prompt.strip().splitlines()[0] in content) and (
         context_key_check in content
     )

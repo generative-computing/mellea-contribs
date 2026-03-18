@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mellea_contribs.reqlib.common_aliases import COMMON_ALIASES, MODULE_RELOCATIONS
-from mellea_contribs.reqlib.import_repair import PythonImportRepair, extract_python_code
-from mellea_contribs.reqlib.import_resolution import (
+from reqlib.common_aliases import COMMON_ALIASES, MODULE_RELOCATIONS
+from reqlib.import_repair import PythonImportRepair, extract_python_code
+from reqlib.import_resolution import (
     find_undefined_names,
     get_installed_packages,
     is_module_available,

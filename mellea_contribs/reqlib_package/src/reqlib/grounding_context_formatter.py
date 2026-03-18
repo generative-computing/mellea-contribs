@@ -1,5 +1,5 @@
 """Author: IBM Research – Mellea Agent Team
-Maintainer: Mellea Agent - IBM Research
+Maintainer: Mellea Agent - IBM Research.
 
 Purpose: GroundingContextFormatter is a reusable component for constructing grounding context blocks for Mellea agents. It organizes arbitrary
 context fields into a structured, LLM-friendly format.
@@ -19,7 +19,7 @@ When should an agent use it?
 import json
 from typing import Any
 
-from mellea.stdlib.base import Component, TemplateRepresentation
+from mellea.stdlib.components import Component, TemplateRepresentation
 
 
 class GroundingContextFormatter(Component):

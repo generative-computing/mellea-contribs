@@ -11,8 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from mellea.stdlib.base import Context
-from mellea.stdlib.requirement import Requirement, ValidationResult
+from mellea.stdlib.context import Context
+from mellea.stdlib.requirements import Requirement, ValidationResult
 
 from .import_resolution import (
     ImportSuggestion,

@@ -4,6 +4,8 @@ Tests actual LangChain BaseTool conversion, complex schemas,
 error handling, and edge cases.
 """
 
+import enum
+
 import pytest
 
 from mellea_langchain.tool_conversion import LangChainToolConverter
@@ -252,9 +254,8 @@ class TestToolSchemaValidation:
 
     def test_tool_with_enum_parameter(self):
         """Test conversion of tool with enum parameter."""
-        from enum import Enum
 
-        class Color(str, Enum):
+        class Color(enum.StrEnum):
             """Color enum."""
 
             RED = "red"
@@ -507,5 +508,3 @@ class TestMixedToolTypes:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-# Made with Bob
