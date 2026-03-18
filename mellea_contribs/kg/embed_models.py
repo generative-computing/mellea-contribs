@@ -83,7 +83,8 @@ class EmbeddingSimilarity(BaseModel):
 class EmbeddingStats(BaseModel):
     """Statistics about embedding operations.
 
-    Tracks performance and results of batch embedding.
+    Tracks performance and results of batch embedding, including optional
+    storage and index creation counts when used in a full pipeline.
     """
 
     total_entities: int = Field(description="Total entities processed")
@@ -101,6 +102,33 @@ class EmbeddingStats(BaseModel):
     total_time: float = Field(description="Total time (seconds) for the batch")
 
     model_used: str = Field(description="Embedding model used")
+
+    # Pipeline-level fields (populated by embed_and_store_all)
+    dimension: int = Field(default=0, description="Embedding vector dimension")
+
+    total_relations: int = Field(default=0, description="Total relations processed")
+
+    successful_relation_embeddings: int = Field(
+        default=0, description="Number of successfully embedded relations"
+    )
+
+    failed_relation_embeddings: int = Field(
+        default=0, description="Number of relations that failed to embed"
+    )
+
+    entities_stored: int = Field(default=0, description="Embeddings stored back to the graph DB")
+
+    relations_stored: int = Field(
+        default=0, description="Relation embeddings stored back to the graph DB"
+    )
+
+    vector_indices_created: int = Field(
+        default=0, description="Vector indices created for similarity search"
+    )
+
+    success: bool = Field(default=True, description="Whether the pipeline completed successfully")
+
+    error_message: str = Field(default="", description="Error message if pipeline failed")
 
 
 __all__ = [

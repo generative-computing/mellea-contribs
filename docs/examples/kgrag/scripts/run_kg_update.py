@@ -12,12 +12,9 @@ Usage:
 
 import argparse
 import asyncio
-import bz2
-import json
 import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -30,6 +27,7 @@ from mellea_contribs.kg.updater_models import (
     UpdateStats,
 )
 from mellea_contribs.kg.utils import (
+    BaseProgressLogger,
     create_backend,
     create_session_from_env,
     load_jsonl,
@@ -153,81 +151,6 @@ class KGUpdateConfig:
         return self.dataset_config.validate()
 
 
-class KGProgressTracker:
-    """Track progress of KG updates."""
-
-    def __init__(self, progress_path: str = "results/update_kg_progress.json"):
-        """Initialize progress tracker."""
-        self.progress_path = progress_path
-        self.stats: list[Dict[str, Any]] = []
-        self.processed_docs: set[str] = set()
-        self.start_time = time.time()
-        self.load_progress()
-
-    def load_progress(self) -> None:
-        """Load existing progress from file."""
-        if Path(self.progress_path).exists():
-            try:
-                with open(self.progress_path, "r") as f:
-                    data = json.load(f)
-                    self.stats = data.get("stats", [])
-                    self.processed_docs = set(data.get("processed_docs", []))
-                    log_progress(f"Loaded progress: {len(self.processed_docs)} documents")
-            except Exception as e:
-                log_progress(f"Warning: Could not load progress: {e}")
-
-    def add_stat(self, stat: Dict[str, Any]) -> None:
-        """Add a statistic."""
-        self.stats.append(stat)
-        self.processed_docs.add(stat.get("doc_id", ""))
-
-    def save_progress(self) -> None:
-        """Save progress to file."""
-        Path(self.progress_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(self.progress_path, "w") as f:
-            json.dump(
-                {
-                    "stats": self.stats,
-                    "processed_docs": list(self.processed_docs),
-                    "last_update": datetime.now().isoformat(),
-                    "elapsed_time": time.time() - self.start_time,
-                },
-                f,
-                indent=2,
-            )
-
-    def get_summary(self) -> Dict[str, Any]:
-        """Get summary statistics."""
-        total_entities = sum(s.get("entities_new", 0) for s in self.stats)
-        total_relations = sum(s.get("relations_new", 0) for s in self.stats)
-        total_time = sum(s.get("processing_time", 0) for s in self.stats)
-
-        return {
-            "processed_documents": len(self.stats),
-            "total_entities": total_entities,
-            "total_relations": total_relations,
-            "total_processing_time": round(total_time, 2),
-            "elapsed_time": round(time.time() - self.start_time, 2),
-        }
-
-
-def load_jsonl_compressed(file_path: Path):
-    """Load JSONL file that may be compressed (.bz2).
-
-    Args:
-        file_path: Path to JSONL or JSONL.bz2 file
-
-    Yields:
-        Parsed JSON objects
-    """
-    if str(file_path).endswith('.bz2'):
-        with bz2.open(file_path, 'rt', encoding='utf-8') as f:
-            for line in f:
-                if line.strip():
-                    yield json.loads(line)
-    else:
-        for obj in load_jsonl(file_path):
-            yield obj
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -362,7 +285,7 @@ async def process_document(
     session: Any,
     domain: str,
     model: str,
-    progress_tracker: KGProgressTracker,
+    progress_tracker: BaseProgressLogger,
 ) -> UpdateResult:
     """Process a single document.
 
@@ -427,6 +350,7 @@ async def process_document(
                 "processing_time": round(elapsed_time, 2),
             }
         )
+        progress_tracker.mark_processed(doc_id)
 
         return result
 
@@ -450,7 +374,7 @@ async def process_document(
 async def process_dataset(
     dataset_path: Path,
     config: KGUpdateConfig,
-    progress_tracker: KGProgressTracker,
+    progress_tracker: BaseProgressLogger,
 ) -> UpdateBatchResult:
     """Process entire dataset with parallel workers.
 
@@ -497,7 +421,7 @@ async def process_dataset(
     try:
         # Create tasks for all documents
         doc_num = 0
-        for doc_num, doc in enumerate(load_jsonl_compressed(dataset_path), 1):
+        for doc_num, doc in enumerate(load_jsonl(dataset_path), 1):
             # Handle different dataset formats
             doc_id = doc.get("id") or doc.get("interaction_id") or f"doc_{doc_num}"
             # Try different text field names
@@ -612,7 +536,10 @@ async def main() -> int:
             return 1
 
         # Create progress tracker
-        progress_tracker = KGProgressTracker(config.dataset_config.progress_path)
+        progress_tracker = BaseProgressLogger(config.dataset_config.progress_path)
+        progress_tracker.load()
+        if progress_tracker.num_processed:
+            log_progress(f"Resuming: {progress_tracker.num_processed} documents already processed.")
 
         # Log configuration
         log_progress("=" * 60)
@@ -639,10 +566,7 @@ async def main() -> int:
         batch_result = await process_dataset(dataset_path, config, progress_tracker)
 
         # Save progress
-        progress_tracker.save_progress()
-
-        # Get summary
-        summary = progress_tracker.get_summary()
+        progress_tracker.save()
 
         # Log results
         log_progress("=" * 60)

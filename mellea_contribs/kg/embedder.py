@@ -53,10 +53,13 @@ Example::
 
 import logging
 import math
+import time
+from datetime import datetime
 from typing import Optional
 
 from mellea import MelleaSession
 
+from mellea_contribs.kg.embed_models import EmbeddingStats
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
 from mellea_contribs.kg.models import Entity, Relation
 
@@ -303,6 +306,303 @@ class KGEmbedder:
         except Exception as e:
             logger.error(f"Embedding API error: {e}")
             raise
+
+    # ------------------------------------------------------------------
+    # Neo4j pipeline: fetch / store / index
+    # ------------------------------------------------------------------
+
+    async def fetch_entities_from_neo4j(self) -> list[Entity]:
+        """Fetch all entities from Neo4j as Entity objects.
+
+        Returns:
+            List of Entity objects from the graph, or empty list for non-Neo4j backends.
+        """
+        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return []
+
+        cypher = """
+        MATCH (n)
+        RETURN n.name AS name, labels(n)[0] AS type
+        LIMIT 100000
+        """
+        try:
+            driver = getattr(self.backend, "_async_driver", None)
+            if driver is None:
+                return []
+            async with driver.session() as session:
+                result = await session.run(cypher)
+                records = [r async for r in result]
+            return [
+                Entity(
+                    type=r.get("type", "Unknown"),
+                    name=r.get("name", ""),
+                    description=f"Node of type {r.get('type')}",
+                )
+                for r in records
+            ]
+        except Exception as exc:
+            logger.warning(f"Failed to fetch entities from Neo4j: {exc}")
+            return []
+
+    async def fetch_relations_from_neo4j(self) -> list[Relation]:
+        """Fetch all relations from Neo4j as Relation objects.
+
+        Returns:
+            List of Relation objects from the graph, or empty list for non-Neo4j backends.
+        """
+        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return []
+
+        cypher = """
+        MATCH ()-[r]->()
+        RETURN type(r) AS relation_type, id(r) AS rel_id
+        LIMIT 100000
+        """
+        try:
+            driver = getattr(self.backend, "_async_driver", None)
+            if driver is None:
+                return []
+            async with driver.session() as session:
+                result = await session.run(cypher)
+                records = [r async for r in result]
+            return [
+                Relation(
+                    relation_type=r.get("relation_type", "UNKNOWN"),
+                    source_entity_type="Node",
+                    source_entity_name=f"Relation_{r.get('rel_id')}",
+                    target_entity_type="Node",
+                    target_entity_name="Target",
+                )
+                for r in records
+            ]
+        except Exception as exc:
+            logger.warning(f"Failed to fetch relations from Neo4j: {exc}")
+            return []
+
+    async def store_entity_embeddings(self, entities: list[Entity]) -> int:
+        """Store entity embeddings back to Neo4j.
+
+        Args:
+            entities: Entities with populated ``embedding`` fields.
+
+        Returns:
+            Number of embeddings stored, or 0 for non-Neo4j backends.
+        """
+        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return 0
+
+        cypher = """
+        UNWIND $batch AS item
+        MATCH (n {name: item.name})
+        SET n.embedding = item.embedding
+        RETURN count(n) AS updated
+        """
+        batch = [
+            {"name": e.name, "embedding": getattr(e, "embedding", []) or []}
+            for e in entities
+        ]
+        try:
+            driver = getattr(self.backend, "_async_driver", None)
+            if driver is None:
+                return 0
+            async with driver.session() as session:
+                result = await session.run(cypher, batch=batch)
+                record = await result.single()
+                return record.get("updated", 0) if record else 0
+        except Exception as exc:
+            logger.warning(f"Failed to store entity embeddings: {exc}")
+            return 0
+
+    async def store_relation_embeddings(self, relations: list[Relation]) -> int:
+        """Store relation embeddings back to Neo4j.
+
+        Args:
+            relations: Relations with populated ``embedding`` fields.
+
+        Returns:
+            Number of embeddings stored, or 0 for non-Neo4j backends.
+        """
+        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return 0
+
+        cypher = """
+        UNWIND $batch AS item
+        MATCH ()-[r {type: item.relation_type}]->()
+        SET r.embedding = item.embedding
+        RETURN count(r) AS updated
+        """
+        batch = [
+            {
+                "relation_type": r.relation_type,
+                "embedding": getattr(r, "embedding", []) or [],
+            }
+            for r in relations
+        ]
+        try:
+            driver = getattr(self.backend, "_async_driver", None)
+            if driver is None:
+                return 0
+            async with driver.session() as session:
+                result = await session.run(cypher, batch=batch)
+                record = await result.single()
+                return record.get("updated", 0) if record else 0
+        except Exception as exc:
+            logger.warning(f"Failed to store relation embeddings: {exc}")
+            return 0
+
+    async def create_vector_indices(self) -> int:
+        """Create Neo4j vector indices for embedding similarity search.
+
+        Creates one index for entity nodes and one for relationship embeddings
+        using the configured ``embedding_dimension``.
+
+        Returns:
+            Number of indices created, or 0 for non-Neo4j backends.
+        """
+        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return 0
+
+        driver = getattr(self.backend, "_async_driver", None)
+        if driver is None:
+            return 0
+
+        indices_created = 0
+        dim = self.embedding_dimension
+        index_queries = [
+            f"""
+            CREATE VECTOR INDEX IF NOT EXISTS entity_embedding_index
+            FOR (n) ON (n.embedding)
+            OPTIONS {{
+                indexConfig: {{
+                    `vector.dimensions`: {dim},
+                    `vector.similarity_function`: 'cosine'
+                }}
+            }}
+            """,
+            f"""
+            CREATE VECTOR INDEX IF NOT EXISTS relation_embedding_index
+            FOR (r: RELATIONSHIP) ON (r.embedding)
+            OPTIONS {{
+                indexConfig: {{
+                    `vector.dimensions`: {dim},
+                    `vector.similarity_function`: 'cosine'
+                }}
+            }}
+            """,
+        ]
+        try:
+            async with driver.session() as session:
+                for query in index_queries:
+                    try:
+                        await session.run(query)
+                        indices_created += 1
+                    except Exception as exc:
+                        logger.debug(f"Vector index creation note: {exc}")
+        except Exception as exc:
+            logger.warning(f"Failed to create vector indices: {exc}")
+
+        return indices_created
+
+    async def embed_and_store_all(self, batch_size: int = 100) -> EmbeddingStats:
+        """Run the full embedding pipeline: fetch → embed → store → index.
+
+        Fetches entities and relations from the graph backend, generates
+        embeddings for each, stores them back, and creates vector indices
+        for similarity search.  For non-Neo4j backends the fetch/store/index
+        steps are no-ops so the method can still be used in tests with the
+        mock backend.
+
+        Args:
+            batch_size: Number of items to log progress at each interval.
+
+        Returns:
+            :class:`~mellea_contribs.kg.embed_models.EmbeddingStats` populated
+            with counts for entities, relations, storage, and index creation.
+        """
+        t_start = time.monotonic()
+
+        entities_embedded = entities_failed = entities_stored = 0
+        relations_embedded = relations_failed = relations_stored = 0
+        vector_indices = 0
+
+        try:
+            # --- entities ---------------------------------------------------
+            logger.info("Embedding pipeline: fetching entities…")
+            entities = await self.fetch_entities_from_neo4j()
+            logger.info(f"  Fetched {len(entities)} entities")
+
+            for i, entity in enumerate(entities):
+                try:
+                    await self.embed_entity(entity)
+                    entities_embedded += 1
+                except Exception:
+                    entities_failed += 1
+                if (i + 1) % batch_size == 0:
+                    logger.info(f"  Embedded {i + 1}/{len(entities)} entities…")
+
+            if entities_embedded:
+                entities_stored = await self.store_entity_embeddings(entities)
+                logger.info(f"  Stored {entities_stored} entity embeddings")
+
+            # --- relations --------------------------------------------------
+            logger.info("Embedding pipeline: fetching relations…")
+            relations = await self.fetch_relations_from_neo4j()
+            logger.info(f"  Fetched {len(relations)} relations")
+
+            for i, relation in enumerate(relations):
+                try:
+                    text = f"Relation: {relation.relation_type}"
+                    relation.embedding = await self._get_embedding(text)  # type: ignore[attr-defined]
+                    relations_embedded += 1
+                except Exception:
+                    relations_failed += 1
+                if (i + 1) % batch_size == 0:
+                    logger.info(f"  Embedded {i + 1}/{len(relations)} relations…")
+
+            if relations_embedded:
+                relations_stored = await self.store_relation_embeddings(relations)
+                logger.info(f"  Stored {relations_stored} relation embeddings")
+
+            # --- vector indices ---------------------------------------------
+            logger.info("Embedding pipeline: creating vector indices…")
+            vector_indices = await self.create_vector_indices()
+            logger.info(f"  Created {vector_indices} vector indices")
+
+            total_time = time.monotonic() - t_start
+            n_total = max(len(entities), 1)
+            return EmbeddingStats(
+                total_entities=len(entities),
+                successful_embeddings=entities_embedded,
+                failed_embeddings=entities_failed,
+                skipped_embeddings=0,
+                average_embedding_time=total_time / n_total,
+                total_time=total_time,
+                model_used=self.embedding_model,
+                dimension=self.embedding_dimension,
+                total_relations=len(relations),
+                successful_relation_embeddings=relations_embedded,
+                failed_relation_embeddings=relations_failed,
+                entities_stored=entities_stored,
+                relations_stored=relations_stored,
+                vector_indices_created=vector_indices,
+                success=True,
+            )
+
+        except Exception as exc:
+            total_time = time.monotonic() - t_start
+            logger.error(f"Embedding pipeline failed: {exc}")
+            return EmbeddingStats(
+                total_entities=0,
+                successful_embeddings=0,
+                failed_embeddings=0,
+                skipped_embeddings=0,
+                average_embedding_time=0.0,
+                total_time=total_time,
+                model_used=self.embedding_model,
+                dimension=self.embedding_dimension,
+                success=False,
+                error_message=str(exc),
+            )
 
     async def close(self):
         """Close connections and cleanup resources."""

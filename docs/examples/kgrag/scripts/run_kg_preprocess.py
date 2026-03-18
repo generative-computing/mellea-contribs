@@ -231,36 +231,38 @@ class PredefinedDataPreprocessor:
         log_progress(f"✓ Inserted {count} movie entities")
         return count
 
-    async def _execute_batch_insert_movies(self, batch: List[Dict]) -> None:
-        """Execute Cypher query to insert batch of movies.
+    async def _execute_cypher_batch(self, cypher_query: str, batch: List[Dict]) -> None:
+        """Execute a parameterised Cypher query with a batch of items.
 
         Args:
-            batch: List of movie dictionaries
+            cypher_query: Cypher query with ``$batch`` parameter.
+            batch: List of parameter dicts to pass as ``batch``.
         """
         if not batch:
             return
-
-        # Construct Cypher query - using Entity model properties for guidance
-        cypher_query = """
-        UNWIND $batch AS movie
-        MERGE (m:Movie {name: movie.name})
-        SET m.release_date = movie.release_date,
-            m.original_language = movie.original_language,
-            m.budget = movie.budget,
-            m.revenue = movie.revenue,
-            m.rating = movie.rating
-        RETURN count(m) as inserted
-        """
-
         try:
-            # Use async driver if Neo4j backend
             if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
                 async with self.backend._async_driver.session() as session:
                     await session.run(cypher_query, batch=batch)
-            # Mock backend - just skip (data stored in memory)
+            # Mock backend: no-op (data lives in memory)
         except Exception as e:
             log_progress(f"  Warning: Batch insert failed: {e}")
-            # Continue anyway to not block the pipeline
+
+    async def _execute_batch_insert_movies(self, batch: List[Dict]) -> None:
+        """Execute Cypher query to insert batch of movies."""
+        await self._execute_cypher_batch(
+            """
+            UNWIND $batch AS movie
+            MERGE (m:Movie {name: movie.name})
+            SET m.release_date = movie.release_date,
+                m.original_language = movie.original_language,
+                m.budget = movie.budget,
+                m.revenue = movie.revenue,
+                m.rating = movie.rating
+            RETURN count(m) as inserted
+            """,
+            batch,
+        )
 
     async def _insert_persons(self) -> int:
         """Insert person entities into the graph using Cypher queries.
@@ -300,30 +302,16 @@ class PredefinedDataPreprocessor:
         return count
 
     async def _execute_batch_insert_persons(self, batch: List[Dict]) -> None:
-        """Execute Cypher query to insert batch of persons.
-
-        Args:
-            batch: List of person dictionaries
-        """
-        if not batch:
-            return
-
-        # Construct Cypher query - using Entity model for reference
-        cypher_query = """
-        UNWIND $batch AS person
-        MERGE (p:Person {name: person.name})
-        SET p.birthday = person.birthday
-        RETURN count(p) as inserted
-        """
-
-        try:
-            # Use async driver if Neo4j backend
-            if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
-                async with self.backend._async_driver.session() as session:
-                    await session.run(cypher_query, batch=batch)
-            # Mock backend - just skip
-        except Exception as e:
-            log_progress(f"  Warning: Batch insert failed: {e}")
+        """Execute Cypher query to insert batch of persons."""
+        await self._execute_cypher_batch(
+            """
+            UNWIND $batch AS person
+            MERGE (p:Person {name: person.name})
+            SET p.birthday = person.birthday
+            RETURN count(p) as inserted
+            """,
+            batch,
+        )
 
     async def _insert_movie_relations(self) -> int:
         """Insert relations between movies and persons using Cypher queries.
@@ -442,60 +430,39 @@ class PredefinedDataPreprocessor:
 
     async def _execute_batch_insert_cast(self, batch: List[Dict]) -> None:
         """Execute Cypher query to insert batch of cast relations."""
-        if not batch:
-            return
-
-        cypher_query = """
-        UNWIND $batch AS item
-        MATCH (m:Movie {name: item.movie_name})
-        MATCH (p:Person {name: item.person_name})
-        MERGE (p)-[:ACTED_IN {character: item.character, order: item.order}]->(m)
-        """
-
-        try:
-            if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
-                async with self.backend._async_driver.session() as session:
-                    await session.run(cypher_query, batch=batch)
-        except Exception as e:
-            log_progress(f"  Warning: Cast batch insert failed: {e}")
+        await self._execute_cypher_batch(
+            """
+            UNWIND $batch AS item
+            MATCH (m:Movie {name: item.movie_name})
+            MATCH (p:Person {name: item.person_name})
+            MERGE (p)-[:ACTED_IN {character: item.character, order: item.order}]->(m)
+            """,
+            batch,
+        )
 
     async def _execute_batch_insert_directors(self, batch: List[Dict]) -> None:
         """Execute Cypher query to insert batch of director relations."""
-        if not batch:
-            return
-
-        cypher_query = """
-        UNWIND $batch AS item
-        MATCH (m:Movie {name: item.movie_name})
-        MATCH (p:Person {name: item.person_name})
-        MERGE (p)-[:DIRECTED]->(m)
-        """
-
-        try:
-            if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
-                async with self.backend._async_driver.session() as session:
-                    await session.run(cypher_query, batch=batch)
-        except Exception as e:
-            log_progress(f"  Warning: Director batch insert failed: {e}")
+        await self._execute_cypher_batch(
+            """
+            UNWIND $batch AS item
+            MATCH (m:Movie {name: item.movie_name})
+            MATCH (p:Person {name: item.person_name})
+            MERGE (p)-[:DIRECTED]->(m)
+            """,
+            batch,
+        )
 
     async def _execute_batch_insert_genres(self, batch: List[Dict]) -> None:
         """Execute Cypher query to insert batch of genre relations."""
-        if not batch:
-            return
-
-        cypher_query = """
-        UNWIND $batch AS item
-        MATCH (m:Movie {name: item.movie_name})
-        MERGE (g:Genre {name: item.genre_name})
-        MERGE (m)-[:BELONGS_TO_GENRE]->(g)
-        """
-
-        try:
-            if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
-                async with self.backend._async_driver.session() as session:
-                    await session.run(cypher_query, batch=batch)
-        except Exception as e:
-            log_progress(f"  Warning: Genre batch insert failed: {e}")
+        await self._execute_cypher_batch(
+            """
+            UNWIND $batch AS item
+            MATCH (m:Movie {name: item.movie_name})
+            MERGE (g:Genre {name: item.genre_name})
+            MERGE (m)-[:BELONGS_TO_GENRE]->(g)
+            """,
+            batch,
+        )
 
 
 async def main():
