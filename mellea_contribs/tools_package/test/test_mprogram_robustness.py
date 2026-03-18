@@ -26,7 +26,7 @@ import yaml
 from mellea import start_session
 
 from mellea.backends import ModelOption
-from tools.tools.benchdrift_runner import (
+from tools.benchdrift_runner import (
     analyze_robustness,
     run_benchdrift_pipeline,
 )

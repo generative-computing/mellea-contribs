@@ -1,0 +1,47 @@
+name: Quality - DSPy Backend
+
+on:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CICD: 1
+  OLLAMA_HOST: "127.0.0.1:5000"
+
+jobs:
+  test-dspy-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install mellea from main branch
+        run: uv pip install git+https://github.com/generative-computing/mellea.git@main
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama
+        run: nohup ollama serve &
+      - name: Pull model granite4:micro
+        run: ollama pull granite4:micro
+      - name: Run DSPy Backend Tests (includes integration tests with Ollama)
+        run: |
+          cd mellea_contribs/dspy_backend
+          uv pip install git+https://github.com/generative-computing/mellea.git@main
+          uv pip install ../mellea-integration-core
+          uv pip install dspy pytest pytest-asyncio pytest-cov
+          PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v tests/
+      - name: Send failure message
+        if: failure()
+        run: echo "DSPy backend tests failed. Please verify that tests are working locally."
