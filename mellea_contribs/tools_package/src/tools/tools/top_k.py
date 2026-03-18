@@ -1,11 +1,14 @@
-"""Author: IBM Research – Mellea Agent Team
-Maintainer: Mellea Agent - IBM Research
+"""Author: IBM Research - Mellea Agent Team.
+
+Maintainer: Mellea Agent - IBM Research.
 
 Purpose: Generic Top-K selection engine using Mellea agents.
+
 - Takes N items and asks the model to pick the top K based on a comparison prompt.
 - Returns items sorted by score (frequency of selection).
 
 When should an agent use it?
+
 - Use when you have multiple candidate items and need the model to rank or pick the best ones.
 - Suitable for:
     * Tool selection
@@ -14,14 +17,13 @@ When should an agent use it?
 - Avoid using for:
     * Single-item deterministic selection
     * Non-comparable items (items must have attributes or context the model can reason over)
-
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
-from mellea.backends.types import ModelOption
-from mellea.stdlib.requirement import req, simple_validate
+from mellea.backends import ModelOption
+from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 
 TOP_K_CACHE: dict[str, Any] = {}

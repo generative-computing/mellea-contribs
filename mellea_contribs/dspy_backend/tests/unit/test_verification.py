@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 from mellea_dspy.verification import (
     MelleaBestOfN,
     MelleaRefine,
@@ -424,7 +423,7 @@ class TestMelleaBestOfN:
 
 class SimpleTestModule:
     """Simple test module for Refine tests.
-    
+
     This is a real module (not a mock) so dspy.Refine can inspect its source.
     """
 

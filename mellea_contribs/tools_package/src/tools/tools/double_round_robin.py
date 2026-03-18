@@ -1,9 +1,11 @@
-"""Author: IBM Research – Mellea Agent Team
-Maintainer: Mellea Agent - IBM Research
+"""Author: IBM Research - Mellea Agent Team.
 
-Purpose: Generic Double Round Robin (DRR) engine for Mellea agents.DRR performs pairwise comparisons between multiple items, using LLM judgment.
+Maintainer: Mellea Agent - IBM Research.
+
+Purpose: Generic Double Round Robin (DRR) engine for Mellea agents. DRR performs pairwise comparisons between multiple items, using LLM judgment.
 
 What DRR Does:
+
 - Takes N items to compare.
 - Runs every possible pair (A vs B, B vs A).
 - The model decides winner ("A" or "B").
@@ -11,20 +13,21 @@ What DRR Does:
 - Returns all items with accumulated scores.
 
 When should an agent use it?
+
 - When multiple candidate judgments exist for an entity.
 - When the agent wants to perform robust evaluation using pairwise reasoning.
 - Especially useful for cases where scores or confidence values alone may be ambiguous.
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+import logging
+from typing import Any, Optional
 
-from mellea.backends.types import ModelOption
-from mellea.helpers.fancy_logger import FancyLogger
-from mellea.stdlib.requirement import req, simple_validate
+from mellea.backends import ModelOption
+from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 
-logger = FancyLogger.get_logger()
+logger = logging.getLogger(__name__)
 
 DRR_CACHE: dict[str, Any] = {}
 
@@ -82,7 +85,8 @@ def compare_pair(
         "You are a terse pairwise selector. Output exactly one token: A or B."
     )
 
-    validator = lambda s: extract_choice(s) in ["A", "B"]
+    def validator(s):
+        return extract_choice(s) in ["A", "B"]
 
     response = m.instruct(
         prompt,

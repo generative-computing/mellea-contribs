@@ -2,11 +2,11 @@ import gc
 import os
 
 import pytest
-
 from mellea import start_session
-from mellea.stdlib.requirement import req
+from mellea.stdlib.requirements import req
 from mellea.stdlib.sampling import RejectionSamplingStrategy
-from mellea_contribs.reqlib.is_appellate_case import (
+
+from reqlib.is_appellate_case import (
     court_abbv_from_citation,
     get_court_from_case,
     is_appellate_case,

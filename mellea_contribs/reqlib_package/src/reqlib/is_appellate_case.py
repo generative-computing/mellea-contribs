@@ -2,8 +2,8 @@ import json
 import os
 import re
 
-from mellea.stdlib.base import Context
-from mellea.stdlib.requirement import Requirement, ValidationResult
+from mellea.stdlib.context import Context
+from mellea.stdlib.requirements import Requirement, ValidationResult
 
 # ------------------------------------------------------------ #
 # FUNCTIONS SUPPORTING CASE NAME AS INPUT TO IS_APPELLATE_CASE #

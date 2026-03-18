@@ -218,5 +218,3 @@ class TestGuardrailIntegration:
         assert passed is False
         assert "Validation failed" in value
         assert "Must have at least 20 words" in value
-
-
