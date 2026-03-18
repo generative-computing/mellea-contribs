@@ -201,22 +201,22 @@ Examples:
     parser.add_argument(
         "--neo4j-uri",
         type=str,
-        default="bolt://localhost:7687",
-        help="Neo4j connection URI (default: bolt://localhost:7687)",
+        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        help="Neo4j connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
     )
 
     parser.add_argument(
         "--neo4j-user",
         type=str,
-        default="neo4j",
-        help="Neo4j username (default: neo4j)",
+        default=os.getenv("NEO4J_USER", "neo4j"),
+        help="Neo4j username (default: $NEO4J_USER or neo4j)",
     )
 
     parser.add_argument(
         "--neo4j-password",
         type=str,
-        default="password",
-        help="Neo4j password (default: password)",
+        default=os.getenv("NEO4J_PASSWORD", "password"),
+        help="Neo4j password (default: $NEO4J_PASSWORD or password)",
     )
 
     parser.add_argument(

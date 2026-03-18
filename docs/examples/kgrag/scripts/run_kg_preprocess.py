@@ -14,6 +14,7 @@ Usage:
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -241,10 +242,9 @@ class PredefinedDataPreprocessor:
         if not batch:
             return
         try:
-            if self.backend.backend_id == "neo4j" and hasattr(self.backend, '_async_driver'):
-                async with self.backend._async_driver.session() as session:
-                    await session.run(cypher_query, batch=batch)
-            # Mock backend: no-op (data lives in memory)
+            from mellea_contribs.kg.components.query import CypherQuery
+            query = CypherQuery(cypher_query, parameters={"batch": batch})
+            await self.backend.execute_query(query)
         except Exception as e:
             log_progress(f"  Warning: Batch insert failed: {e}")
 
@@ -491,22 +491,22 @@ Examples:
     parser.add_argument(
         "--neo4j-uri",
         type=str,
-        default="bolt://localhost:7687",
-        help="Neo4j connection URI (default: bolt://localhost:7687)",
+        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        help="Neo4j connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
     )
 
     parser.add_argument(
         "--neo4j-user",
         type=str,
-        default="neo4j",
-        help="Neo4j username (default: neo4j)",
+        default=os.getenv("NEO4J_USER", "neo4j"),
+        help="Neo4j username (default: $NEO4J_USER or neo4j)",
     )
 
     parser.add_argument(
         "--neo4j-password",
         type=str,
-        default="password",
-        help="Neo4j password (default: password)",
+        default=os.getenv("NEO4J_PASSWORD", "password"),
+        help="Neo4j password (default: $NEO4J_PASSWORD or password)",
     )
 
     parser.add_argument(

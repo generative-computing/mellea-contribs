@@ -334,6 +334,115 @@ class TestAggregateUpdateResults:
         assert stats.failed_documents == 1
 
 
+class TestEvaluatePredictions:
+    """Tests for evaluate_predictions function."""
+
+    @pytest.mark.asyncio
+    async def test_exact_match(self):
+        """Test evaluate_predictions identifies exact matches."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"query": "What is 2+2?", "answer": "4", "answer_aliases": ["4", "four"]},
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["correct"] is True
+        assert result[0]["eval_method"] == "exact"
+
+    @pytest.mark.asyncio
+    async def test_fuzzy_match(self):
+        """Test evaluate_predictions falls back to fuzzy match."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"query": "Capital of France?", "answer": "Pari", "answer_aliases": ["Paris"]},
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["correct"] is True
+        assert result[0]["eval_method"] == "fuzzy"
+
+    @pytest.mark.asyncio
+    async def test_no_match(self):
+        """Test evaluate_predictions handles wrong answers."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"query": "What color is the sky?", "answer": "red", "answer_aliases": ["blue"]},
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["correct"] is False
+
+    @pytest.mark.asyncio
+    async def test_missing_gold_answers(self):
+        """Test evaluate_predictions when no gold answers are provided."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [{"query": "What is X?", "answer": "something"}]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["correct"] is False
+        assert result[0]["eval_method"] == "none"
+
+    @pytest.mark.asyncio
+    async def test_preserves_original_fields(self):
+        """Test that evaluate_predictions keeps original dict fields."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {
+                "query": "Q?",
+                "answer": "A",
+                "answer_aliases": ["A"],
+                "custom_field": "preserved",
+            }
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["custom_field"] == "preserved"
+        assert "correct" in result[0]
+        assert "eval_method" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_custom_key_names(self):
+        """Test evaluate_predictions with non-default key names."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"question": "Q?", "prediction": "answer", "expected": ["answer"]},
+        ]
+        result = await evaluate_predictions(
+            None,
+            predictions,
+            query_key="question",
+            answer_key="prediction",
+            gold_key="expected",
+        )
+        assert result[0]["correct"] is True
+
+    @pytest.mark.asyncio
+    async def test_string_gold_coerced_to_list(self):
+        """Test evaluate_predictions accepts a string for gold answers."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"query": "Q?", "answer": "Paris", "answer_aliases": "Paris"},
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert result[0]["correct"] is True
+
+    @pytest.mark.asyncio
+    async def test_multiple_predictions(self):
+        """Test evaluate_predictions processes all items in the list."""
+        from mellea_contribs.kg.utils import evaluate_predictions
+
+        predictions = [
+            {"query": "Q1", "answer": "correct", "answer_aliases": ["correct"]},
+            {"query": "Q2", "answer": "wrong", "answer_aliases": ["right"]},
+        ]
+        result = await evaluate_predictions(None, predictions)
+        assert len(result) == 2
+        assert result[0]["correct"] is True
+        assert result[1]["correct"] is False
+
+
 class TestIntegration:
     """Integration tests for eval_utils functions."""
 
