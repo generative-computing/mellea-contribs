@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from mellea import start_session
 
-from tools.tools.top_k import top_k
+from tools.top_k import top_k
 
 ITEMS = [
     {

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from mellea import start_session
 
-from tools.tools.double_round_robin import double_round_robin
+from tools.double_round_robin import double_round_robin
 
 logging.basicConfig(level=logging.WARNING)
 
