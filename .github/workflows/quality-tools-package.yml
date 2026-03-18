@@ -34,4 +34,5 @@ jobs:
           PYTHONPATH=src python -m pytest -v test/test_double_round_robin.py test/test_top_k.py
       - name: Send failure message
         if: failure()
-        run: echo "Tools package tests failed. Please verify that tests are working locally. Note: test_mprogram_robustness.py requires benchdrift package and is skipped."
+        run: echo "Tools package tests failed. Please verify that tests are working locally. Note - test_mprogram_robustness.py requires benchdrift package and is skipped."
+
