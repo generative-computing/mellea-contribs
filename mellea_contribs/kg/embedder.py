@@ -452,16 +452,25 @@ class KGEmbedder:
             logger.warning(f"Failed to fetch relations from Neo4j: {exc}")
             return []
 
-    async def store_entity_embeddings(self, entities: list[Entity]) -> int:
+    async def store_entity_embeddings(
+        self, entities: list[Entity], store_batch_size: int = 1000
+    ) -> int:
         """Store entity embeddings back to Neo4j.
 
         Args:
             entities: Entities with populated ``embedding`` fields.
+            store_batch_size: Rows per Cypher transaction (default: 1000).
+                All chunks run within a single session to avoid connection
+                overhead while still providing progress visibility.
 
         Returns:
             Number of embeddings stored, or 0 for non-Neo4j backends.
         """
         if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return 0
+
+        driver = getattr(self.backend, "_async_driver", None)
+        if driver is None:
             return 0
 
         cypher = """
@@ -470,32 +479,60 @@ class KGEmbedder:
         SET n.embedding = item.embedding
         RETURN count(n) AS updated
         """
-        batch = [
+        rows = [
             {"name": e.name, "embedding": getattr(e, "embedding", []) or []}
             for e in entities
+            if getattr(e, "embedding", None)
         ]
-        try:
-            driver = getattr(self.backend, "_async_driver", None)
-            if driver is None:
-                return 0
-            async with driver.session() as session:
-                result = await session.run(cypher, batch=batch)
-                record = await result.single()
-                return record.get("updated", 0) if record else 0
-        except Exception as exc:
-            logger.warning(f"Failed to store entity embeddings: {exc}")
-            return 0
 
-    async def store_relation_embeddings(self, relations: list[Relation]) -> int:
+        try:
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+            _tqdm = None
+
+        try:
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+            _tqdm = None
+
+        chunks = [rows[i : i + store_batch_size] for i in range(0, len(rows), store_batch_size)]
+        total_stored = 0
+        pbar = _tqdm(total=len(rows), desc="Storing entity embeddings", unit="ent") if _tqdm else None
+        try:
+            async with driver.session() as s:
+                for chunk in chunks:
+                    try:
+                        result = await s.run(cypher, batch=chunk)
+                        record = await result.single()
+                        total_stored += record.get("updated", 0) if record else 0
+                    except Exception as exc:
+                        logger.warning(f"Failed to store entity embedding chunk: {exc}")
+                    if pbar:
+                        pbar.update(len(chunk))
+                    else:
+                        logger.info(f"  Stored {total_stored}/{len(rows)} entity embeddings…")
+        finally:
+            if pbar:
+                pbar.close()
+        return total_stored
+
+    async def store_relation_embeddings(
+        self, relations: list[Relation], store_batch_size: int = 1000
+    ) -> int:
         """Store relation embeddings back to Neo4j.
 
         Args:
             relations: Relations with populated ``embedding`` fields.
+            store_batch_size: Rows per Cypher transaction (default: 1000).
 
         Returns:
             Number of embeddings stored, or 0 for non-Neo4j backends.
         """
         if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+            return 0
+
+        driver = getattr(self.backend, "_async_driver", None)
+        if driver is None:
             return 0
 
         cypher = """
@@ -504,24 +541,45 @@ class KGEmbedder:
         SET r.embedding = item.embedding
         RETURN count(r) AS updated
         """
-        batch = [
+        rows = [
             {
                 "relation_type": r.relation_type,
                 "embedding": getattr(r, "embedding", []) or [],
             }
             for r in relations
+            if getattr(r, "embedding", None)
         ]
+
         try:
-            driver = getattr(self.backend, "_async_driver", None)
-            if driver is None:
-                return 0
-            async with driver.session() as session:
-                result = await session.run(cypher, batch=batch)
-                record = await result.single()
-                return record.get("updated", 0) if record else 0
-        except Exception as exc:
-            logger.warning(f"Failed to store relation embeddings: {exc}")
-            return 0
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+            _tqdm = None
+
+        try:
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+            _tqdm = None
+
+        chunks = [rows[i : i + store_batch_size] for i in range(0, len(rows), store_batch_size)]
+        total_stored = 0
+        pbar = _tqdm(total=len(rows), desc="Storing relation embeddings", unit="rel") if _tqdm else None
+        try:
+            async with driver.session() as s:
+                for chunk in chunks:
+                    try:
+                        result = await s.run(cypher, batch=chunk)
+                        record = await result.single()
+                        total_stored += record.get("updated", 0) if record else 0
+                    except Exception as exc:
+                        logger.warning(f"Failed to store relation embedding chunk: {exc}")
+                    if pbar:
+                        pbar.update(len(chunk))
+                    else:
+                        logger.info(f"  Stored {total_stored}/{len(rows)} relation embeddings…")
+        finally:
+            if pbar:
+                pbar.close()
+        return total_stored
 
     async def create_vector_indices(self) -> int:
         """Create Neo4j vector indices for embedding similarity search.
