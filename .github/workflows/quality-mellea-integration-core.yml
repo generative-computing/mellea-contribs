@@ -28,7 +28,8 @@ jobs:
         run: |
           cd mellea_contribs/mellea-integration-core
           uv sync --dev
-          uv run -- pytest -v tests/
+          uv pip install pytest pytest-asyncio pytest-cov ruff mypy
+          uv run python -m pytest -v tests/
       - name: Send failure message
         if: failure()
         run: echo "mellea-integration-core tests failed. Please verify that tests are working locally."
