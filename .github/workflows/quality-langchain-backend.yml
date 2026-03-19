@@ -27,10 +27,24 @@ jobs:
       - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/langchain_backend
+          if ! command -v uv &> /dev/null; then
+            echo "Installing uv..."
+            pip install uv
+          fi
+          echo "Setting up virtual environment..."
+          uv venv
+          source .venv/bin/activate
+          echo "Installing mellea-integration-core..."
           uv pip install -e ../mellea-integration-core
+          echo "Installing langchain_backend..."
           uv pip install -e .
+          echo "Installing test dependencies..."
           uv pip install pytest pytest-asyncio pytest-cov
-          PYTHONPATH=src:../mellea-integration-core/src python -m pytest -v tests/ --ignore=tests/integration
+          echo "Running tests..."
+          python -m pytest -v tests/ --ignore=tests/integration
+          deactivate
       - name: Send failure message
         if: failure()
         run: echo "LangChain backend tests failed. Please verify that tests are working locally."
+
+
