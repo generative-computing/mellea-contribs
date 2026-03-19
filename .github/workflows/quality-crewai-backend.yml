@@ -19,11 +19,12 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: true
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama
+        run: nohup ollama serve &
+      - name: Pull model granite4:micro
+        run: ollama pull granite4:micro
       - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/crewai_backend
