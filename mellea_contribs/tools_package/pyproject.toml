@@ -11,7 +11,7 @@ authors = [
 ]
 description = "mellea-contribs is a library for incubating generative programming libraries"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "mellea[litellm]",
+  "mellea[litellm]==0.3.2",
   "rapidfuzz>=3.14.3",
   "eyecite",
   "citeurl",
