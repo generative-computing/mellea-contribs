@@ -5,23 +5,63 @@ on:
     types: [opened, reopened, synchronize]
 
 jobs:
-  #mellea-integration-core:
-  #  uses: ./.github/workflows/quality-mellea-integration-core.yml
-  
-  #crewai-backend:
-  #  uses: ./.github/workflows/quality-crewai-backend.yml
-  #  needs: mellea-integration-core
-  
-  #dspy-backend:
-  #  uses: ./.github/workflows/quality-dspy-backend.yml
-  #  needs: mellea-integration-core
-  
-  #langchain-backend:
-  #  uses: ./.github/workflows/quality-langchain-backend.yml
-  #  needs: mellea-integration-core
-  
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      mellea-integration-core: ${{ steps.changes.outputs.mellea-integration-core }}
+      crewai-backend: ${{ steps.changes.outputs.crewai-backend }}
+      dspy-backend: ${{ steps.changes.outputs.dspy-backend }}
+      langchain-backend: ${{ steps.changes.outputs.langchain-backend }}
+      reqlib-package: ${{ steps.changes.outputs.reqlib-package }}
+      tools-package: ${{ steps.changes.outputs.tools-package }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed files
+        id: changes
+        run: |
+          # Get the base and head commits
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only $BASE...$HEAD)
+
+          # Check each package
+          echo "mellea-integration-core=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/mellea-integration-core/\|\.github/workflows/quality-mellea-integration-core\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "crewai-backend=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/crewai_backend/\|\.github/workflows/quality-crewai-backend\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "dspy-backend=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/dspy_backend/\|\.github/workflows/quality-dspy-backend\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "langchain-backend=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/langchain_backend/\|\.github/workflows/quality-langchain-backend\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "reqlib-package=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/reqlib_package/\|\.github/workflows/quality-reqlib-package\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          echo "tools-package=$(echo "$CHANGED_FILES" | grep -q 'mellea_contribs/tools_package/\|\.github/workflows/quality-tools-package\.yml' && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+
+  mellea-integration-core:
+    needs: detect-changes
+    uses: ./.github/workflows/quality-mellea-integration-core.yml
+    if: needs.detect-changes.outputs.mellea-integration-core == 'true'
+
+  crewai-backend:
+    needs: [detect-changes, mellea-integration-core]
+    uses: ./.github/workflows/quality-crewai-backend.yml
+    if: needs.detect-changes.outputs.crewai-backend == 'true'
+
+  dspy-backend:
+    needs: [detect-changes, mellea-integration-core]
+    uses: ./.github/workflows/quality-dspy-backend.yml
+    if: needs.detect-changes.outputs.dspy-backend == 'true'
+
+  langchain-backend:
+    needs: [detect-changes, mellea-integration-core]
+    uses: ./.github/workflows/quality-langchain-backend.yml
+    if: needs.detect-changes.outputs.langchain-backend == 'true'
+
   reqlib-package:
+    needs: detect-changes
     uses: ./.github/workflows/quality-reqlib-package.yml
-  
-  #tools-package:
-  #  uses: ./.github/workflows/quality-tools-package.yml
+    if: needs.detect-changes.outputs.reqlib-package == 'true'
+
+  tools-package:
+    needs: detect-changes
+    uses: ./.github/workflows/quality-tools-package.yml
+    if: needs.detect-changes.outputs.tools-package == 'true'
