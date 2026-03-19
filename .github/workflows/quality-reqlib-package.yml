@@ -19,6 +19,14 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+      - name: Install Ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama
+        run: nohup ollama serve &
+      - name: Pull model granite4:micro
+        run: ollama pull granite4:micro
       - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/reqlib_package
