@@ -386,11 +386,11 @@ class KGUpdateRunConfig(BaseModel):
     )
 
     # Graph backend
-    db_uri: str = Field(
+    graph_uri: str = Field(
         default="bolt://localhost:7687", description="Graph database connection URI."
     )
-    db_user: str = Field(default="neo4j", description="Graph database username.")
-    db_password: str = Field(default="password", description="Graph database password.")
+    graph_user: str = Field(default="neo4j", description="Graph database username.")
+    graph_password: str = Field(default="password", description="Graph database password.")
     mock: bool = Field(default=False, description="Use in-memory mock backend instead of real DB.")
 
     # Misc

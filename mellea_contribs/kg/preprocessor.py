@@ -124,6 +124,7 @@ class KGPreprocessor(ABC):
 
         # Layer 3: Extract entities and relations using LLM
         result = await extract_entities_and_relations(
+            self.session,
             doc_context=doc_text,
             domain=self.domain,
             hints=self.get_hints(),
@@ -165,21 +166,27 @@ class KGPreprocessor(ABC):
     ) -> dict[str, Any]:
         """Persist extracted entities and relations to the KG.
 
-        Converts Entity/Relation models to GraphNode/GraphEdge and stores them.
+        Converts Entity/Relation models to GraphNode/GraphEdge and writes them to
+        the backend using upsert semantics. Relations are linked by name lookup.
 
         Args:
             result: ExtractionResult to persist
             doc_id: Document ID for tracking provenance
-            merge_strategy: Strategy for handling existing entities ("merge_if_similar", "skip", "overwrite")
+            merge_strategy: Strategy for handling existing entities (unused; upsert handles merging)
 
         Returns:
-            Dictionary with persisted node/edge IDs and statistics
+            Dictionary with persisted entity/edge IDs and statistics
         """
-        persisted = {"entities": {}, "relations": {}, "stats": {}}
+        persisted: dict[str, Any] = {
+            "entity_ids": {},   # entity name → backend-assigned ID
+            "edge_ids": [],     # list of persisted edge IDs
+            "skipped_relations": [],
+            "stats": {},
+        }
 
-        # Convert entities to GraphNodes and store
+        # Step 1: upsert every entity and collect name → ID map
+        name_to_id: dict[str, str] = {}
         for i, entity in enumerate(result.entities):
-            # Create GraphNode from Entity
             node = GraphNode(
                 id=f"{doc_id}_entity_{i}",
                 label=entity.type,
@@ -188,40 +195,75 @@ class KGPreprocessor(ABC):
                     "description": entity.description,
                     "confidence": entity.confidence,
                     "source_doc": doc_id,
+                    **entity.properties,
                 },
             )
+            assigned_id = await self.backend.upsert_entity(node)
+            name_to_id[entity.name] = assigned_id
+            persisted["entity_ids"][entity.name] = assigned_id
+            logger.debug(f"Upserted entity '{entity.name}' → {assigned_id}")
 
-            # Add domain-specific properties if present
-            if entity.properties:
-                node.properties.update(entity.properties)
-
-            # Store node ID for relation linking
-            persisted["entities"][i] = node.id
-            logger.debug(f"Persisted entity: {node.id}")
-
-        # Convert relations to GraphEdges and store
+        # Step 2: upsert each relation, resolving source/target by name
         for i, relation in enumerate(result.relations):
-            # For now, just store relation data
-            # In a full implementation, would link to actual entity IDs
-            edge_data = {
-                "source_entity": relation.source_entity,
-                "relation_type": relation.relation_type,
-                "target_entity": relation.target_entity,
-                "description": relation.description,
-                "source_doc": doc_id,
-            }
+            src_id = name_to_id.get(relation.source_entity)
+            tgt_id = name_to_id.get(relation.target_entity)
 
-            if relation.properties:
-                edge_data.update(relation.properties)
+            # Fall back to a name search for entities not extracted in this doc
+            if src_id is None:
+                candidates = await self.backend.search_entities_by_name(
+                    relation.source_entity, k=1
+                )
+                if candidates:
+                    src_id = candidates[0].id
+                    name_to_id[relation.source_entity] = src_id
 
-            persisted["relations"][i] = edge_data
-            logger.debug(f"Persisted relation: {relation.relation_type}")
+            if tgt_id is None:
+                candidates = await self.backend.search_entities_by_name(
+                    relation.target_entity, k=1
+                )
+                if candidates:
+                    tgt_id = candidates[0].id
+                    name_to_id[relation.target_entity] = tgt_id
+
+            if src_id is None or tgt_id is None:
+                logger.debug(
+                    f"Skipping relation '{relation.relation_type}': "
+                    f"could not resolve "
+                    f"{'source' if src_id is None else 'target'} entity"
+                )
+                persisted["skipped_relations"].append(
+                    {
+                        "relation_type": relation.relation_type,
+                        "source_entity": relation.source_entity,
+                        "target_entity": relation.target_entity,
+                    }
+                )
+                continue
+
+            src_node = GraphNode(id=src_id, label="Entity", properties={})
+            tgt_node = GraphNode(id=tgt_id, label="Entity", properties={})
+            edge = GraphEdge(
+                id=f"{doc_id}_rel_{i}",
+                label=relation.relation_type,
+                source=src_node,
+                target=tgt_node,
+                properties={
+                    "description": relation.description,
+                    "source_doc": doc_id,
+                    **relation.properties,
+                },
+            )
+            assigned_edge_id = await self.backend.upsert_relation(edge)
+            persisted["edge_ids"].append(assigned_edge_id)
+            logger.debug(
+                f"Upserted relation '{relation.relation_type}' → {assigned_edge_id}"
+            )
 
         persisted["stats"] = {
-            "entities_count": len(result.entities),
-            "relations_count": len(result.relations),
+            "entities_persisted": len(persisted["entity_ids"]),
+            "relations_persisted": len(persisted["edge_ids"]),
+            "relations_skipped": len(persisted["skipped_relations"]),
         }
-
         return persisted
 
     async def close(self):

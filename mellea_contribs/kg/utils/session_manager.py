@@ -24,17 +24,16 @@ def create_session(
     backend_name: str = "litellm",
     model_id: str = "gpt-4o-mini",
     temperature: float = 0.7,
-    api_base: Optional[str] = None,
-    api_key: Optional[str] = None,
 ) -> "MelleaSession":
     """Create a Mellea session.
+
+    For OpenAI-compatible endpoints with custom base URL or API key, use
+    :func:`create_session_from_env` or :func:`create_openai_session` instead.
 
     Args:
         backend_name: Backend name (default: "litellm").
         model_id: Model ID to use (default: "gpt-4o-mini").
         temperature: Temperature for generation (default: 0.7).
-        api_base: Optional API base URL.
-        api_key: Optional API key.
 
     Returns:
         MelleaSession object.

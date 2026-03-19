@@ -19,7 +19,6 @@ from pathlib import Path
 
 from mellea_contribs.kg.utils import (
     create_backend,
-    create_session,
     log_progress,
 )
 
@@ -76,12 +75,6 @@ Examples:
         help="Batch size for inserting entities (default: 50)",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="gpt-4o-mini",
-        help="LLM model to use (default: gpt-4o-mini)",
-    )
-    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -107,8 +100,6 @@ Examples:
             neo4j_user=args.db_user,
             neo4j_password=args.db_password,
         )
-        _ = create_session(model_id=args.model)
-
         log_progress("=" * 60)
         log_progress("KG Preprocessing from Predefined Data")
         log_progress("=" * 60)

@@ -1,6 +1,6 @@
 # KG-RAG: Knowledge Graph-Enhanced Retrieval-Augmented Generation
 
-A complete example system demonstrating how to build intelligent retrieval-augmented generation (RAG) using knowledge graphs with the Mellea framework and RITS cloud LLM service.
+A complete example system demonstrating how to build intelligent retrieval-augmented generation (RAG) using knowledge graphs with the Mellea framework.
 
 ## Overview
 

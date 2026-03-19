@@ -9,9 +9,11 @@ from typing import List
 from mellea import generative
 
 from mellea_contribs.kg.models import (
+    AlignmentResult,
     DirectAnswer,
     EvaluationResult,
     ExtractionResult,
+    MergeDecision,
     QuestionRoutes,
     RelevantEntities,
     RelevantRelations,
@@ -512,8 +514,25 @@ async def align_entity_with_kg(
     candidate_entities: str,
     domain: str,
     doc_text: str = ""
-):
-    """Align extracted entity with knowledge graph candidates."""
+) -> AlignmentResult:
+    """You are an expert at aligning extracted entities with an existing knowledge graph in the {domain} domain.
+
+    An entity was extracted from a document:
+    - Name: {extracted_entity_name}
+    - Type: {extracted_entity_type}
+    - Description: {extracted_entity_desc}
+
+    Source document excerpt:
+    {doc_text}
+
+    Candidate entities already in the knowledge graph:
+    {candidate_entities}
+
+    Your task: determine whether any candidate entity refers to the same real-world entity as the extracted one.
+    If a match exists, return its ID and your confidence (0-1). If no match exists, return null for aligned_entity_id.
+
+    Return a JSON object: {{"aligned_entity_id": "<id or null>", "confidence": <0-1>, "reasoning": "<brief reason>"}}
+    """
     pass
 
 
@@ -522,8 +541,23 @@ async def decide_entity_merge(
     entity_pair: str,
     doc_text: str,
     domain: str
-):
-    """Decide whether to merge two entities."""
+) -> MergeDecision:
+    """You are an expert at resolving entity coreference in the {domain} domain.
+
+    Two entities from a knowledge graph may or may not refer to the same real-world entity:
+    {entity_pair}
+
+    Supporting document excerpt:
+    {doc_text}
+
+    Decide whether these two entities should be merged into one.
+    Consider: name similarity, type match, shared properties, and contextual clues.
+
+    Return a JSON object:
+    {{"should_merge": true/false, "reasoning": "<brief explanation>", "merged_properties": {{}}}}
+
+    Only populate merged_properties when should_merge is true, combining the best values from both entities.
+    """
     pass
 
 
@@ -534,8 +568,26 @@ async def align_relation_with_kg(
     synonym_relations: str,
     domain: str,
     doc_text: str = ""
-):
-    """Align extracted relation with knowledge graph candidates."""
+) -> AlignmentResult:
+    """You are an expert at aligning extracted relations with an existing knowledge graph in the {domain} domain.
+
+    An relation was extracted from a document:
+    {extracted_relation}
+
+    Source document excerpt:
+    {doc_text}
+
+    Candidate relations already in the knowledge graph (same source and target):
+    {candidate_relations}
+
+    Known synonym relation types that should be considered equivalent:
+    {synonym_relations}
+
+    Your task: determine whether any candidate relation is semantically equivalent to the extracted one.
+    If a match exists, return its ID and your confidence (0-1). If no match exists, return null for aligned_entity_id.
+
+    Return a JSON object: {{"aligned_entity_id": "<id or null>", "confidence": <0-1>, "reasoning": "<brief reason>"}}
+    """
     pass
 
 
@@ -544,6 +596,21 @@ async def decide_relation_merge(
     relation_pair: str,
     doc_text: str,
     domain: str
-):
-    """Decide whether to merge two relations."""
+) -> MergeDecision:
+    """You are an expert at resolving relation coreference in the {domain} domain.
+
+    Two relations from a knowledge graph may or may not represent the same real-world fact:
+    {relation_pair}
+
+    Supporting document excerpt:
+    {doc_text}
+
+    Decide whether these two relations should be merged into one.
+    Consider: relation type equivalence, property compatibility, and contextual clues.
+
+    Return a JSON object:
+    {{"should_merge": true/false, "reasoning": "<brief explanation>", "merged_properties": {{}}}}
+
+    Only populate merged_properties when should_merge is true, combining the best values from both relations.
+    """
     pass

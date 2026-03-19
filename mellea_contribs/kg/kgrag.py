@@ -316,155 +316,6 @@ def _edge_to_triplet_text(edge: Any) -> str:
     return f"{src}-[{edge.label}]->{tgt}"
 
 
-async def _search_entities_by_name(
-    backend: GraphBackend, name: str, k: int = 4
-) -> list:
-    """Search KG entities by case-insensitive name containment.
-
-    Args:
-        backend: Graph database backend.
-        name: Entity name fragment to search for.
-        k: Maximum number of results.
-
-    Returns:
-        List of matching GraphNode objects.
-    """
-    q = CypherQuery(
-        query_string=(
-            "MATCH (n) WHERE toLower(n.name) CONTAINS toLower($name) "
-            "RETURN n LIMIT $k"
-        ),
-        parameters={"name": name, "k": k},
-    )
-    try:
-        result = await backend.execute_query(q)
-        return result.nodes
-    except Exception:
-        return []
-
-
-async def _search_entities_by_embedding(
-    backend: GraphBackend,
-    embedding: list,
-    k: int = 10,
-    exclude_ids: Optional[set] = None,
-) -> list:
-    """Search KG entities using a Neo4j vector index.
-
-    Falls back gracefully to an empty list when no vector index exists.
-
-    Args:
-        backend: Graph database backend.
-        embedding: Query embedding vector.
-        k: Maximum number of results to return.
-        exclude_ids: Node IDs to exclude from the returned list.
-
-    Returns:
-        List of GraphNode objects ordered by similarity.
-    """
-    exclude_ids = exclude_ids or set()
-    fetch_k = k + len(exclude_ids)
-    q = CypherQuery(
-        query_string=(
-            "CALL db.index.vector.queryNodes('entity_embedding', $k, $emb) "
-            "YIELD node RETURN node"
-        ),
-        parameters={"k": fetch_k, "emb": embedding},
-    )
-    try:
-        result = await backend.execute_query(q)
-        return [n for n in result.nodes if n.id not in exclude_ids][:k]
-    except Exception:
-        return []
-
-
-async def _get_unique_relation_types(
-    backend: GraphBackend, node_id: str, width: int = 30
-) -> list:
-    """Retrieve distinct ``(relation_type, target_label)`` pairs from a node.
-
-    Args:
-        backend: Graph database backend.
-        node_id: Element ID of the source node.
-        width: Maximum number of distinct relation types to return.
-
-    Returns:
-        List of ``(relation_type, target_label)`` tuples.
-    """
-    q = CypherQuery(
-        query_string=(
-            "MATCH (n)-[r]->(m) WHERE elementId(n) = $nid "
-            "RETURN DISTINCT type(r) AS rel_type, labels(m)[0] AS tgt_type "
-            "LIMIT $w"
-        ),
-        parameters={"nid": node_id, "w": width},
-    )
-    try:
-        result = await backend.execute_query(q)
-        pairs: list = []
-        # raw_result holds Neo4j records for non-node/edge RETURN clauses
-        if result.raw_result:
-            for record in result.raw_result:
-                try:
-                    data = record.data() if hasattr(record, "data") else dict(record)
-                    rt = data.get("rel_type")
-                    tt = data.get("tgt_type") or "Unknown"
-                    if rt:
-                        pairs.append((str(rt), str(tt)))
-                except Exception:
-                    continue
-        # Fallback: deduplicate from edges when the backend already parsed them
-        if not pairs and result.edges:
-            seen: set = set()
-            for edge in result.edges:
-                key = (edge.label, edge.target.label)
-                if key not in seen:
-                    seen.add(key)
-                    pairs.append(key)
-        return pairs
-    except Exception:
-        return []
-
-
-async def _get_triplets(
-    backend: GraphBackend,
-    node_id: str,
-    rel_type: str,
-    target_type: str = "Unknown",
-    k: int = 30,
-) -> list:
-    """Retrieve full ``(source)-[rel]->(target)`` triplets from the KG.
-
-    Args:
-        backend: Graph database backend.
-        node_id: Element ID of the source node.
-        rel_type: Relationship type to traverse.
-        target_type: Label of target nodes; ignored when ``"Unknown"``/``"None"``.
-        k: Maximum number of triplets to return.
-
-    Returns:
-        List of GraphEdge objects (each carries source and target GraphNodes).
-    """
-    # Sanitise identifiers to prevent Cypher injection
-    safe_rel = "".join(c for c in rel_type if c.isalnum() or c == "_")
-    safe_tgt = "".join(c for c in target_type if c.isalnum() or c == "_")
-
-    if safe_tgt and safe_tgt not in ("Unknown", "None"):
-        cypher = (
-            f"MATCH (n)-[r:{safe_rel}]->(m:{safe_tgt}) "
-            "WHERE elementId(n) = $nid RETURN n, r, m LIMIT $k"
-        )
-    else:
-        cypher = (
-            f"MATCH (n)-[r:{safe_rel}]->(m) "
-            "WHERE elementId(n) = $nid RETURN n, r, m LIMIT $k"
-        )
-    q = CypherQuery(query_string=cypher, parameters={"nid": node_id, "k": k})
-    try:
-        result = await backend.execute_query(q)
-        return result.edges
-    except Exception:
-        return []
 
 
 # ============================================================================
@@ -548,13 +399,13 @@ async def orchestrate_qa_retrieval(
         """
         norm_coeff = 1.0 / max(1, len(route))
 
-        fuzzy_nodes = await _search_entities_by_name(backend, topic_name, k=4)
+        fuzzy_nodes = await backend.search_entities_by_name(topic_name, k=4)
         fuzzy_ids = {n.id for n in fuzzy_nodes}
 
         emb_nodes: list = []
         if topic_emb is not None and len(fuzzy_nodes) < top_k:
-            emb_nodes = await _search_entities_by_embedding(
-                backend, topic_emb, k=top_k - len(fuzzy_nodes), exclude_ids=fuzzy_ids
+            emb_nodes = await backend.search_entities_by_embedding(
+                topic_emb, k=top_k - len(fuzzy_nodes), exclude_ids=fuzzy_ids
             )
 
         all_nodes = fuzzy_nodes + emb_nodes
@@ -652,7 +503,7 @@ async def orchestrate_qa_retrieval(
             triplet_scored: list = []
 
             for node, entity_score in topic_entities_scores:
-                rel_types = await _get_unique_relation_types(backend, node.id, width=width)
+                rel_types = await backend.get_relation_types(node.id, width=width)
                 if not rel_types:
                     continue
 
@@ -685,7 +536,7 @@ async def orchestrate_qa_retrieval(
                         continue
                     rt, tt = rel_types[idx]
 
-                    triplets = await _get_triplets(backend, node.id, rt, tt, k=width)
+                    triplets = await backend.get_triplets(node.id, rt, tt, k=width)
                     triplets = [e for e in triplets if e.id not in visited_edges]
                     if not triplets:
                         continue
@@ -916,6 +767,8 @@ async def orchestrate_kg_update(
     hints: str = "",
     entity_types: str = "",
     relation_types: str = "",
+    align_topk: int = 10,
+    confidence_threshold: float = 0.6,
 ) -> dict:
     """Orchestrate KG update pipeline.
 
@@ -923,24 +776,40 @@ async def orchestrate_kg_update(
     information extracted from documents. It extracts entities and relations,
     aligns them with existing KG data, and decides on merges.
 
+    Pipeline:
+      1. Extract entities and relations from the document.
+      2. For each extracted entity: search KG candidates, align via LLM,
+         decide whether to merge or insert.
+      3. Write new / merged entities to the backend.
+      4. For each extracted relation: resolve source/target entity IDs, search
+         for matching KG relations, align via LLM, decide whether to merge.
+      5. Write new / merged relations to the backend.
+
     Args:
-        session: Mellea session for LLM calls
-        backend: Graph database backend for queries and updates
-        doc_text: Document text to extract information from
-        domain: Domain-specific knowledge
-        hints: Domain-specific hints for the LLM
-        entity_types: Comma-separated list of valid entity types
-        relation_types: Comma-separated list of valid relation types
+        session: Mellea session for LLM calls.
+        backend: Graph database backend for queries and updates.
+        doc_text: Document text to extract information from.
+        domain: Knowledge domain label (e.g. ``"movie"``).
+        hints: Domain-specific hints for the LLM.
+        entity_types: Comma-separated list of valid entity types.
+        relation_types: Comma-separated list of valid relation types.
+        align_topk: Number of KG candidates to retrieve for alignment.
+        confidence_threshold: Minimum alignment confidence to trigger a merge.
 
     Returns:
         Dictionary with:
-        - extracted_entities: List of extracted entity objects
-        - extracted_relations: List of extracted relation objects
-        - aligned_entities: List of alignment results
-        - aligned_relations: List of alignment results
-        - update_summary: Summary of updates made to KG
+        - ``extracted_entities``: List of Entity objects from the document.
+        - ``extracted_relations``: List of Relation objects from the document.
+        - ``aligned_entities``: List of ``(entity, aligned_id | None)`` pairs.
+        - ``aligned_relations``: List of ``(relation, aligned_id | None)`` pairs.
+        - ``entities_inserted``: Count of new entities added to KG.
+        - ``entities_merged``: Count of entities merged with existing KG nodes.
+        - ``relations_inserted``: Count of new relations added to KG.
+        - ``relations_merged``: Count of relations merged with existing KG edges.
     """
-    # Step 1: Extract entities and relations from document
+    from mellea_contribs.kg.base import GraphEdge, GraphNode
+
+    # ── Step 1: Extract entities and relations ────────────────────────────────
     extraction = await extract_entities_and_relations(
         session,
         doc_context=doc_text,
@@ -951,18 +820,199 @@ async def orchestrate_kg_update(
         relation_types=relation_types,
     )
 
-    # Step 2-3: Align entities with KG and decide merges
-    # (Simplified - full implementation would iterate through extracted entities)
+    # ── Step 2-3: Align and upsert entities ───────────────────────────────────
+    # entity_name → element ID in KG (used when building relation edges)
+    entity_name_to_id: dict = {}
+    aligned_entities: list = []
+    entities_inserted = 0
+    entities_merged = 0
 
-    # Step 4-5: Align relations with KG and decide merges
-    # (Simplified - full implementation would iterate through extracted relations)
+    for entity in extraction.entities:
+        # 2a. Find candidates in KG by name similarity
+        candidates = await backend.search_entities_by_name(entity.name, k=align_topk)
+
+        aligned_id: Optional[str] = None
+
+        if candidates:
+            candidates_str = "\n".join(
+                f"id={n.id} | {_node_to_text(n)}" for n in candidates
+            )
+            try:
+                alignment = await align_entity_with_kg(
+                    session,
+                    extracted_entity_name=entity.name,
+                    extracted_entity_type=entity.type,
+                    extracted_entity_desc=entity.description,
+                    candidate_entities=candidates_str,
+                    domain=domain,
+                    doc_text=doc_text[:500],
+                )
+                if (
+                    alignment.aligned_entity_id
+                    and alignment.confidence >= confidence_threshold
+                ):
+                    # 2b. Check if we should actually merge
+                    candidate_node = next(
+                        (n for n in candidates if n.id == alignment.aligned_entity_id),
+                        None,
+                    )
+                    if candidate_node is not None:
+                        entity_pair = (
+                            f"Extracted: {entity.type} '{entity.name}' — {entity.description}\n"
+                            f"KG node:   {_node_to_text(candidate_node)}"
+                        )
+                        merge_dec = await decide_entity_merge(
+                            session,
+                            entity_pair=entity_pair,
+                            doc_text=doc_text[:500],
+                            domain=domain,
+                        )
+                        if merge_dec.should_merge:
+                            aligned_id = alignment.aligned_entity_id
+                            # Update properties on the existing node
+                            merged_props = dict(candidate_node.properties)
+                            merged_props.update(merge_dec.merged_properties)
+                            merged_node = GraphNode(
+                                id=aligned_id,
+                                label=candidate_node.label,
+                                properties=merged_props,
+                            )
+                            await backend.upsert_entity(merged_node)
+                            entities_merged += 1
+            except Exception:
+                pass  # alignment failure — fall through to insert
+
+        if aligned_id is None:
+            # 3. No match found — insert as new entity
+            new_node = GraphNode(
+                id=entity.id or f"entity_{entity.name.lower().replace(' ', '_')}",
+                label=entity.type,
+                properties={
+                    "name": entity.name,
+                    "description": entity.description,
+                    **entity.properties,
+                },
+            )
+            try:
+                new_id = await backend.upsert_entity(new_node)
+                entity_name_to_id[entity.name] = new_id
+                entities_inserted += 1
+            except Exception:
+                entity_name_to_id[entity.name] = new_node.id
+        else:
+            entity_name_to_id[entity.name] = aligned_id
+
+        aligned_entities.append((entity, aligned_id))
+
+    # ── Step 4-5: Align and upsert relations ──────────────────────────────────
+    aligned_relations: list = []
+    relations_inserted = 0
+    relations_merged = 0
+
+    for relation in extraction.relations:
+        src_id = entity_name_to_id.get(relation.source_entity)
+        tgt_id = entity_name_to_id.get(relation.target_entity)
+
+        if not src_id or not tgt_id:
+            # Cannot resolve entity IDs — skip relation
+            aligned_relations.append((relation, None))
+            continue
+
+        # Build a GraphNode stub for source/target (needed for GraphEdge)
+        src_node = GraphNode(id=src_id, label="Entity", properties={"name": relation.source_entity})
+        tgt_node = GraphNode(id=tgt_id, label="Entity", properties={"name": relation.target_entity})
+
+        # 4a. Find existing relations between src and tgt
+        safe_rel = "".join(c for c in relation.relation_type if c.isalnum() or c == "_")
+        existing = await backend.get_triplets(src_id, safe_rel, k=align_topk)
+
+        aligned_rel_id: Optional[str] = None
+
+        if existing:
+            existing_str = "\n".join(
+                f"id={e.id} | {_edge_to_triplet_text(e)}" for e in existing
+            )
+            extracted_rel_str = (
+                f"({relation.source_entity})-[{relation.relation_type}]->({relation.target_entity})"
+                f" | {relation.description}"
+            )
+            try:
+                rel_alignment = await align_relation_with_kg(
+                    session,
+                    extracted_relation=extracted_rel_str,
+                    candidate_relations=existing_str,
+                    synonym_relations="",
+                    domain=domain,
+                    doc_text=doc_text[:500],
+                )
+                if (
+                    rel_alignment.aligned_entity_id
+                    and rel_alignment.confidence >= confidence_threshold
+                ):
+                    candidate_edge = next(
+                        (e for e in existing if e.id == rel_alignment.aligned_entity_id),
+                        None,
+                    )
+                    if candidate_edge is not None:
+                        rel_pair = (
+                            f"Extracted: {extracted_rel_str}\n"
+                            f"KG edge:   {_edge_to_triplet_text(candidate_edge)}"
+                        )
+                        merge_dec = await decide_relation_merge(
+                            session,
+                            relation_pair=rel_pair,
+                            doc_text=doc_text[:500],
+                            domain=domain,
+                        )
+                        if merge_dec.should_merge:
+                            aligned_rel_id = rel_alignment.aligned_entity_id
+                            merged_props = dict(candidate_edge.properties)
+                            merged_props.update(merge_dec.merged_properties)
+                            merged_edge = GraphEdge(
+                                id=aligned_rel_id,
+                                source=candidate_edge.source,
+                                label=candidate_edge.label,
+                                target=candidate_edge.target,
+                                properties=merged_props,
+                            )
+                            await backend.upsert_relation(merged_edge)
+                            relations_merged += 1
+            except Exception:
+                pass
+
+        if aligned_rel_id is None:
+            # 5. No match — insert new relation
+            new_edge = GraphEdge(
+                id=f"{src_id}_{safe_rel}_{tgt_id}",
+                source=src_node,
+                label=safe_rel,
+                target=tgt_node,
+                properties={
+                    "description": relation.description,
+                    **relation.properties,
+                },
+            )
+            try:
+                await backend.upsert_relation(new_edge)
+                relations_inserted += 1
+            except Exception:
+                pass
+
+        aligned_relations.append((relation, aligned_rel_id))
 
     return {
         "extracted_entities": extraction.entities,
         "extracted_relations": extraction.relations,
-        "aligned_entities": [],
-        "aligned_relations": [],
-        "update_summary": "Document processed and entities/relations extracted",
+        "aligned_entities": aligned_entities,
+        "aligned_relations": aligned_relations,
+        "entities_inserted": entities_inserted,
+        "entities_merged": entities_merged,
+        "relations_inserted": relations_inserted,
+        "relations_merged": relations_merged,
+        "update_summary": (
+            f"Inserted {entities_inserted} entities, merged {entities_merged}; "
+            f"inserted {relations_inserted} relations, merged {relations_merged}."
+        ),
     }
 
 
