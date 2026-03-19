@@ -1,0 +1,20 @@
+name: CI - DSPy Backend
+
+on:
+  pull_request:
+    paths:
+      - 'mellea_contribs/dspy_backend/**'
+      - '.github/workflows/ci-dspy-backend.yml'
+      - '.github/workflows/quality-dspy-backend.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'mellea_contribs/dspy_backend/**'
+      - '.github/workflows/ci-dspy-backend.yml'
+      - '.github/workflows/quality-dspy-backend.yml'
+
+jobs:
+  test:
+    uses: ./.github/workflows/quality-dspy-backend.yml
+
