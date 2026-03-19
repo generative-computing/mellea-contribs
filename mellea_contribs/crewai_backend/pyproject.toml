@@ -3,7 +3,7 @@ name = "mellea-crewai"
 version = "0.1.0"
 description = "CrewAI integration for Mellea - enables CrewAI agents to use Mellea's generative programming capabilities"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "IBM Research", email = "mellea@ibm.com" }
