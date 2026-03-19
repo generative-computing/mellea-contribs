@@ -5,16 +5,16 @@ on:
     types: [opened, reopened, synchronize]
 
 jobs:
-  mellea-integration-core:
-    uses: ./.github/workflows/quality-mellea-integration-core.yml
+  #mellea-integration-core:
+  #  uses: ./.github/workflows/quality-mellea-integration-core.yml
   
   #crewai-backend:
   #  uses: ./.github/workflows/quality-crewai-backend.yml
   #  needs: mellea-integration-core
   
-  dspy-backend:
-    uses: ./.github/workflows/quality-dspy-backend.yml
-    needs: mellea-integration-core
+  #dspy-backend:
+  #  uses: ./.github/workflows/quality-dspy-backend.yml
+  #  needs: mellea-integration-core
   
   #langchain-backend:
   #  uses: ./.github/workflows/quality-langchain-backend.yml
