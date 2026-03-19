@@ -1,0 +1,20 @@
+name: CI - LangChain Backend
+
+on:
+  pull_request:
+    paths:
+      - 'mellea_contribs/langchain_backend/**'
+      - '.github/workflows/ci-langchain-backend.yml'
+      - '.github/workflows/quality-langchain-backend.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'mellea_contribs/langchain_backend/**'
+      - '.github/workflows/ci-langchain-backend.yml'
+      - '.github/workflows/quality-langchain-backend.yml'
+
+jobs:
+  test:
+    uses: ./.github/workflows/quality-langchain-backend.yml
+

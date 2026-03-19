@@ -1,0 +1,19 @@
+name: CI - Tools Package
+
+on:
+  pull_request:
+    paths:
+      - 'mellea_contribs/tools_package/**'
+      - '.github/workflows/ci-tools-package.yml'
+      - '.github/workflows/quality-tools-package.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'mellea_contribs/tools_package/**'
+      - '.github/workflows/ci-tools-package.yml'
+      - '.github/workflows/quality-tools-package.yml'
+
+jobs:
+  test:
+    uses: ./.github/workflows/quality-tools-package.yml

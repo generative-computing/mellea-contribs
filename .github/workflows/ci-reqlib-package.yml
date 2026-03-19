@@ -1,0 +1,19 @@
+name: CI - Reqlib Package
+
+on:
+  pull_request:
+    paths:
+      - 'mellea_contribs/reqlib_package/**'
+      - '.github/workflows/ci-reqlib-package.yml'
+      - '.github/workflows/quality-reqlib-package.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'mellea_contribs/reqlib_package/**'
+      - '.github/workflows/ci-reqlib-package.yml'
+      - '.github/workflows/quality-reqlib-package.yml'
+
+jobs:
+  test:
+    uses: ./.github/workflows/quality-reqlib-package.yml
