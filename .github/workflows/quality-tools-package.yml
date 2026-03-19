@@ -27,7 +27,13 @@ jobs:
       - name: Install dependencies and run tests
         run: |
           cd mellea_contribs/tools_package
+          if ! command -v uv &> /dev/null; then
+            echo "Installing uv..."
+            pip install uv
+          fi
+          echo "Setting up virtual environment and installing dependencies..."
           uv sync --dev
+          echo "Running tests..."
           uv run -- pytest -v test/test_double_round_robin.py test/test_top_k.py
       - name: Send failure message
         if: failure()
