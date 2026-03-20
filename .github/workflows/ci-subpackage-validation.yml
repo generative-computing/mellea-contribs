@@ -1,0 +1,169 @@
+name: CI - Subpackage Validation
+
+on:
+  pull_request:
+    paths:
+      - 'mellea_contribs/**'
+      - '.github/workflows/ci-*.yml'
+      - '.github/workflows/quality-*.yml'
+      - '.github/workflows/ci-subpackage-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'mellea_contribs/**'
+      - '.github/workflows/ci-*.yml'
+      - '.github/workflows/quality-*.yml'
+      - '.github/workflows/ci-subpackage-validation.yml'
+
+jobs:
+  validate-subpackage-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate subpackage CI configurations
+        run: |
+          set -e
+          
+          echo "=== Validating CI configurations for mellea_contribs subpackages ==="
+          echo ""
+          
+          # Track validation status
+          all_valid=true
+          missing_ci=()
+          missing_quality=()
+          invalid_paths=()
+          missing_test_jobs=()
+          
+          # Find all subpackages (directories with pyproject.toml)
+          subpackages=()
+          for dir in mellea_contribs/*/; do
+            if [ -f "${dir}pyproject.toml" ]; then
+              subpackage=$(basename "$dir")
+              subpackages+=("$subpackage")
+            fi
+          done
+          
+          echo "Found ${#subpackages[@]} subpackages:"
+          printf '  - %s\n' "${subpackages[@]}"
+          echo ""
+          
+          # Validate each subpackage
+          for subpackage in "${subpackages[@]}"; do
+            echo "Checking: $subpackage"
+            
+            # Convert subpackage name to CI filename format
+            # e.g., langchain_backend -> ci-langchain-backend.yml
+            ci_name=$(echo "$subpackage" | sed 's/_/-/g')
+            ci_file=".github/workflows/ci-${ci_name}.yml"
+            quality_file=".github/workflows/quality-${ci_name}.yml"
+            
+            # Check if CI file exists
+            if [ ! -f "$ci_file" ]; then
+              echo "  ❌ Missing CI file: $ci_file"
+              missing_ci+=("$subpackage")
+              all_valid=false
+              continue
+            fi
+            echo "  ✓ CI file exists: $ci_file"
+            
+            # Check if quality workflow file exists
+            if [ ! -f "$quality_file" ]; then
+              echo "  ❌ Missing quality workflow: $quality_file"
+              missing_quality+=("$subpackage")
+              all_valid=false
+              continue
+            fi
+            echo "  ✓ Quality workflow exists: $quality_file"
+            
+            # Validate CI file has correct path triggers
+            expected_path="mellea_contribs/${subpackage}/"
+            if ! grep -q "paths:" "$ci_file"; then
+              echo "  ❌ CI file missing 'paths:' section"
+              invalid_paths+=("$subpackage")
+              all_valid=false
+            elif ! grep -q "'${expected_path}\*\*'" "$ci_file" && ! grep -q "\"${expected_path}\*\*\"" "$ci_file"; then
+              echo "  ❌ CI file missing path trigger for: ${expected_path}**"
+              invalid_paths+=("$subpackage")
+              all_valid=false
+            else
+              echo "  ✓ CI file has correct path triggers"
+            fi
+            
+            # Validate CI file references quality workflow
+            if ! grep -q "uses: ./.github/workflows/quality-${ci_name}.yml" "$ci_file"; then
+              echo "  ⚠️  Warning: CI file may not reference quality workflow correctly"
+            else
+              echo "  ✓ CI file references quality workflow"
+            fi
+            
+            # Validate quality workflow has test jobs
+            if ! grep -q "jobs:" "$quality_file"; then
+              echo "  ❌ Quality workflow missing 'jobs:' section"
+              missing_test_jobs+=("$subpackage")
+              all_valid=false
+            elif ! grep -q "pytest" "$quality_file" && ! grep -q "test" "$quality_file"; then
+              echo "  ⚠️  Warning: Quality workflow may not run tests (no 'pytest' or 'test' found)"
+            else
+              echo "  ✓ Quality workflow has test jobs"
+            fi
+            
+            echo ""
+          done
+          
+          # Summary report
+          echo "=== Validation Summary ==="
+          echo ""
+          
+          if [ "$all_valid" = true ]; then
+            echo "✅ All subpackages have valid CI configurations!"
+            exit 0
+          else
+            echo "❌ Validation failed for one or more subpackages"
+            echo ""
+            
+            if [ ${#missing_ci[@]} -gt 0 ]; then
+              echo "Subpackages missing CI files:"
+              printf '  - %s\n' "${missing_ci[@]}"
+              echo ""
+            fi
+            
+            if [ ${#missing_quality[@]} -gt 0 ]; then
+              echo "Subpackages missing quality workflows:"
+              printf '  - %s\n' "${missing_quality[@]}"
+              echo ""
+            fi
+            
+            if [ ${#invalid_paths[@]} -gt 0 ]; then
+              echo "Subpackages with invalid path triggers:"
+              printf '  - %s\n' "${invalid_paths[@]}"
+              echo ""
+            fi
+            
+            if [ ${#missing_test_jobs[@]} -gt 0 ]; then
+              echo "Subpackages with missing test jobs:"
+              printf '  - %s\n' "${missing_test_jobs[@]}"
+              echo ""
+            fi
+            
+            echo "Please ensure each subpackage has:"
+            echo "  1. A CI workflow file: .github/workflows/ci-<subpackage-name>.yml"
+            echo "  2. A quality workflow file: .github/workflows/quality-<subpackage-name>.yml"
+            echo "  3. Correct path triggers in the CI file"
+            echo "  4. Test jobs in the quality workflow"
+            echo ""
+            echo "Example CI file structure:"
+            echo "  on:"
+            echo "    pull_request:"
+            echo "      paths:"
+            echo "        - 'mellea_contribs/<subpackage>/**'"
+            echo "        - '.github/workflows/ci-<subpackage>.yml'"
+            echo "        - '.github/workflows/quality-<subpackage>.yml'"
+            echo "  jobs:"
+            echo "    test:"
+            echo "      uses: ./.github/workflows/quality-<subpackage>.yml"
+            
+            exit 1
+          fi
