@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'mellea_contribs/langchain_backend/**'
+      - 'mellea_contribs/mellea-integration-core/**'
       - '.github/workflows/ci-langchain-backend.yml'
       - '.github/workflows/quality-langchain-backend.yml'
   push:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - 'mellea_contribs/langchain_backend/**'
+      - 'mellea_contribs/mellea-integration-core/**'
       - '.github/workflows/ci-langchain-backend.yml'
       - '.github/workflows/quality-langchain-backend.yml'
 
