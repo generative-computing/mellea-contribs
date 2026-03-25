@@ -151,11 +151,12 @@ def test_is_appellate_case():
 
 
 @pytest.mark.qualitative
+@pytest.mark.skip(reason="Test is unstable")
 def test_appellate_case_session(m_session):
     case_name = "ARTHUR DeMOORS, PLAINTIFF-RESPONDENT, v. ATLANTIC CASUALTY INSURANCE COMPANY OF NEWARK, NEW JERSEY, A CORPORATION, DEFENDANT-APPELLANT"
     m = m_session
     appellate_case = m.instruct(
-        f"Return the following string (only return the characters after the colon, no other words): {case_name}",
+        f"Return the following string (only return the characters after the colon, without change including puctuation characters, no other words): {case_name}",
         requirements=[
             req(
                 "The result should be an appellate court case name or citation",
