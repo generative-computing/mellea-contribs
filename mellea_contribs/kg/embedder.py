@@ -1,10 +1,10 @@
-"""KG Embedder: Layer 1 application for generating vector embeddings for KG entities.
+"""KG Embedder: Layer 2 library for generating vector embeddings for KG entities.
 
 This module provides embedding infrastructure for converting entities and relations
 into vector representations using LiteLLM's embedding API.
 
-The architecture follows Mellea's Layer 1 pattern:
-- Layer 1: KGEmbedder (this module) orchestrates embedding operations
+The architecture follows Mellea's Layer 2 pattern:
+- Layer 2: KGEmbedder (this module) orchestrates embedding operations
 - Layer 3: Can integrate with LLM session for embedding generation
 - Layer 4: Uses GraphBackend for storing/retrieving entities
 
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 class KGEmbedder:
     """Generates and manages vector embeddings for KG entities and relations.
 
-    This is a Layer 1 application that orchestrates embedding operations.
+    This is a Layer 2 library that orchestrates embedding operations.
     It uses LiteLLM's embedding API for generating vector representations.
 
     The class supports:
@@ -91,7 +91,7 @@ class KGEmbedder:
         batch_size: int = 10,
         backend: Optional[GraphBackend] = None,
     ):
-        """Initialize the KG embedder using individual parameters (Mellea Layer 1 pattern).
+        """Initialize the KG embedder using individual parameters (Mellea Layer 2 pattern).
 
         Matches the pattern used by KGRag and KGPreprocessor with individual
         configuration parameters rather than a config object.

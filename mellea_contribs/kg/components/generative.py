@@ -1,8 +1,7 @@
 """Generative functions for KG-RAG using Mellea's @generative decorator.
 
-These are Layer 2-3 functions that combine LLM generative calls with orchestration.
-Layer 2: Executor functions that orchestrate the pipeline
-Layer 3: @generative functions that call the LLM
+These are Layer 3 @generative functions that call the LLM directly.
+They are pure LLM functions with no backend access.
 """
 from typing import List
 

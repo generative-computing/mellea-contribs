@@ -1,11 +1,11 @@
-"""KG Preprocessor: Layer 1 application for preprocessing raw data into KG entities/relations.
+"""KG Preprocessor: Layer 2 library for preprocessing raw data into KG entities/relations.
 
 This module provides generic preprocessing infrastructure for converting raw documents
-into Knowledge Graph entities and relations using the Layer 2-3 extraction functions.
+into Knowledge Graph entities and relations using the Layer 3 extraction functions.
 
-The architecture follows Mellea's Layer 1 pattern:
-- Layer 1: KGPreprocessor (this module) orchestrates the pipeline
-- Layer 2-3: extract_entities_and_relations, align_entity_with_kg, etc.
+The architecture follows Mellea's Layer 2 pattern:
+- Layer 2: KGPreprocessor (this module) orchestrates the pipeline
+- Layer 3: extract_entities_and_relations, align_entity_with_kg, etc.
 - Layer 4: GraphBackend for persisting to Neo4j
 
 Example::
@@ -42,17 +42,25 @@ try:
 except ImportError:
     MelleaSession = None
 
-from mellea_contribs.kg.base import GraphEdge, GraphNode
-
 try:
     from mellea_contribs.kg.components import (
         extract_entities_and_relations,
     )
+    from mellea_contribs.kg.components.persistence import (
+        persist_entities,
+        persist_relations,
+    )
 except ImportError:
     extract_entities_and_relations = None
+    persist_entities = None
+    persist_relations = None
 
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
-from mellea_contribs.kg.models import Entity, ExtractionResult, Relation
+try:
+    from mellea_contribs.kg.graph_dbs.base import GraphBackend
+except ImportError:
+    GraphBackend = None  # type: ignore[assignment,misc]
+
+from mellea_contribs.kg.models import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +68,10 @@ logger = logging.getLogger(__name__)
 class KGPreprocessor(ABC):
     """Generic base class for preprocessing raw data into KG entities and relations.
 
-    Orchestrates the Layer 2-3 extraction pipeline and handles entity/relation storage.
+    Orchestrates the Layer 3 extraction pipeline and handles entity/relation storage.
     Subclasses should override get_hints() and optionally post_process_entities/relations().
 
-    This is a Layer 1 application that:
+    This is a Layer 2 library that:
     1. Uses Layer 3 extract_entities_and_relations for LLM extraction
     2. Optionally calls Layer 3 alignment functions
     3. Uses Layer 4 GraphBackend for persistence
@@ -166,8 +174,8 @@ class KGPreprocessor(ABC):
     ) -> dict[str, Any]:
         """Persist extracted entities and relations to the KG.
 
-        Converts Entity/Relation models to GraphNode/GraphEdge and writes them to
-        the backend using upsert semantics. Relations are linked by name lookup.
+        Delegates to Layer 3 ``persist_entities`` and ``persist_relations``
+        executor functions, which handle all backend interactions.
 
         Args:
             result: ExtractionResult to persist
@@ -177,94 +185,24 @@ class KGPreprocessor(ABC):
         Returns:
             Dictionary with persisted entity/edge IDs and statistics
         """
-        persisted: dict[str, Any] = {
-            "entity_ids": {},   # entity name → backend-assigned ID
-            "edge_ids": [],     # list of persisted edge IDs
-            "skipped_relations": [],
-            "stats": {},
+        # Step 1: upsert every entity via Layer 3 executor
+        name_to_id = await persist_entities(self.backend, result.entities, doc_id)
+
+        # Step 2: upsert each relation via Layer 3 executor
+        edge_ids, skipped_relations = await persist_relations(
+            self.backend, result.relations, name_to_id, doc_id
+        )
+
+        return {
+            "entity_ids": name_to_id,
+            "edge_ids": edge_ids,
+            "skipped_relations": skipped_relations,
+            "stats": {
+                "entities_persisted": len(name_to_id),
+                "relations_persisted": len(edge_ids),
+                "relations_skipped": len(skipped_relations),
+            },
         }
-
-        # Step 1: upsert every entity and collect name → ID map
-        name_to_id: dict[str, str] = {}
-        for i, entity in enumerate(result.entities):
-            node = GraphNode(
-                id=f"{doc_id}_entity_{i}",
-                label=entity.type,
-                properties={
-                    "name": entity.name,
-                    "description": entity.description,
-                    "confidence": entity.confidence,
-                    "source_doc": doc_id,
-                    **entity.properties,
-                },
-            )
-            assigned_id = await self.backend.upsert_entity(node)
-            name_to_id[entity.name] = assigned_id
-            persisted["entity_ids"][entity.name] = assigned_id
-            logger.debug(f"Upserted entity '{entity.name}' → {assigned_id}")
-
-        # Step 2: upsert each relation, resolving source/target by name
-        for i, relation in enumerate(result.relations):
-            src_id = name_to_id.get(relation.source_entity)
-            tgt_id = name_to_id.get(relation.target_entity)
-
-            # Fall back to a name search for entities not extracted in this doc
-            if src_id is None:
-                candidates = await self.backend.search_entities_by_name(
-                    relation.source_entity, k=1
-                )
-                if candidates:
-                    src_id = candidates[0].id
-                    name_to_id[relation.source_entity] = src_id
-
-            if tgt_id is None:
-                candidates = await self.backend.search_entities_by_name(
-                    relation.target_entity, k=1
-                )
-                if candidates:
-                    tgt_id = candidates[0].id
-                    name_to_id[relation.target_entity] = tgt_id
-
-            if src_id is None or tgt_id is None:
-                logger.debug(
-                    f"Skipping relation '{relation.relation_type}': "
-                    f"could not resolve "
-                    f"{'source' if src_id is None else 'target'} entity"
-                )
-                persisted["skipped_relations"].append(
-                    {
-                        "relation_type": relation.relation_type,
-                        "source_entity": relation.source_entity,
-                        "target_entity": relation.target_entity,
-                    }
-                )
-                continue
-
-            src_node = GraphNode(id=src_id, label="Entity", properties={})
-            tgt_node = GraphNode(id=tgt_id, label="Entity", properties={})
-            edge = GraphEdge(
-                id=f"{doc_id}_rel_{i}",
-                label=relation.relation_type,
-                source=src_node,
-                target=tgt_node,
-                properties={
-                    "description": relation.description,
-                    "source_doc": doc_id,
-                    **relation.properties,
-                },
-            )
-            assigned_edge_id = await self.backend.upsert_relation(edge)
-            persisted["edge_ids"].append(assigned_edge_id)
-            logger.debug(
-                f"Upserted relation '{relation.relation_type}' → {assigned_edge_id}"
-            )
-
-        persisted["stats"] = {
-            "entities_persisted": len(persisted["entity_ids"]),
-            "relations_persisted": len(persisted["edge_ids"]),
-            "relations_skipped": len(persisted["skipped_relations"]),
-        }
-        return persisted
 
     async def close(self):
         """Close connections and cleanup resources."""

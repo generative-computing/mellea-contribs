@@ -1,4 +1,4 @@
-"""Graph traversal component (Layer 2: full Mellea Component implementation)."""
+"""Graph traversal component (Layer 3: full Mellea Component implementation)."""
 
 from collections.abc import Callable
 

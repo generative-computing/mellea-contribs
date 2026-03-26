@@ -108,15 +108,16 @@ class TestKGRagStructural:
         rag = KGRag(backend=backend, session=None)
         assert asyncio.iscoroutinefunction(rag.answer)
 
-    async def test_validate_and_repair_returns_valid_query(self, backend):
-        """_validate_and_repair returns the query unchanged when already valid."""
-        rag = KGRag(backend=backend, session=None)
+    async def test_validate_and_execute_returns_result(self, backend):
+        """validate_and_execute_query returns a result for a valid query."""
+        from mellea_contribs.kg.components.retrieval import validate_and_execute_query
+
         schema_text = format_schema(await backend.get_schema())
-        # MockBackend.validate_query always returns True
-        result = await rag._validate_and_repair(
-            "MATCH (n) RETURN n", schema_text
+        # MockBackend.validate_query always returns True; execute_query returns a GraphResult
+        result = await validate_and_execute_query(
+            backend, None, "MATCH (n) RETURN n", schema_text
         )
-        assert result == "MATCH (n) RETURN n"
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------

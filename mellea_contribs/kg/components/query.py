@@ -1,4 +1,4 @@
-"""Graph query components (Layer 2: full Mellea Component implementations)."""
+"""Graph query components (Layer 3: full Mellea Component implementations)."""
 
 from copy import deepcopy
 from typing import Any

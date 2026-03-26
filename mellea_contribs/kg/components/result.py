@@ -1,4 +1,4 @@
-"""Graph result component (Layer 2: full Mellea Component implementation)."""
+"""Graph result component (Layer 3: full Mellea Component implementation)."""
 
 import json
 from typing import TYPE_CHECKING, Any

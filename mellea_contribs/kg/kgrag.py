@@ -1,6 +1,6 @@
 """KGRag: Knowledge Graph Retrieval-Augmented Generation.
 
-Layer 1 application that orchestrates the full KG RAG pipeline:
+Layer 2 library that orchestrates the full KG RAG pipeline:
 
 **QA Pipeline**:
   1. Break down question into solving routes (Layer 3 @generative)
@@ -47,49 +47,56 @@ except ImportError:
 # Optional imports from mellea components (requires mellea to be installed)
 try:
     from mellea_contribs.kg.components import (
-        align_entity_with_kg,
-        align_relation_with_kg,
         align_topic_entities,
         break_down_question,
-        decide_entity_merge,
-        decide_relation_merge,
         evaluate_knowledge_sufficiency,
         extract_entities_and_relations,
         extract_topic_entities,
         generate_direct_answer,
-        prune_relations,
-        prune_triplets,
         validate_consensus,
     )
     from mellea_contribs.kg.components.llm_guided import (
         explain_query_result,
         natural_language_to_cypher,
-        suggest_query_improvement,
     )
-    from mellea_contribs.kg.components.query import CypherQuery
+    from mellea_contribs.kg.components.retrieval import (
+        edge_to_triplet_text,
+        fetch_schema_text,
+        node_to_text,
+        search_and_align_entities,
+        traverse_and_prune,
+        validate_and_execute_query,
+    )
+    from mellea_contribs.kg.components.persistence import (
+        align_and_upsert_entity,
+        align_and_upsert_relation,
+    )
     from mellea_contribs.kg.components.result import GraphResult
 except ImportError:
     # These are optional - mellea may not be installed
-    align_entity_with_kg = None
-    align_relation_with_kg = None
     align_topic_entities = None
     break_down_question = None
-    decide_entity_merge = None
-    decide_relation_merge = None
     evaluate_knowledge_sufficiency = None
     extract_entities_and_relations = None
     extract_topic_entities = None
     generate_direct_answer = None
-    prune_relations = None
-    prune_triplets = None
     validate_consensus = None
     explain_query_result = None
     natural_language_to_cypher = None
-    suggest_query_improvement = None
-    CypherQuery = None
+    edge_to_triplet_text = None
+    fetch_schema_text = None
+    node_to_text = None
+    search_and_align_entities = None
+    traverse_and_prune = None
+    validate_and_execute_query = None
+    align_and_upsert_entity = None
+    align_and_upsert_relation = None
     GraphResult = None
 
-from mellea_contribs.kg.graph_dbs.base import GraphBackend
+try:
+    from mellea_contribs.kg.graph_dbs.base import GraphBackend
+except ImportError:
+    GraphBackend = None  # type: ignore[assignment,misc]
 
 # Maximum Cypher repair attempts before giving up
 _MAX_REPAIR_ATTEMPTS = 2
@@ -178,11 +185,10 @@ class KGRag:
         Returns:
             A natural language answer grounded in graph query results.
         """
-        # Step 1: Get graph schema
-        schema = await self._backend.get_schema()
-        schema_text = format_schema(schema)
+        # Step 1: Get graph schema (Layer 3)
+        schema_text = await fetch_schema_text(self._backend)
 
-        # Step 2: Generate Cypher query from natural language
+        # Step 2: Generate Cypher query from natural language (Layer 3 @generative)
         generated = await natural_language_to_cypher(
             self._session,
             natural_language_query=question,
@@ -191,23 +197,21 @@ class KGRag:
         )
         cypher_string = generated.query
 
-        # Step 3: Validate and repair loop
-        cypher_string = await self._validate_and_repair(
-            cypher_string, schema_text
+        # Step 3: Validate, repair, and execute (Layer 3)
+        graph_result = await validate_and_execute_query(
+            self._backend,
+            self._session,
+            cypher_string,
+            schema_text,
+            max_repair_attempts=self._max_repair_attempts,
+            format_style=self._format_style,
         )
 
-        # Step 4: Execute validated query
-        query = CypherQuery(query_string=cypher_string, description=question)
-        graph_result = await self._backend.execute_query(
-            query, format_style=self._format_style
-        )
-
-        # Step 5: Generate natural language answer
+        # Step 4: Format result and generate natural language answer (Layer 3 @generative)
         result_component = GraphResult(
             nodes=graph_result.nodes,
             edges=graph_result.edges,
             paths=graph_result.paths,
-            query=query,
             format_style=self._format_style,
         )
         result_text = result_component.format_for_llm().args["result"]
@@ -220,106 +224,9 @@ class KGRag:
         )
         return answer
 
-    async def _validate_and_repair(
-        self, cypher_string: str, schema_text: str
-    ) -> str:
-        """Validate Cypher syntax; repair via LLM if invalid.
-
-        Attempts up to ``_max_repair_attempts`` repairs.  Returns the last
-        generated string whether or not it passed validation, so the caller
-        always gets a best-effort answer.
-
-        Args:
-            cypher_string: Cypher query to validate.
-            schema_text: Formatted schema text used when requesting repairs.
-
-        Returns:
-            The validated (or best-effort repaired) Cypher string.
-        """
-        for attempt in range(self._max_repair_attempts + 1):
-            query = CypherQuery(query_string=cypher_string)
-            is_valid, error = await self._backend.validate_query(query)
-
-            if is_valid:
-                return cypher_string
-
-            if attempt < self._max_repair_attempts:
-                improved = await suggest_query_improvement(
-                    self._session,
-                    query=cypher_string,
-                    error_message=error or "Unknown syntax error",
-                    schema=schema_text,
-                )
-                cypher_string = improved.query
-
-        # Return last attempt regardless (best-effort)
-        return cypher_string
-
 
 # ============================================================================
-# Layer 1 - KG traversal helpers
-# ============================================================================
-
-
-def _node_to_text(node: Any) -> str:
-    """Format a GraphNode as entity text for LLM prompts.
-
-    Produces ``(Label: NAME, desc: "...", props: {...})`` used by the
-    @generative alignment / pruning functions.
-
-    Args:
-        node: GraphNode instance.
-
-    Returns:
-        Formatted entity string.
-    """
-    name = str(node.properties.get("name", node.id)).strip().upper()
-    desc = node.properties.get("description", "")
-    _SKIP = {"name", "description", "embedding"}
-    props = {
-        k: v
-        for k, v in node.properties.items()
-        if k not in _SKIP and not k.startswith("_")
-    }
-    parts = [f"({node.label}: {name}"]
-    if desc:
-        parts.append(f', desc: "{str(desc).replace(chr(34), chr(39))}"')
-    if props:
-        prop_items = [f"{k}: {v}" for k, v in list(props.items())[:8]]
-        parts.append(f", props: {{{', '.join(prop_items)}}}")
-    parts.append(")")
-    return "".join(parts)
-
-
-def _edge_to_triplet_text(edge: Any) -> str:
-    """Format a GraphEdge as a triplet text for LLM prompts.
-
-    Produces ``(Src)-[REL, props: {...}]->(Tgt)`` format.
-
-    Args:
-        edge: GraphEdge instance.
-
-    Returns:
-        Formatted triplet string.
-    """
-    src = _node_to_text(edge.source)
-    tgt = _node_to_text(edge.target)
-    _SKIP = {"embedding"}
-    props = {
-        k: v
-        for k, v in edge.properties.items()
-        if k not in _SKIP and not k.startswith("_")
-    }
-    if props:
-        prop_items = [f"{k}: {v}" for k, v in list(props.items())[:5]]
-        return f"{src}-[{edge.label}, props: {{{', '.join(prop_items)}}}]->{tgt}"
-    return f"{src}-[{edge.label}]->{tgt}"
-
-
-
-
-# ============================================================================
-# Layer 1 - QA Orchestration (Multi-Route Question Answering)
+# Layer 2 - QA Orchestration (Multi-Route Question Answering)
 # ============================================================================
 
 
@@ -392,56 +299,13 @@ async def orchestrate_qa_retrieval(
         except Exception:
             return [None] * len(texts)
 
-    async def _align_topic(route: list, topic_name: str, topic_emb: Any, top_k: int = 45) -> list:
-        """Align one topic entity name with KG candidates.
-
-        Returns list of ``(GraphNode, float)`` scored pairs.
-        """
-        norm_coeff = 1.0 / max(1, len(route))
-
-        fuzzy_nodes = await backend.search_entities_by_name(topic_name, k=4)
-        fuzzy_ids = {n.id for n in fuzzy_nodes}
-
-        emb_nodes: list = []
-        if topic_emb is not None and len(fuzzy_nodes) < top_k:
-            emb_nodes = await backend.search_entities_by_embedding(
-                topic_emb, k=top_k - len(fuzzy_nodes), exclude_ids=fuzzy_ids
-            )
-
-        all_nodes = fuzzy_nodes + emb_nodes
-        if not all_nodes:
-            return []
-
-        entities_dict = {f"ent_{i}": n for i, n in enumerate(all_nodes)}
-        entities_str = "\n".join(
-            f"{k}: {_node_to_text(v)}" for k, v in entities_dict.items()
-        )
-
-        align_result = await align_topic_entities(
-            session,
-            query=query,
-            query_time=query_time,
-            route=route,
-            domain=domain,
-            top_k_entities_str=entities_str,
-        )
-
-        scored = []
-        for key, score_str in align_result.relevant_entities.items():
-            try:
-                score = float(score_str)
-            except (TypeError, ValueError):
-                score = 0.0
-            if score > 0 and key in entities_dict:
-                scored.append((entities_dict[key], norm_coeff * score))
-        return scored
-
     async def _explore_one_route(route: list) -> dict:
         """Run the ToG traversal for one solving route.
 
         Returns dict with keys ``ans``, ``context``, ``route``.
+        Calls Layer 3 executor functions; never calls backend directly.
         """
-        # Step A: Extract topic entities
+        # Step A: Extract topic entities (Layer 3 @generative)
         topic_result = await extract_topic_entities(
             session,
             query=query,
@@ -455,10 +319,13 @@ async def orchestrate_qa_retrieval(
         if not topic_names:
             return {"ans": "I don't know.", "context": "", "route": route}
 
-        # Step B: Align each topic entity with KG
+        # Step B: Align each topic entity with KG (Layer 3 executor)
         topic_embeddings = await _embed(topic_names)
         align_tasks = [
-            _align_topic(route, name, emb, top_k=min(45, width))
+            search_and_align_entities(
+                backend, session, query, query_time, route, domain,
+                name, emb, top_k=min(45, width),
+            )
             for name, emb in zip(topic_names, topic_embeddings)
         ]
         align_results = await asyncio.gather(*align_tasks)
@@ -473,9 +340,9 @@ async def orchestrate_qa_retrieval(
         topic_entities_scores = list(score_map.values())
         initial_entities = [n for n, _ in topic_entities_scores]
 
-        # Step C: Initial knowledge sufficiency check (before any traversal)
+        # Step C: Initial knowledge sufficiency check (Layer 3 @generative)
         ent_str = (
-            "\n".join(f"ent_{i}: {_node_to_text(n)}" for i, n in enumerate(initial_entities))
+            "\n".join(f"ent_{i}: {node_to_text(n)}" for i, n in enumerate(initial_entities))
             or "None"
         )
         eval_result = await evaluate_knowledge_sufficiency(
@@ -500,72 +367,11 @@ async def orchestrate_qa_retrieval(
         visited_edges: set = set()
 
         for _hop in range(depth):
-            triplet_scored: list = []
-
-            for node, entity_score in topic_entities_scores:
-                rel_types = await backend.get_relation_types(node.id, width=width)
-                if not rel_types:
-                    continue
-
-                entity_str = _node_to_text(node)
-                src_name = node.properties.get("name", node.id).strip().upper()
-                rels_str = "\n".join(
-                    f"rel_{i}: ({node.label}: {src_name})-[{rt}]->({tt}: None)"
-                    for i, (rt, tt) in enumerate(rel_types)
-                )
-
-                rel_prune = await prune_relations(
-                    session,
-                    query=query,
-                    query_time=query_time,
-                    route=route,
-                    domain=domain,
-                    entity_str=entity_str,
-                    relations_str=rels_str,
-                    width=width,
-                    hints=hints,
-                )
-
-                for key, score_str in rel_prune.relevant_relations.items():
-                    try:
-                        score = float(score_str)
-                        idx = int(key.split("_")[1])
-                    except (TypeError, ValueError, IndexError):
-                        continue
-                    if score <= 0 or idx >= len(rel_types):
-                        continue
-                    rt, tt = rel_types[idx]
-
-                    triplets = await backend.get_triplets(node.id, rt, tt, k=width)
-                    triplets = [e for e in triplets if e.id not in visited_edges]
-                    if not triplets:
-                        continue
-
-                    trips_str = "\n".join(
-                        f"rel_{j}: {_edge_to_triplet_text(e)}"
-                        for j, e in enumerate(triplets[:width])
-                    )
-                    trip_prune = await prune_triplets(
-                        session,
-                        query=query,
-                        query_time=query_time,
-                        route=route,
-                        domain=domain,
-                        entity_str=entity_str,
-                        relations_str=trips_str,
-                        hints=hints,
-                    )
-
-                    for tkey, tscore_str in trip_prune.relevant_relations.items():
-                        try:
-                            tscore = float(tscore_str)
-                            tidx = int(tkey.split("_")[1])
-                        except (TypeError, ValueError, IndexError):
-                            continue
-                        if tscore > 0 and tidx < len(triplets):
-                            triplet_scored.append(
-                                (triplets[tidx], entity_score * score * tscore)
-                            )
+            # One hop via Layer 3 executor (no backend calls here)
+            triplet_scored = await traverse_and_prune(
+                backend, session, topic_entities_scores, visited_edges,
+                query, query_time, route, domain, hints, width,
+            )
 
             # Keep top-width triplets by score
             triplet_scored.sort(key=lambda x: x[1], reverse=True)
@@ -574,7 +380,7 @@ async def orchestrate_qa_retrieval(
             if not triplet_scored:
                 break
 
-            chain_texts = [_edge_to_triplet_text(e) for e, _ in triplet_scored]
+            chain_texts = [edge_to_triplet_text(e) for e, _ in triplet_scored]
             cluster_chain.append(chain_texts)
             for edge, _ in triplet_scored:
                 visited_edges.add(edge.id)
@@ -589,9 +395,9 @@ async def orchestrate_qa_retrieval(
                 next_scores[tgt.id] = (tgt, prev + score * norm)
             topic_entities_scores = list(next_scores.values())
 
-            # Evaluate sufficiency with accumulated knowledge
+            # Evaluate sufficiency with accumulated knowledge (Layer 3 @generative)
             ent_str2 = (
-                "\n".join(f"ent_{i}: {_node_to_text(n)}" for i, n in enumerate(initial_entities))
+                "\n".join(f"ent_{i}: {node_to_text(n)}" for i, n in enumerate(initial_entities))
                 or "None"
             )
             idx = 0
@@ -624,7 +430,7 @@ async def orchestrate_qa_retrieval(
 
         # Depth exhausted — force a final answer from accumulated knowledge
         ent_str_f = (
-            "\n".join(f"ent_{i}: {_node_to_text(n)}" for i, n in enumerate(initial_entities))
+            "\n".join(f"ent_{i}: {node_to_text(n)}" for i, n in enumerate(initial_entities))
             or "None"
         )
         idx = 0
@@ -755,7 +561,7 @@ async def orchestrate_qa_retrieval(
 
 
 # ============================================================================
-# Layer 1 - Update Orchestration (Document-based KG Updating)
+# Layer 2 - Update Orchestration (Document-based KG Updating)
 # ============================================================================
 
 
@@ -772,7 +578,7 @@ async def orchestrate_kg_update(
 ) -> dict:
     """Orchestrate KG update pipeline.
 
-    This is the main Layer 1 entry point for updating a knowledge graph with
+    This is the main Layer 2 entry point for updating a knowledge graph with
     information extracted from documents. It extracts entities and relations,
     aligns them with existing KG data, and decides on merges.
 
@@ -807,9 +613,7 @@ async def orchestrate_kg_update(
         - ``relations_inserted``: Count of new relations added to KG.
         - ``relations_merged``: Count of relations merged with existing KG edges.
     """
-    from mellea_contribs.kg.base import GraphEdge, GraphNode
-
-    # ── Step 1: Extract entities and relations ────────────────────────────────
+    # ── Step 1: Extract entities and relations (Layer 3 @generative) ─────────
     extraction = await extract_entities_and_relations(
         session,
         doc_context=doc_text,
@@ -820,91 +624,26 @@ async def orchestrate_kg_update(
         relation_types=relation_types,
     )
 
-    # ── Step 2-3: Align and upsert entities ───────────────────────────────────
-    # entity_name → element ID in KG (used when building relation edges)
+    # ── Step 2-3: Align and upsert entities (Layer 3 executor) ───────────────
     entity_name_to_id: dict = {}
     aligned_entities: list = []
     entities_inserted = 0
     entities_merged = 0
 
     for entity in extraction.entities:
-        # 2a. Find candidates in KG by name similarity
-        candidates = await backend.search_entities_by_name(entity.name, k=align_topk)
-
-        aligned_id: Optional[str] = None
-
-        if candidates:
-            candidates_str = "\n".join(
-                f"id={n.id} | {_node_to_text(n)}" for n in candidates
-            )
-            try:
-                alignment = await align_entity_with_kg(
-                    session,
-                    extracted_entity_name=entity.name,
-                    extracted_entity_type=entity.type,
-                    extracted_entity_desc=entity.description,
-                    candidate_entities=candidates_str,
-                    domain=domain,
-                    doc_text=doc_text[:500],
-                )
-                if (
-                    alignment.aligned_entity_id
-                    and alignment.confidence >= confidence_threshold
-                ):
-                    # 2b. Check if we should actually merge
-                    candidate_node = next(
-                        (n for n in candidates if n.id == alignment.aligned_entity_id),
-                        None,
-                    )
-                    if candidate_node is not None:
-                        entity_pair = (
-                            f"Extracted: {entity.type} '{entity.name}' — {entity.description}\n"
-                            f"KG node:   {_node_to_text(candidate_node)}"
-                        )
-                        merge_dec = await decide_entity_merge(
-                            session,
-                            entity_pair=entity_pair,
-                            doc_text=doc_text[:500],
-                            domain=domain,
-                        )
-                        if merge_dec.should_merge:
-                            aligned_id = alignment.aligned_entity_id
-                            # Update properties on the existing node
-                            merged_props = dict(candidate_node.properties)
-                            merged_props.update(merge_dec.merged_properties)
-                            merged_node = GraphNode(
-                                id=aligned_id,
-                                label=candidate_node.label,
-                                properties=merged_props,
-                            )
-                            await backend.upsert_entity(merged_node)
-                            entities_merged += 1
-            except Exception:
-                pass  # alignment failure — fall through to insert
-
-        if aligned_id is None:
-            # 3. No match found — insert as new entity
-            new_node = GraphNode(
-                id=entity.id or f"entity_{entity.name.lower().replace(' ', '_')}",
-                label=entity.type,
-                properties={
-                    "name": entity.name,
-                    "description": entity.description,
-                    **entity.properties,
-                },
-            )
-            try:
-                new_id = await backend.upsert_entity(new_node)
-                entity_name_to_id[entity.name] = new_id
-                entities_inserted += 1
-            except Exception:
-                entity_name_to_id[entity.name] = new_node.id
+        entity_id, was_merged = await align_and_upsert_entity(
+            backend, session, entity, doc_text, domain,
+            align_topk=align_topk,
+            confidence_threshold=confidence_threshold,
+        )
+        entity_name_to_id[entity.name] = entity_id
+        aligned_entities.append((entity, entity_id if was_merged else None))
+        if was_merged:
+            entities_merged += 1
         else:
-            entity_name_to_id[entity.name] = aligned_id
+            entities_inserted += 1
 
-        aligned_entities.append((entity, aligned_id))
-
-    # ── Step 4-5: Align and upsert relations ──────────────────────────────────
+    # ── Step 4-5: Align and upsert relations (Layer 3 executor) ──────────────
     aligned_relations: list = []
     relations_inserted = 0
     relations_merged = 0
@@ -914,91 +653,19 @@ async def orchestrate_kg_update(
         tgt_id = entity_name_to_id.get(relation.target_entity)
 
         if not src_id or not tgt_id:
-            # Cannot resolve entity IDs — skip relation
             aligned_relations.append((relation, None))
             continue
 
-        # Build a GraphNode stub for source/target (needed for GraphEdge)
-        src_node = GraphNode(id=src_id, label="Entity", properties={"name": relation.source_entity})
-        tgt_node = GraphNode(id=tgt_id, label="Entity", properties={"name": relation.target_entity})
-
-        # 4a. Find existing relations between src and tgt
-        safe_rel = "".join(c for c in relation.relation_type if c.isalnum() or c == "_")
-        existing = await backend.get_triplets(src_id, safe_rel, k=align_topk)
-
-        aligned_rel_id: Optional[str] = None
-
-        if existing:
-            existing_str = "\n".join(
-                f"id={e.id} | {_edge_to_triplet_text(e)}" for e in existing
-            )
-            extracted_rel_str = (
-                f"({relation.source_entity})-[{relation.relation_type}]->({relation.target_entity})"
-                f" | {relation.description}"
-            )
-            try:
-                rel_alignment = await align_relation_with_kg(
-                    session,
-                    extracted_relation=extracted_rel_str,
-                    candidate_relations=existing_str,
-                    synonym_relations="",
-                    domain=domain,
-                    doc_text=doc_text[:500],
-                )
-                if (
-                    rel_alignment.aligned_entity_id
-                    and rel_alignment.confidence >= confidence_threshold
-                ):
-                    candidate_edge = next(
-                        (e for e in existing if e.id == rel_alignment.aligned_entity_id),
-                        None,
-                    )
-                    if candidate_edge is not None:
-                        rel_pair = (
-                            f"Extracted: {extracted_rel_str}\n"
-                            f"KG edge:   {_edge_to_triplet_text(candidate_edge)}"
-                        )
-                        merge_dec = await decide_relation_merge(
-                            session,
-                            relation_pair=rel_pair,
-                            doc_text=doc_text[:500],
-                            domain=domain,
-                        )
-                        if merge_dec.should_merge:
-                            aligned_rel_id = rel_alignment.aligned_entity_id
-                            merged_props = dict(candidate_edge.properties)
-                            merged_props.update(merge_dec.merged_properties)
-                            merged_edge = GraphEdge(
-                                id=aligned_rel_id,
-                                source=candidate_edge.source,
-                                label=candidate_edge.label,
-                                target=candidate_edge.target,
-                                properties=merged_props,
-                            )
-                            await backend.upsert_relation(merged_edge)
-                            relations_merged += 1
-            except Exception:
-                pass
-
-        if aligned_rel_id is None:
-            # 5. No match — insert new relation
-            new_edge = GraphEdge(
-                id=f"{src_id}_{safe_rel}_{tgt_id}",
-                source=src_node,
-                label=safe_rel,
-                target=tgt_node,
-                properties={
-                    "description": relation.description,
-                    **relation.properties,
-                },
-            )
-            try:
-                await backend.upsert_relation(new_edge)
-                relations_inserted += 1
-            except Exception:
-                pass
-
-        aligned_relations.append((relation, aligned_rel_id))
+        rel_id, was_merged = await align_and_upsert_relation(
+            backend, session, relation, src_id, tgt_id, doc_text, domain,
+            align_topk=align_topk,
+            confidence_threshold=confidence_threshold,
+        )
+        aligned_relations.append((relation, rel_id if was_merged else None))
+        if was_merged:
+            relations_merged += 1
+        else:
+            relations_inserted += 1
 
     return {
         "extracted_entities": extraction.entities,
@@ -1017,24 +684,9 @@ async def orchestrate_kg_update(
 
 
 __all__ = [
-    # Main Layer 1 orchestration functions
+    # Layer 2 orchestration functions
     "KGRag",
     "format_schema",
     "orchestrate_qa_retrieval",
     "orchestrate_kg_update",
-    # QA Generative functions (Layer 3)
-    "break_down_question",
-    "extract_topic_entities",
-    "align_topic_entities",
-    "prune_relations",
-    "prune_triplets",
-    "evaluate_knowledge_sufficiency",
-    "validate_consensus",
-    "generate_direct_answer",
-    # Update Generative functions (Layer 3)
-    "extract_entities_and_relations",
-    "align_entity_with_kg",
-    "decide_entity_merge",
-    "align_relation_with_kg",
-    "decide_relation_merge",
 ]

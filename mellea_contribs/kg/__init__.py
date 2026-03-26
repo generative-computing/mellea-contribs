@@ -204,7 +204,7 @@ _all = [
     "MergeConflict",
     "UpdateResult",
     "UpdateBatchResult",
-    # Layer 1 Applications
+    # Layer 2 Orchestrators
     "KGRag",
     "KGPreprocessor",
     "KGEmbedder",

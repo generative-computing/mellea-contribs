@@ -1,5 +1,19 @@
 """Query components for graph database operations."""
 
+from mellea_contribs.kg.components.persistence import (
+    align_and_upsert_entity,
+    align_and_upsert_relation,
+    persist_entities,
+    persist_relations,
+)
+from mellea_contribs.kg.components.retrieval import (
+    edge_to_triplet_text,
+    fetch_schema_text,
+    node_to_text,
+    search_and_align_entities,
+    traverse_and_prune,
+    validate_and_execute_query,
+)
 from mellea_contribs.kg.components.generative import (
     align_entity_with_kg,
     align_relation_with_kg,
@@ -50,4 +64,16 @@ __all__ = [
     "decide_entity_merge",
     "align_relation_with_kg",
     "decide_relation_merge",
+    # Layer 3 retrieval executors
+    "search_and_align_entities",
+    "traverse_and_prune",
+    "node_to_text",
+    "edge_to_triplet_text",
+    "fetch_schema_text",
+    "validate_and_execute_query",
+    # Layer 3 persistence executors
+    "persist_entities",
+    "persist_relations",
+    "align_and_upsert_entity",
+    "align_and_upsert_relation",
 ]
