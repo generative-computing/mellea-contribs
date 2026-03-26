@@ -16,13 +16,7 @@ if TYPE_CHECKING:
 
 
 class GraphBackend(ABC):
-    """Abstract backend for graph databases.
-
-    Following Mellea's Backend pattern:
-    - Takes backend_id (like model_id)
-    - Takes backend_options (like model_options)
-    - Abstract methods for core operations
-    """
+    """Abstract backend for graph databases."""
 
     def __init__(
         self,
@@ -35,8 +29,6 @@ class GraphBackend(ABC):
     ):
         """Initialize graph backend.
 
-        Following Mellea's Backend(model_id, model_options) pattern.
-
         Args:
             backend_id: Identifier for backend type (e.g., "neo4j", "neptune")
             connection_uri: URI for connecting to the database
@@ -44,7 +36,6 @@ class GraphBackend(ABC):
             database: Database name (if multi-database system)
             backend_options: Backend-specific options
         """
-        # MELLEA PATTERN: Similar to Backend.__init__
         self.backend_id = backend_id
         self.backend_options = backend_options if backend_options is not None else {}
 

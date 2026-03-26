@@ -20,10 +20,6 @@ class GraphResult(Component):
     - "paths": Narrative descriptions of graph paths
     - "structured": JSON representation of nodes and edges
 
-    Follows Mellea patterns:
-    - Private fields with _ prefix
-    - Public properties for read access
-    - format_for_llm() returns TemplateRepresentation
     """
 
     def __init__(

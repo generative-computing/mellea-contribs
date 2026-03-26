@@ -109,8 +109,7 @@ mellea-contribs/kg/
 │   └── __init__.py                # All requirement functions
 │       ├── is_valid_cypher()      # Cypher syntax validation
 │       ├── is_valid_sparql()      # SPARQL syntax validation
-│       ├── returns_results()      # Query returns non-empty results
-│       └── respects_schema()      # Query respects graph schema
+│       └── returns_results()      # Query returns non-empty results
 │
 └── README.md                      # Documentation
 ```
@@ -1280,25 +1279,6 @@ def returns_results(backend: GraphBackend) -> Requirement:
     )
 
 
-def respects_schema(backend: GraphBackend) -> Requirement:
-    """Requirement: Query must only reference valid node/edge types from schema."""
-
-    async def validate(ctx: Context) -> ValidationResult:
-        query_string = ctx.last_assistant_message.as_str()
-        schema = await backend.get_schema()
-
-        # Would need actual Cypher parsing logic
-        # For now, simplified validation
-
-        return ValidationResult(
-            result=True,
-            reason="Query respects schema",
-        )
-
-    return Requirement(
-        description="Query must only reference valid schema types",
-        validation_fn=validate,
-    )
 ```
 
 ---

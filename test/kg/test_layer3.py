@@ -3,7 +3,7 @@
 Covers:
 - components/llm_guided.py: @generative functions and GeneratedQuery model
 - sampling/validation.py: QueryValidationStrategy
-- requirements/__init__.py: is_valid_cypher, returns_results, respects_schema
+- requirements/__init__.py: is_valid_cypher, returns_results
 """
 
 import pytest
@@ -21,7 +21,6 @@ from mellea_contribs.kg.components.llm_guided import (
 from mellea_contribs.kg.graph_dbs.mock import MockGraphBackend
 from mellea_contribs.kg.requirements import (
     is_valid_cypher,
-    respects_schema,
     returns_results,
 )
 from mellea_contribs.kg.sampling import QueryValidationStrategy
@@ -240,18 +239,11 @@ class TestRequirements:
         assert isinstance(req, Requirement)
         assert "results" in req.description.lower()
 
-    def test_respects_schema_returns_requirement(self, mock_backend):
-        """respects_schema() returns a Requirement."""
-        req = respects_schema(mock_backend)
-        assert isinstance(req, Requirement)
-        assert "schema" in req.description.lower()
-
     def test_all_requirements_have_validation_fn(self, mock_backend):
         """All requirement factories set a validation_fn."""
         for req in [
             is_valid_cypher(mock_backend),
             returns_results(mock_backend),
-            respects_schema(mock_backend),
         ]:
             assert req.validation_fn is not None
 
@@ -283,9 +275,4 @@ class TestRequirements:
         assert bool(result) is False
         assert "no results" in result.reason.lower()
 
-    async def test_respects_schema_passes(self, mock_backend, ctx_with_query):
-        """respects_schema validation passes (placeholder implementation)."""
-        req = respects_schema(mock_backend)
-        result = await req.validation_fn(ctx_with_query)
-        assert isinstance(result, ValidationResult)
-        assert bool(result) is True
+

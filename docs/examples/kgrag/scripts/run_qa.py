@@ -81,6 +81,7 @@ from dotenv import load_dotenv
 from mellea_contribs.kg.kgrag import orchestrate_qa_retrieval
 from mellea_contribs.kg.utils import (
     QAProgressLogger,
+    add_graph_args,
     create_backend,
     create_embedding_client,
     create_session_from_env,
@@ -223,26 +224,7 @@ async def main() -> None:
         default="",
         help="JSON file for progress tracking / resumption",
     )
-    parser.add_argument(
-        "--mock",
-        action="store_true",
-        help="Use MockGraphBackend (no graph database required)",
-    )
-    parser.add_argument(
-        "--db-uri",
-        type=str,
-        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-    )
-    parser.add_argument(
-        "--db-user",
-        type=str,
-        default=os.getenv("NEO4J_USER", "neo4j"),
-    )
-    parser.add_argument(
-        "--db-password",
-        type=str,
-        default=os.getenv("NEO4J_PASSWORD", "password"),
-    )
+    add_graph_args(parser)
     parser.add_argument(
         "--domain",
         type=str,

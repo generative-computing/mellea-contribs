@@ -12,11 +12,6 @@ class GraphQuery(Component):
     Represents a graph query that can be executed against a GraphBackend
     and formatted for LLM consumption.
 
-    Follows Mellea patterns:
-    - Private fields with _ prefix
-    - Public properties for read access
-    - format_for_llm() returns TemplateRepresentation
-    - Immutable updates via deepcopy
     """
 
     def __init__(

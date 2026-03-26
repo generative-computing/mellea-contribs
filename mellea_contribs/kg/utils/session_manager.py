@@ -91,6 +91,44 @@ def create_backend(
     raise ValueError(f"Unknown backend type: {backend_type}")
 
 
+def add_graph_args(parser) -> None:
+    """Add common graph-database CLI arguments to an argparse parser.
+
+    Adds ``--db-uri``, ``--db-user``, ``--db-password``, and ``--mock``.
+    Values default to ``NEO4J_URI`` / ``NEO4J_USER`` / ``NEO4J_PASSWORD``
+    environment variables when set.
+
+    Args:
+        parser: :class:`argparse.ArgumentParser` to extend in-place.
+    """
+    import argparse
+    import os
+
+    parser.add_argument(
+        "--db-uri",
+        type=str,
+        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
+        help="Graph database connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
+    )
+    parser.add_argument(
+        "--db-user",
+        type=str,
+        default=os.getenv("NEO4J_USER", "neo4j"),
+        help="Graph database username (default: $NEO4J_USER or neo4j)",
+    )
+    parser.add_argument(
+        "--db-password",
+        type=str,
+        default=os.getenv("NEO4J_PASSWORD", "password"),
+        help="Graph database password (default: $NEO4J_PASSWORD or password)",
+    )
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Use MockGraphBackend instead of the graph database",
+    )
+
+
 class MelleaResourceManager:
     """Async context manager for managing Mellea session and backend resources.
 

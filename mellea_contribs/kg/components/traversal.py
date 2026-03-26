@@ -27,10 +27,6 @@ class GraphTraversal(Component):
     - "bfs": Breadth-first traversal from start nodes
     - "dfs": Depth-first traversal from start nodes
 
-    Follows Mellea patterns:
-    - Private fields with _ prefix
-    - Public properties for read access
-    - format_for_llm() returns TemplateRepresentation
     """
 
     def __init__(

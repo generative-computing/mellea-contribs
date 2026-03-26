@@ -16,7 +16,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Generator
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -30,64 +30,23 @@ from mellea_contribs.kg.updater_models import (
     UpdateStats,
 )
 from mellea_contribs.kg.utils import (
-    BaseDatasetLoader,
     BaseProgressLogger,
+    add_graph_args,
     aggregate_update_results,
     create_backend,
     create_session_from_env,
-    load_jsonl,
     log_progress,
     output_json,
     print_stats,
     setup_logging,
 )
 
+from dataset.update_dataset_loader import UpdateDatasetLoader
+
 try:
     from preprocessor.movie_preprocessor import MovieKGPreprocessor
 except ImportError:
     MovieKGPreprocessor = None  # type: ignore[assignment,misc]
-
-
-# ---------------------------------------------------------------------------
-# Dataset loader
-# ---------------------------------------------------------------------------
-
-class UpdateDatasetLoader(BaseDatasetLoader):
-    """Dataset loader for KG update documents.
-
-    Reads a JSONL (or ``.jsonl.bz2``) file and yields normalised document
-    items suitable for ``orchestrate_kg_update``.
-
-    Each yielded item contains:
-
-    * ``id``   — document identifier (``interaction_id``, ``id``, or
-      ``"doc_{n}"``).
-    * ``text`` — document body (``text``, ``query``, or ``context`` field).
-    * ``_raw`` — the original dict from the file.
-    """
-
-    def iter_items(self) -> Generator[Dict[str, Any], None, None]:
-        """Yield normalised document items from the dataset file.
-
-        Yields:
-            Dict with keys ``id``, ``text``, and ``_raw``.
-        """
-        for doc_num, raw in enumerate(load_jsonl(self.dataset_path), 1):
-            doc_id = (
-                raw.get("interaction_id")
-                or raw.get("id")
-                or f"doc_{doc_num}"
-            )
-            text = (
-                raw.get("text")
-                or raw.get("query")
-                or raw.get("context")
-                or ""
-            )
-            if not text:
-                log_progress(f"[{doc_num}] WARNING: empty text for {doc_id}")
-                continue
-            yield {"id": str(doc_id), "text": text, "_raw": raw}
 
 
 # ---------------------------------------------------------------------------
@@ -204,25 +163,7 @@ Examples:
         "--queue-size", type=int, default=64,
         help="Queue size for data loading (default: 64)",
     )
-    parser.add_argument(
-        "--db-uri", type=str,
-        default=os.getenv("NEO4J_URI", "bolt://localhost:7687"),
-        help="Graph database connection URI (default: $NEO4J_URI or bolt://localhost:7687)",
-    )
-    parser.add_argument(
-        "--db-user", type=str,
-        default=os.getenv("NEO4J_USER", "neo4j"),
-        help="Graph database username (default: $NEO4J_USER or neo4j)",
-    )
-    parser.add_argument(
-        "--db-password", type=str,
-        default=os.getenv("NEO4J_PASSWORD", "password"),
-        help="Graph database password (default: $NEO4J_PASSWORD or password)",
-    )
-    parser.add_argument(
-        "--mock", action="store_true",
-        help="Use MockGraphBackend instead of the graph database",
-    )
+    add_graph_args(parser)
     parser.add_argument(
         "--model", type=str, default="gpt-4o-mini",
         help="LLM model to use (default: gpt-4o-mini)",

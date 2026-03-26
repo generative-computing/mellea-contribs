@@ -1,6 +1,9 @@
 """Neo4j implementation of GraphBackend."""
 
+import logging
 from typing import TYPE_CHECKING, Any
+
+_logger = logging.getLogger(__name__)
 
 from mellea_contribs.kg.base import GraphEdge, GraphNode, GraphPath
 from mellea_contribs.kg.graph_dbs.base import GraphBackend
@@ -58,7 +61,6 @@ class Neo4jBackend(GraphBackend):
                 "Install with: pip install mellea-contribs[kg]"
             )
 
-        # Call parent constructor following Mellea pattern
         super().__init__(
             backend_id="neo4j",
             connection_uri=connection_uri,
@@ -283,7 +285,8 @@ class Neo4jBackend(GraphBackend):
             q = CypherQuery(query_string=cypher, parameters={"name": name, "k": k})
             result = await self.execute_query(q)
             return result.nodes
-        except Exception:
+        except Exception as exc:
+            _logger.warning("search_entities_by_name failed: %s", exc)
             return []
 
     async def search_entities_by_embedding(
@@ -318,7 +321,8 @@ class Neo4jBackend(GraphBackend):
             )
             result = await self.execute_query(q)
             return [n for n in result.nodes if n.id not in exclude_ids][:k]
-        except Exception:
+        except Exception as exc:
+            _logger.warning("search_entities_by_embedding failed: %s", exc)
             return []
 
     async def get_relation_types(
@@ -354,7 +358,8 @@ class Neo4jBackend(GraphBackend):
                         tt = data.get("tgt_type") or "Unknown"
                         if rt:
                             pairs.append((str(rt), str(tt)))
-                    except Exception:
+                    except Exception as exc:
+                        _logger.debug("Skipping malformed relation record: %s", exc)
                         continue
             if not pairs and result.edges:
                 seen: set = set()
@@ -364,7 +369,8 @@ class Neo4jBackend(GraphBackend):
                         seen.add(key)
                         pairs.append(key)
             return pairs
-        except Exception:
+        except Exception as exc:
+            _logger.warning("get_relation_types failed for node %s: %s", node_id, exc)
             return []
 
     async def get_triplets(
@@ -385,8 +391,12 @@ class Neo4jBackend(GraphBackend):
         Returns:
             List of GraphEdge objects (each carries source and target GraphNodes).
         """
-        # Sanitise identifiers to prevent Cypher injection
+        # Sanitise identifiers to prevent Cypher injection.
+        # Raise early if the identifier is entirely invalid rather than
+        # silently producing an empty string that would generate broken Cypher.
         safe_rel = "".join(c for c in rel_type if c.isalnum() or c == "_")
+        if not safe_rel:
+            raise ValueError(f"Invalid relationship type for Cypher query: {rel_type!r}")
         safe_tgt = "".join(c for c in target_type if c.isalnum() or c == "_")
 
         if safe_tgt and safe_tgt not in ("Unknown", "None"):
@@ -407,7 +417,8 @@ class Neo4jBackend(GraphBackend):
             )
             result = await self.execute_query(q)
             return result.edges
-        except Exception:
+        except Exception as exc:
+            _logger.warning("get_triplets failed for node %s rel %s: %s", node_id, rel_type, exc)
             return []
 
     async def upsert_entity(self, node: GraphNode) -> str:
@@ -481,8 +492,7 @@ class Neo4jBackend(GraphBackend):
                 for r in records
             ]
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(f"fetch_entities_for_embedding failed: {exc}")
+            _logger.warning("fetch_entities_for_embedding failed: %s", exc)
             return []
 
     async def fetch_relations_for_embedding(self) -> list[dict]:
@@ -506,8 +516,7 @@ class Neo4jBackend(GraphBackend):
                 for r in records
             ]
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(f"fetch_relations_for_embedding failed: {exc}")
+            _logger.warning("fetch_relations_for_embedding failed: %s", exc)
             return []
 
     async def store_node_embeddings(self, batch: list[dict]) -> int:
@@ -526,8 +535,7 @@ class Neo4jBackend(GraphBackend):
                 record = await result.single()
                 return record["updated"] if record else 0
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(f"store_node_embeddings failed: {exc}")
+            _logger.warning("store_node_embeddings failed: %s", exc)
             return 0
 
     async def store_edge_embeddings(self, batch: list[dict]) -> int:
@@ -546,8 +554,7 @@ class Neo4jBackend(GraphBackend):
                 record = await result.single()
                 return record["updated"] if record else 0
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(f"store_edge_embeddings failed: {exc}")
+            _logger.warning("store_edge_embeddings failed: %s", exc)
             return 0
 
     async def create_vector_index(
@@ -559,27 +566,32 @@ class Neo4jBackend(GraphBackend):
         similarity: str = "cosine",
     ) -> bool:
         """Create a Neo4j vector index if it does not already exist."""
+        safe_name = "".join(c for c in name if c.isalnum() or c == "_")
+        safe_prop = "".join(c for c in prop if c.isalnum() or c == "_")
+        safe_target = "".join(c for c in target if c.isalnum() or c == "_")
+        safe_similarity = "".join(c for c in similarity if c.isalnum() or c == "_")
+        if not safe_name or not safe_prop:
+            raise ValueError(f"Invalid index name {name!r} or property {prop!r}")
         if target.upper() == "RELATIONSHIP":
             cypher = f"""
-            CREATE VECTOR INDEX IF NOT EXISTS {name}
-            FOR ()-[r]-() ON (r.{prop})
-            OPTIONS {{indexConfig: {{`vector.dimensions`: {dimensions},
-                                    `vector.similarity_function`: '{similarity}'}}}}
+            CREATE VECTOR INDEX IF NOT EXISTS {safe_name}
+            FOR ()-[r]-() ON (r.{safe_prop})
+            OPTIONS {{indexConfig: {{`vector.dimensions`: {int(dimensions)},
+                                    `vector.similarity_function`: '{safe_similarity}'}}}}
             """
         else:
             cypher = f"""
-            CREATE VECTOR INDEX IF NOT EXISTS {name}
-            FOR (n:{target}) ON (n.{prop})
-            OPTIONS {{indexConfig: {{`vector.dimensions`: {dimensions},
-                                    `vector.similarity_function`: '{similarity}'}}}}
+            CREATE VECTOR INDEX IF NOT EXISTS {safe_name}
+            FOR (n:{safe_target}) ON (n.{safe_prop})
+            OPTIONS {{indexConfig: {{`vector.dimensions`: {int(dimensions)},
+                                    `vector.similarity_function`: '{safe_similarity}'}}}}
             """
         try:
             async with self._async_driver.session(database=self.database) as session:
                 await session.run(cypher)
             return True
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).debug(f"create_vector_index note: {exc}")
+            _logger.debug("create_vector_index note: %s", exc)
             return False
 
     async def close(self):

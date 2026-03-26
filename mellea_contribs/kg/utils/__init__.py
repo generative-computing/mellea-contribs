@@ -40,6 +40,7 @@ from .progress import (
 )
 from .session_manager import (
     MelleaResourceManager,
+    add_graph_args,
     create_backend,
     create_embedding_client,
     create_openai_session,
@@ -64,6 +65,7 @@ __all__ = [
     "create_openai_session",
     "create_session_from_env",
     "create_backend",
+    "add_graph_args",
     "create_embedding_client",
     "generate_embeddings",
     "MelleaResourceManager",

@@ -70,29 +70,4 @@ def returns_results(backend: GraphBackend) -> Requirement:
     )
 
 
-def respects_schema(backend: GraphBackend) -> Requirement:
-    """Require that the query only references node and edge types in the schema.
-
-    Args:
-        backend: Graph backend used to retrieve the schema.
-
-    Returns:
-        A Requirement that passes when the query respects the schema.
-    """
-
-    async def validate(ctx: Context) -> ValidationResult:
-        await backend.get_schema()
-        # Full Cypher AST parsing would be needed for strict enforcement.
-        # This is a placeholder that always passes once the schema is fetched.
-        return ValidationResult(
-            True,
-            reason="Query respects schema",
-        )
-
-    return Requirement(
-        description="Query must only reference valid schema types",
-        validation_fn=validate,
-    )
-
-
-__all__ = ["is_valid_cypher", "respects_schema", "returns_results"]
+__all__ = ["is_valid_cypher", "returns_results"]
