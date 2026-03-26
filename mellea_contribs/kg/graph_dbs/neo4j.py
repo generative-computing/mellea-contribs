@@ -458,6 +458,130 @@ class Neo4jBackend(GraphBackend):
             record = await result.single()
             return str(record["eid"]) if record else edge.id
 
+    async def fetch_entities_for_embedding(self) -> list[dict]:
+        """Fetch all non-schema nodes with their element IDs and descriptions."""
+        cypher = """
+        MATCH (n)
+        WHERE NOT n:_EntitySchema AND NOT n:_RelationSchema
+        RETURN elementId(n) AS eid, n.name AS name, labels(n)[0] AS type,
+               coalesce(n.description, n._description) AS description,
+               n._paragraph AS paragraph
+        """
+        try:
+            async with self._async_driver.session(database=self.database) as session:
+                result = await session.run(cypher)
+                records = [r async for r in result]
+            return [
+                {
+                    "eid": r["eid"],
+                    "name": r["name"] or "",
+                    "type": r["type"] or "Unknown",
+                    "description": " ".join(filter(None, [r["description"], r["paragraph"]])),
+                }
+                for r in records
+            ]
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"fetch_entities_for_embedding failed: {exc}")
+            return []
+
+    async def fetch_relations_for_embedding(self) -> list[dict]:
+        """Fetch all edges with their element IDs."""
+        cypher = """
+        MATCH (s)-[r]->(t)
+        RETURN elementId(r) AS eid, type(r) AS relation_type,
+               s.name AS src_name, t.name AS dst_name
+        """
+        try:
+            async with self._async_driver.session(database=self.database) as session:
+                result = await session.run(cypher)
+                records = [r async for r in result]
+            return [
+                {
+                    "eid": r["eid"],
+                    "relation_type": r["relation_type"] or "UNKNOWN",
+                    "src_name": r["src_name"] or "",
+                    "dst_name": r["dst_name"] or "",
+                }
+                for r in records
+            ]
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"fetch_relations_for_embedding failed: {exc}")
+            return []
+
+    async def store_node_embeddings(self, batch: list[dict]) -> int:
+        """Store embedding vectors on nodes using the Neo4j vector property API."""
+        if not batch:
+            return 0
+        cypher = """
+        UNWIND $batch AS item
+        MATCH (n) WHERE elementId(n) = item.eid
+        CALL db.create.setNodeVectorProperty(n, '_embedding', item.embedding)
+        RETURN count(n) AS updated
+        """
+        try:
+            async with self._async_driver.session(database=self.database) as session:
+                result = await session.run(cypher, batch=batch)
+                record = await result.single()
+                return record["updated"] if record else 0
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"store_node_embeddings failed: {exc}")
+            return 0
+
+    async def store_edge_embeddings(self, batch: list[dict]) -> int:
+        """Store embedding vectors on edges using the Neo4j vector property API."""
+        if not batch:
+            return 0
+        cypher = """
+        UNWIND $batch AS item
+        MATCH ()-[r]->() WHERE elementId(r) = item.eid
+        CALL db.create.setRelationshipVectorProperty(r, '_embedding', item.embedding)
+        RETURN count(r) AS updated
+        """
+        try:
+            async with self._async_driver.session(database=self.database) as session:
+                result = await session.run(cypher, batch=batch)
+                record = await result.single()
+                return record["updated"] if record else 0
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"store_edge_embeddings failed: {exc}")
+            return 0
+
+    async def create_vector_index(
+        self,
+        name: str,
+        target: str,
+        prop: str,
+        dimensions: int,
+        similarity: str = "cosine",
+    ) -> bool:
+        """Create a Neo4j vector index if it does not already exist."""
+        if target.upper() == "RELATIONSHIP":
+            cypher = f"""
+            CREATE VECTOR INDEX IF NOT EXISTS {name}
+            FOR ()-[r]-() ON (r.{prop})
+            OPTIONS {{indexConfig: {{`vector.dimensions`: {dimensions},
+                                    `vector.similarity_function`: '{similarity}'}}}}
+            """
+        else:
+            cypher = f"""
+            CREATE VECTOR INDEX IF NOT EXISTS {name}
+            FOR (n:{target}) ON (n.{prop})
+            OPTIONS {{indexConfig: {{`vector.dimensions`: {dimensions},
+                                    `vector.similarity_function`: '{similarity}'}}}}
+            """
+        try:
+            async with self._async_driver.session(database=self.database) as session:
+                await session.run(cypher)
+            return True
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug(f"create_vector_index note: {exc}")
+            return False
+
     async def close(self):
         """Close Neo4j connections."""
         await self._async_driver.close()

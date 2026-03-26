@@ -230,6 +230,84 @@ class GraphBackend(ABC):
         """
         ...
 
+    async def fetch_entities_for_embedding(self) -> list[dict]:
+        """Fetch all entities for embedding.
+
+        Returns a list of dicts with keys: ``eid``, ``name``, ``type``,
+        ``description``.  The default implementation returns an empty list;
+        backends that support bulk embedding should override this.
+
+        Returns:
+            List of entity dicts.
+        """
+        return []
+
+    async def fetch_relations_for_embedding(self) -> list[dict]:
+        """Fetch all relations for embedding.
+
+        Returns a list of dicts with keys: ``eid``, ``relation_type``,
+        ``src_name``, ``dst_name``.  The default implementation returns an
+        empty list.
+
+        Returns:
+            List of relation dicts.
+        """
+        return []
+
+    async def store_node_embeddings(self, batch: list[dict]) -> int:
+        """Store embedding vectors on node properties.
+
+        Each item in *batch* must have keys ``eid`` (element ID string) and
+        ``embedding`` (list of floats).  The default implementation is a no-op
+        and returns 0.
+
+        Args:
+            batch: List of ``{eid, embedding}`` dicts.
+
+        Returns:
+            Number of nodes updated.
+        """
+        return 0
+
+    async def store_edge_embeddings(self, batch: list[dict]) -> int:
+        """Store embedding vectors on edge properties.
+
+        Each item in *batch* must have keys ``eid`` and ``embedding``.
+        The default implementation is a no-op and returns 0.
+
+        Args:
+            batch: List of ``{eid, embedding}`` dicts.
+
+        Returns:
+            Number of edges updated.
+        """
+        return 0
+
+    async def create_vector_index(
+        self,
+        name: str,
+        target: str,
+        prop: str,
+        dimensions: int,
+        similarity: str = "cosine",
+    ) -> bool:
+        """Create a vector similarity index.
+
+        The default implementation is a no-op and returns False.  Backends
+        that support vector indices should override this.
+
+        Args:
+            name: Index name.
+            target: Node label or ``RELATIONSHIP`` for edge indices.
+            prop: Property name to index.
+            dimensions: Embedding dimension.
+            similarity: Similarity function (e.g. ``"cosine"``).
+
+        Returns:
+            True if the index was created or already existed, False otherwise.
+        """
+        return False
+
     async def close(self):
         """Close connections to the graph database.
 

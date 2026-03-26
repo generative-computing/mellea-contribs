@@ -376,253 +376,139 @@ class KGEmbedder:
         raise ValueError(f"Unexpected embedding response format: {type(response)}")
 
     # ------------------------------------------------------------------
-    # Neo4j pipeline: fetch / store / index
+    # Embedding pipeline: fetch / store / index (delegated to backend)
     # ------------------------------------------------------------------
 
-    async def fetch_entities_from_neo4j(self) -> list[Entity]:
-        """Fetch all entities from Neo4j as Entity objects.
+    async def fetch_entities_for_embedding(self) -> list[Entity]:
+        """Fetch all entities from the backend for embedding.
 
         Returns:
-            List of Entity objects from the graph, or empty list for non-Neo4j backends.
+            List of Entity objects with ``id`` populated, or empty list if
+            the backend does not support bulk fetch.
         """
-        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+        if not self.backend:
             return []
+        rows = await self.backend.fetch_entities_for_embedding()
+        entities = []
+        for r in rows:
+            e = Entity(
+                type=r.get("type", "Unknown"),
+                name=r.get("name", "") or "",
+                description=r.get("description", "") or "",
+            )
+            e.id = r.get("eid", "")
+            entities.append(e)
+        return entities
 
-        cypher = """
-        MATCH (n)
-        WHERE NOT n:_EntitySchema AND NOT n:_RelationSchema
-        RETURN elementId(n) AS eid, n.name AS name, labels(n)[0] AS type,
-               coalesce(n.description, n._description) AS description,
-               n._paragraph AS paragraph
-        """
-        try:
-            driver = getattr(self.backend, "_async_driver", None)
-            if driver is None:
-                return []
-            async with driver.session() as session:
-                result = await session.run(cypher)
-                records = [r async for r in result]
-            entities = []
-            for r in records:
-                desc = r.get("description") or ""
-                para = r.get("paragraph") or ""
-                e = Entity(
-                    type=r.get("type", "Unknown"),
-                    name=r.get("name", "") or "",
-                    description=f"{desc} {para}".strip() if (desc or para) else "",
-                )
-                e.id = r.get("eid", "")
-                entities.append(e)
-            return entities
-        except Exception as exc:
-            logger.warning(f"Failed to fetch entities from Neo4j: {exc}")
-            return []
-
-    async def fetch_relations_from_neo4j(self) -> list[Relation]:
-        """Fetch all relations from Neo4j as Relation objects.
+    async def fetch_relations_for_embedding(self) -> list[Relation]:
+        """Fetch all relations from the backend for embedding.
 
         Returns:
-            List of Relation objects from the graph, or empty list for non-Neo4j backends.
+            List of Relation objects with ``id`` populated, or empty list if
+            the backend does not support bulk fetch.
         """
-        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+        if not self.backend:
             return []
-
-        cypher = """
-        MATCH (s)-[r]->(t)
-        RETURN elementId(r) AS eid, type(r) AS relation_type,
-               s.name AS src_name, t.name AS dst_name
-        """
-        try:
-            driver = getattr(self.backend, "_async_driver", None)
-            if driver is None:
-                return []
-            async with driver.session() as session:
-                result = await session.run(cypher)
-                records = [r async for r in result]
-            relations = []
-            for r in records:
-                rel = Relation(
-                    source_entity=r.get("src_name", "") or "",
-                    relation_type=r.get("relation_type", "UNKNOWN"),
-                    target_entity=r.get("dst_name", "") or "",
-                )
-                rel.id = r.get("eid", "")
-                relations.append(rel)
-            return relations
-        except Exception as exc:
-            logger.warning(f"Failed to fetch relations from Neo4j: {exc}")
-            return []
+        rows = await self.backend.fetch_relations_for_embedding()
+        relations = []
+        for r in rows:
+            rel = Relation(
+                source_entity=r.get("src_name", "") or "",
+                relation_type=r.get("relation_type", "UNKNOWN"),
+                target_entity=r.get("dst_name", "") or "",
+            )
+            rel.id = r.get("eid", "")
+            relations.append(rel)
+        return relations
 
     async def store_entity_embeddings(
-        self, entities: list[Entity], store_batch_size: int = 1000
+        self, entities: list[Entity], store_batch_size: int = 50_000
     ) -> int:
-        """Store entity embeddings back to Neo4j.
+        """Store entity embeddings via the backend.
 
         Args:
-            entities: Entities with populated ``embedding`` fields.
-            store_batch_size: Rows per Cypher transaction (default: 1000).
-                All chunks run within a single session to avoid connection
-                overhead while still providing progress visibility.
+            entities: Entities with populated ``embedding`` and ``id`` fields.
+            store_batch_size: Items per backend call (default: 50,000).
 
         Returns:
-            Number of embeddings stored, or 0 for non-Neo4j backends.
+            Number of embeddings stored.
         """
-        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+        if not self.backend:
             return 0
-
-        driver = getattr(self.backend, "_async_driver", None)
-        if driver is None:
-            return 0
-
-        cypher = """
-        UNWIND $batch AS item
-        MATCH (n) WHERE elementId(n) = item.eid
-        CALL db.create.setNodeVectorProperty(n, '_embedding', item.embedding)
-        RETURN count(n) AS updated
-        """
         rows = [
             {"eid": getattr(e, "id", ""), "embedding": getattr(e, "embedding", []) or []}
             for e in entities
             if getattr(e, "embedding", None) and getattr(e, "id", None)
         ]
-
         try:
             from tqdm import tqdm as _tqdm
         except ImportError:
             _tqdm = None
-
         chunks = [rows[i : i + store_batch_size] for i in range(0, len(rows), store_batch_size)]
         total_stored = 0
         pbar = _tqdm(total=len(rows), desc="Storing entity embeddings", unit="ent") if _tqdm else None
         try:
-            async with driver.session() as s:
-                for chunk in chunks:
-                    try:
-                        result = await s.run(cypher, batch=chunk)
-                        record = await result.single()
-                        total_stored += record.get("updated", 0) if record else 0
-                    except Exception as exc:
-                        logger.warning(f"Failed to store entity embedding chunk: {exc}")
-                    if pbar:
-                        pbar.update(len(chunk))
-                    else:
-                        logger.info(f"  Stored {total_stored}/{len(rows)} entity embeddings…")
+            for chunk in chunks:
+                total_stored += await self.backend.store_node_embeddings(chunk)
+                if pbar:
+                    pbar.update(len(chunk))
         finally:
             if pbar:
                 pbar.close()
         return total_stored
 
     async def store_relation_embeddings(
-        self, relations: list[Relation], store_batch_size: int = 1000
+        self, relations: list[Relation], store_batch_size: int = 50_000
     ) -> int:
-        """Store relation embeddings back to Neo4j.
+        """Store relation embeddings via the backend.
 
         Args:
-            relations: Relations with populated ``embedding`` fields.
-            store_batch_size: Rows per Cypher transaction (default: 1000).
+            relations: Relations with populated ``embedding`` and ``id`` fields.
+            store_batch_size: Items per backend call (default: 50,000).
 
         Returns:
-            Number of embeddings stored, or 0 for non-Neo4j backends.
+            Number of embeddings stored.
         """
-        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+        if not self.backend:
             return 0
-
-        driver = getattr(self.backend, "_async_driver", None)
-        if driver is None:
-            return 0
-
-        cypher = """
-        UNWIND $batch AS item
-        MATCH ()-[r]->() WHERE elementId(r) = item.eid
-        CALL db.create.setRelationshipVectorProperty(r, '_embedding', item.embedding)
-        RETURN count(r) AS updated
-        """
         rows = [
-            {
-                "eid": getattr(r, "id", ""),
-                "embedding": getattr(r, "embedding", []) or [],
-            }
+            {"eid": getattr(r, "id", ""), "embedding": getattr(r, "embedding", []) or []}
             for r in relations
             if getattr(r, "embedding", None) and getattr(r, "id", None)
         ]
-
         try:
             from tqdm import tqdm as _tqdm
         except ImportError:
             _tqdm = None
-
         chunks = [rows[i : i + store_batch_size] for i in range(0, len(rows), store_batch_size)]
         total_stored = 0
         pbar = _tqdm(total=len(rows), desc="Storing relation embeddings", unit="rel") if _tqdm else None
         try:
-            async with driver.session() as s:
-                for chunk in chunks:
-                    try:
-                        result = await s.run(cypher, batch=chunk)
-                        record = await result.single()
-                        total_stored += record.get("updated", 0) if record else 0
-                    except Exception as exc:
-                        logger.warning(f"Failed to store relation embedding chunk: {exc}")
-                    if pbar:
-                        pbar.update(len(chunk))
-                    else:
-                        logger.info(f"  Stored {total_stored}/{len(rows)} relation embeddings…")
+            for chunk in chunks:
+                total_stored += await self.backend.store_edge_embeddings(chunk)
+                if pbar:
+                    pbar.update(len(chunk))
         finally:
             if pbar:
                 pbar.close()
         return total_stored
 
     async def create_vector_indices(self) -> int:
-        """Create Neo4j vector indices for embedding similarity search.
-
-        Creates one index for entity nodes and one for relationship embeddings
-        using the configured ``embedding_dimension``.
+        """Create vector similarity indices via the backend.
 
         Returns:
-            Number of indices created, or 0 for non-Neo4j backends.
+            Number of indices created.
         """
-        if not self.backend or getattr(self.backend, "backend_id", None) != "neo4j":
+        if not self.backend:
             return 0
-
-        driver = getattr(self.backend, "_async_driver", None)
-        if driver is None:
-            return 0
-
-        indices_created = 0
         dim = self.embedding_dimension
-        index_queries = [
-            f"""
-            CREATE VECTOR INDEX IF NOT EXISTS entity_embedding_index
-            FOR (n) ON (n.embedding)
-            OPTIONS {{
-                indexConfig: {{
-                    `vector.dimensions`: {dim},
-                    `vector.similarity_function`: 'cosine'
-                }}
-            }}
-            """,
-            f"""
-            CREATE VECTOR INDEX IF NOT EXISTS relation_embedding_index
-            FOR (r: RELATIONSHIP) ON (r.embedding)
-            OPTIONS {{
-                indexConfig: {{
-                    `vector.dimensions`: {dim},
-                    `vector.similarity_function`: 'cosine'
-                }}
-            }}
-            """,
-        ]
-        try:
-            async with driver.session() as session:
-                for query in index_queries:
-                    try:
-                        await session.run(query)
-                        indices_created += 1
-                    except Exception as exc:
-                        logger.debug(f"Vector index creation note: {exc}")
-        except Exception as exc:
-            logger.warning(f"Failed to create vector indices: {exc}")
-
+        indices_created = 0
+        for name, target, prop in [
+            ("entity_embedding_index", "_Embeddable", "_embedding"),
+            ("relation_embedding_index", "RELATIONSHIP", "_embedding"),
+        ]:
+            if await self.backend.create_vector_index(name, target, prop, dim):
+                indices_created += 1
         return indices_created
 
     async def embed_and_store_all(self, batch_size: int = 100) -> EmbeddingStats:
@@ -655,7 +541,7 @@ class KGEmbedder:
 
             # --- entities ---------------------------------------------------
             logger.info("Embedding pipeline: fetching entities…")
-            entities = await self.fetch_entities_from_neo4j()
+            entities = await self.fetch_entities_for_embedding()
             logger.info(f"  Fetched {len(entities)} entities")
 
             semaphore = asyncio.Semaphore(64)  # max concurrent batch requests
@@ -706,7 +592,7 @@ class KGEmbedder:
 
             # --- relations --------------------------------------------------
             logger.info("Embedding pipeline: fetching relations…")
-            relations = await self.fetch_relations_from_neo4j()
+            relations = await self.fetch_relations_for_embedding()
             logger.info(f"  Fetched {len(relations)} relations")
 
             async def _embed_relation_batch(batch: list) -> tuple[int, int]:

@@ -82,6 +82,11 @@ run_step() {
 # ---------------------------------------------------------------------------
 # Environment setup
 # ---------------------------------------------------------------------------
+# LLM endpoint: set API_BASE / API_KEY / MODEL_NAME in ../.env (or export them
+# before running).  Do NOT export these as empty strings — empty exports shadow
+# the .env values.  The scripts fall back to 'gpt-4o-mini' when MODEL_NAME is
+# unset.  Optional: EVAL_API_BASE/EVAL_MODEL_NAME, EMB_API_BASE/EMB_MODEL_NAME.
+
 mkdir -p "$KGRAG_ROOT/data"
 mkdir -p "$KGRAG_ROOT/output"
 
@@ -105,11 +110,6 @@ else
   ACTIVE_DATASET="$MOVIE_DATASET"
   DATASET_LABEL="full"
 fi
-
-# LLM endpoint: set API_BASE / API_KEY / MODEL_NAME in ../.env (or export them
-# before running).  Do NOT export these as empty strings — empty exports shadow
-# the .env values.  The scripts fall back to 'gpt-4o-mini' when MODEL_NAME is
-# unset.  Optional: EVAL_API_BASE/EVAL_MODEL_NAME, EMB_API_BASE/EMB_MODEL_NAME.
 
 if [ -z "${API_BASE:-}" ]; then
   echo "⚠  WARNING: API_BASE is not set in the environment."
@@ -180,7 +180,7 @@ if run_step 2; then
     --db-uri "$NEO4J_URI" \
     --db-user "$NEO4J_USER" \
     --db-password "$NEO4J_PASSWORD" \
-    --batch-size 100 > "$KGRAG_ROOT/output/embedding_stats.json"
+    --batch-size 2048 > "$KGRAG_ROOT/output/embedding_stats.json"
   echo "✓ Entity embeddings computed"
 fi
 
