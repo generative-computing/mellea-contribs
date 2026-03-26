@@ -390,8 +390,10 @@ class KGEmbedder:
 
         cypher = """
         MATCH (n)
-        RETURN n.name AS name, labels(n)[0] AS type
-        LIMIT 100000
+        WHERE NOT n:_EntitySchema AND NOT n:_RelationSchema
+        RETURN elementId(n) AS eid, n.name AS name, labels(n)[0] AS type,
+               coalesce(n.description, n._description) AS description,
+               n._paragraph AS paragraph
         """
         try:
             driver = getattr(self.backend, "_async_driver", None)
@@ -400,14 +402,18 @@ class KGEmbedder:
             async with driver.session() as session:
                 result = await session.run(cypher)
                 records = [r async for r in result]
-            return [
-                Entity(
+            entities = []
+            for r in records:
+                desc = r.get("description") or ""
+                para = r.get("paragraph") or ""
+                e = Entity(
                     type=r.get("type", "Unknown"),
-                    name=r.get("name", ""),
-                    description=f"Node of type {r.get('type')}",
+                    name=r.get("name", "") or "",
+                    description=f"{desc} {para}".strip() if (desc or para) else "",
                 )
-                for r in records
-            ]
+                e.id = r.get("eid", "")
+                entities.append(e)
+            return entities
         except Exception as exc:
             logger.warning(f"Failed to fetch entities from Neo4j: {exc}")
             return []
@@ -422,9 +428,9 @@ class KGEmbedder:
             return []
 
         cypher = """
-        MATCH ()-[r]->()
-        RETURN type(r) AS relation_type, id(r) AS rel_id
-        LIMIT 100000
+        MATCH (s)-[r]->(t)
+        RETURN elementId(r) AS eid, type(r) AS relation_type,
+               s.name AS src_name, t.name AS dst_name
         """
         try:
             driver = getattr(self.backend, "_async_driver", None)
@@ -433,15 +439,16 @@ class KGEmbedder:
             async with driver.session() as session:
                 result = await session.run(cypher)
                 records = [r async for r in result]
-            return [
-                Relation(
-                    source_entity=f"Source_{r.get('rel_id', i)}",
+            relations = []
+            for r in records:
+                rel = Relation(
+                    source_entity=r.get("src_name", "") or "",
                     relation_type=r.get("relation_type", "UNKNOWN"),
-                    target_entity="Target",
-                    description=f"Relation of type {r.get('relation_type', 'UNKNOWN')}",
+                    target_entity=r.get("dst_name", "") or "",
                 )
-                for i, r in enumerate(records)
-            ]
+                rel.id = r.get("eid", "")
+                relations.append(rel)
+            return relations
         except Exception as exc:
             logger.warning(f"Failed to fetch relations from Neo4j: {exc}")
             return []
@@ -469,20 +476,15 @@ class KGEmbedder:
 
         cypher = """
         UNWIND $batch AS item
-        MATCH (n {name: item.name})
-        SET n.embedding = item.embedding
+        MATCH (n) WHERE elementId(n) = item.eid
+        CALL db.create.setNodeVectorProperty(n, '_embedding', item.embedding)
         RETURN count(n) AS updated
         """
         rows = [
-            {"name": e.name, "embedding": getattr(e, "embedding", []) or []}
+            {"eid": getattr(e, "id", ""), "embedding": getattr(e, "embedding", []) or []}
             for e in entities
-            if getattr(e, "embedding", None)
+            if getattr(e, "embedding", None) and getattr(e, "id", None)
         ]
-
-        try:
-            from tqdm import tqdm as _tqdm
-        except ImportError:
-            _tqdm = None
 
         try:
             from tqdm import tqdm as _tqdm
@@ -531,23 +533,18 @@ class KGEmbedder:
 
         cypher = """
         UNWIND $batch AS item
-        MATCH ()-[r {type: item.relation_type}]->()
-        SET r.embedding = item.embedding
+        MATCH ()-[r]->() WHERE elementId(r) = item.eid
+        CALL db.create.setRelationshipVectorProperty(r, '_embedding', item.embedding)
         RETURN count(r) AS updated
         """
         rows = [
             {
-                "relation_type": r.relation_type,
+                "eid": getattr(r, "id", ""),
                 "embedding": getattr(r, "embedding", []) or [],
             }
             for r in relations
-            if getattr(r, "embedding", None)
+            if getattr(r, "embedding", None) and getattr(r, "id", None)
         ]
-
-        try:
-            from tqdm import tqdm as _tqdm
-        except ImportError:
-            _tqdm = None
 
         try:
             from tqdm import tqdm as _tqdm
@@ -661,18 +658,19 @@ class KGEmbedder:
             entities = await self.fetch_entities_from_neo4j()
             logger.info(f"  Fetched {len(entities)} entities")
 
-            semaphore = asyncio.Semaphore(16)  # max concurrent batch requests
+            semaphore = asyncio.Semaphore(64)  # max concurrent batch requests
 
             async def _embed_entity_batch(batch: list) -> tuple[int, int]:
                 """Embed one batch via a single API call; return (ok, failed)."""
                 texts = []
                 for ent in batch:
-                    parts = []
-                    if ent.name:
-                        parts.append(f"Name: {ent.name}")
-                    if ent.description:
-                        parts.append(f"Description: {ent.description}")
-                    texts.append(" ".join(parts) or ent.name or "")
+                    # Match Bidirection's entity_to_text format: (Type: Name, desc: "...")
+                    desc = ent.description or ""
+                    if desc:
+                        text = f"({ent.type}: {ent.name}, desc: \"{desc}\")"
+                    else:
+                        text = f"({ent.type}: {ent.name})"
+                    texts.append(text)
                 async with semaphore:
                     try:
                         embeddings = await self._get_embeddings_batch(texts)

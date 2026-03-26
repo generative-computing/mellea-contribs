@@ -126,21 +126,19 @@ FORMATTING NOTES:
         Returns:
             Enriched extraction result with movie-specific post-processing
         """
-        # Clean up entity names and types
+        # Clean up entity names and types, converting to typed domain entities
+        enriched: list = []
         for entity in result.entities:
-            # Standardize entity types
             entity.type = self._standardize_entity_type(entity.type)
-
-            # Clean up names (trim whitespace, fix common issues)
             entity.name = entity.name.strip()
-
-            # Convert to typed domain entity
             if entity.type == "Movie":
                 entity = self._enrich_movie_entity(entity, doc_text)
             elif entity.type == "Person":
                 entity = self._enrich_person_entity(entity, doc_text)
             elif entity.type == "Award":
                 entity = self._enrich_award_entity(entity, doc_text)
+            enriched.append(entity)
+        result.entities = enriched
 
         # Clean up relation types
         for relation in result.relations:

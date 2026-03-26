@@ -88,8 +88,8 @@ Examples:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=100,
-        help="Batch size for progress logging (default: 100)",
+        default=2048,
+        help="Number of texts per embedding API call (default: 2048)",
     )
     parser.add_argument(
         "--verbose",
