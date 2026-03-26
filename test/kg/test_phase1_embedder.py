@@ -84,7 +84,7 @@ class TestKGEmbedderInterface:
         )
 
         assert embedder is not None
-        assert embedder.embedding_model == "all-MiniLM-L6-v2"
+        assert embedder.embedding_model == "openai/all-MiniLM-L6-v2"
         assert embedder.embedding_dimension == 384
 
     def test_kg_embedder_parameter_defaults(self):

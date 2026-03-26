@@ -43,6 +43,13 @@ from mellea_contribs.kg.models import Entity, ExtractionResult
 from mellea_contribs.kg.preprocessor import KGPreprocessor
 from mellea_contribs.kg.utils import log_progress
 
+try:
+    from models.movie_domain_models import AwardEntity, MovieEntity, PersonEntity
+except ImportError:
+    MovieEntity = None  # type: ignore[assignment,misc]
+    PersonEntity = None  # type: ignore[assignment,misc]
+    AwardEntity = None  # type: ignore[assignment,misc]
+
 
 class MovieKGPreprocessor(KGPreprocessor):
     """Domain-specific KG preprocessor for the movie domain.
@@ -127,11 +134,13 @@ FORMATTING NOTES:
             # Clean up names (trim whitespace, fix common issues)
             entity.name = entity.name.strip()
 
-            # Add movie-specific properties if possible
+            # Convert to typed domain entity
             if entity.type == "Movie":
                 entity = self._enrich_movie_entity(entity, doc_text)
             elif entity.type == "Person":
                 entity = self._enrich_person_entity(entity, doc_text)
+            elif entity.type == "Award":
+                entity = self._enrich_award_entity(entity, doc_text)
 
         # Clean up relation types
         for relation in result.relations:
@@ -211,32 +220,94 @@ FORMATTING NOTES:
         return type_map.get(normalized, relation_type)
 
     def _enrich_movie_entity(self, entity: Entity, doc_text: str) -> Entity:
-        """Enrich a movie entity with additional extracted information.
+        """Convert a generic Movie entity into a typed MovieEntity.
+
+        Maps known property keys from the LLM extraction to the typed fields
+        defined on MovieEntity.
 
         Args:
-            entity: The movie entity to enrich
-            doc_text: The source document text
+            entity: Generic entity with type "Movie".
+            doc_text: The source document text (unused, reserved for future use).
 
         Returns:
-            Enriched entity with additional properties
+            MovieEntity instance with typed fields populated.
         """
-        # This would be implemented with more sophisticated extraction logic
-        # For now, just return as-is
-        return entity
+        if MovieEntity is None:
+            return entity
+        props = entity.properties
+        return MovieEntity(
+            **entity.model_dump(exclude={"properties"}),
+            properties=props,
+            release_year=self._to_int(props.get("release_year") or props.get("year")),
+            director=props.get("director") or props.get("directed_by"),
+            box_office=self._to_float(
+                props.get("box_office") or props.get("revenue") or props.get("gross")
+            ),
+            language=props.get("language") or props.get("original_language"),
+            rating=self._to_float(props.get("rating") or props.get("imdb_rating")),
+        )
 
     def _enrich_person_entity(self, entity: Entity, doc_text: str) -> Entity:
-        """Enrich a person entity with additional extracted information.
+        """Convert a generic Person entity into a typed PersonEntity.
 
         Args:
-            entity: The person entity to enrich
-            doc_text: The source document text
+            entity: Generic entity with type "Person".
+            doc_text: The source document text (unused, reserved for future use).
 
         Returns:
-            Enriched entity with additional properties
+            PersonEntity instance with typed fields populated.
         """
-        # This would be implemented with more sophisticated extraction logic
-        # For now, just return as-is
-        return entity
+        if PersonEntity is None:
+            return entity
+        props = entity.properties
+        return PersonEntity(
+            **entity.model_dump(exclude={"properties"}),
+            properties=props,
+            birth_year=self._to_int(props.get("birth_year") or props.get("born")),
+            nationality=props.get("nationality") or props.get("country"),
+            profession=props.get("profession") or props.get("role") or props.get("job"),
+        )
+
+    def _enrich_award_entity(self, entity: Entity, doc_text: str) -> Entity:
+        """Convert a generic Award entity into a typed AwardEntity.
+
+        Args:
+            entity: Generic entity with type "Award".
+            doc_text: The source document text (unused, reserved for future use).
+
+        Returns:
+            AwardEntity instance with typed fields populated.
+        """
+        if AwardEntity is None:
+            return entity
+        props = entity.properties
+        return AwardEntity(
+            **entity.model_dump(exclude={"properties"}),
+            properties=props,
+            ceremony_number=self._to_int(
+                props.get("ceremony_number") or props.get("edition")
+            ),
+            award_type=props.get("award_type") or props.get("category"),
+            award_year=self._to_int(
+                props.get("award_year") or props.get("year")
+            ),
+        )
+
+    @staticmethod
+    def _to_int(value: Any) -> Optional[int]:
+        """Safely coerce a value to int, returning None on failure."""
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _to_float(value: Any) -> Optional[float]:
+        """Safely coerce a value to float, returning None on failure."""
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
 
 @dataclass

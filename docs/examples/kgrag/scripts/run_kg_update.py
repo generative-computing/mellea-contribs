@@ -20,6 +20,8 @@ from typing import Any, Dict, Generator
 
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from mellea_contribs.kg.kgrag import orchestrate_kg_update
 from mellea_contribs.kg.updater_models import (
     KGUpdateRunConfig,
@@ -39,6 +41,11 @@ from mellea_contribs.kg.utils import (
     print_stats,
     setup_logging,
 )
+
+try:
+    from preprocessor.movie_preprocessor import MovieKGPreprocessor
+except ImportError:
+    MovieKGPreprocessor = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -91,9 +98,8 @@ class UpdateDatasetLoader(BaseDatasetLoader):
 async def process_document(
     item: Dict[str, Any],
     *,
+    preprocessor: Any,
     backend: Any,
-    session: Any,
-    domain: str,
     model_id: str,
     progress_tracker: BaseProgressLogger,
 ) -> UpdateResult:
@@ -101,9 +107,8 @@ async def process_document(
 
     Args:
         item: Normalised item from ``UpdateDatasetLoader``.
+        preprocessor: Domain-specific KGPreprocessor.
         backend: Graph backend.
-        session: Mellea session.
-        domain: Knowledge domain.
         model_id: LLM model name (recorded in result).
         progress_tracker: Progress tracker.
 
@@ -117,13 +122,9 @@ async def process_document(
 
     try:
         update_result = await orchestrate_kg_update(
-            session=session,
+            preprocessor=preprocessor,
             backend=backend,
             doc_text=text,
-            domain=domain,
-            hints="",
-            entity_types="",
-            relation_types="",
         )
 
         elapsed_time = time.perf_counter() - start_time
@@ -326,12 +327,16 @@ async def main() -> int:
             f"API base: {os.getenv('API_BASE') or '(default)'}"
         )
 
+        if MovieKGPreprocessor is None:
+            log_progress("ERROR: MovieKGPreprocessor not available", level="ERROR")
+            return 1
+        preprocessor = MovieKGPreprocessor(backend=backend, session=session)
+
         async def _process(item: Dict[str, Any]) -> UpdateResult:
             return await process_document(
                 item,
+                preprocessor=preprocessor,
                 backend=backend,
-                session=session,
-                domain=config.domain,
                 model_id=model_id,
                 progress_tracker=progress_tracker,
             )

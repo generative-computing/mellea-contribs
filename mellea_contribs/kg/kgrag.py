@@ -98,6 +98,11 @@ try:
 except ImportError:
     GraphBackend = None  # type: ignore[assignment,misc]
 
+try:
+    from mellea_contribs.kg.preprocessor import KGPreprocessor
+except ImportError:
+    KGPreprocessor = None  # type: ignore[assignment,misc]
+
 # Maximum Cypher repair attempts before giving up
 _MAX_REPAIR_ATTEMPTS = 2
 
@@ -565,24 +570,20 @@ async def orchestrate_qa_retrieval(
 
 
 async def orchestrate_kg_update(
-    session: MelleaSession,
+    preprocessor: "KGPreprocessor",
     backend: GraphBackend,
     doc_text: str,
-    domain: str = "general",
-    hints: str = "",
-    entity_types: str = "",
-    relation_types: str = "",
     align_topk: int = 10,
     confidence_threshold: float = 0.6,
 ) -> dict:
     """Orchestrate KG update pipeline.
 
-    This is the main Layer 2 entry point for updating a knowledge graph with
-    information extracted from documents. It extracts entities and relations,
-    aligns them with existing KG data, and decides on merges.
+    Uses the provided preprocessor for domain-specific extraction and
+    post-processing, then aligns and upserts the results into the KG.
 
     Pipeline:
-      1. Extract entities and relations from the document.
+      1. Extract entities and relations via the preprocessor (applies domain
+         hints and post-processing).
       2. For each extracted entity: search KG candidates, align via LLM,
          decide whether to merge or insert.
       3. Write new / merged entities to the backend.
@@ -612,16 +613,11 @@ async def orchestrate_kg_update(
         - ``relations_inserted``: Count of new relations added to KG.
         - ``relations_merged``: Count of relations merged with existing KG edges.
     """
-    # ── Step 1: Extract entities and relations (Layer 3 @generative) ─────────
-    extraction = await extract_entities_and_relations(
-        session,
-        doc_context=doc_text,
-        domain=domain,
-        hints=hints,
-        reference="",
-        entity_types=entity_types,
-        relation_types=relation_types,
-    )
+    session = preprocessor.session
+    domain = preprocessor.domain
+
+    # ── Step 1: Extract entities and relations via preprocessor ───────────────
+    extraction = await preprocessor.process_document(doc_text)
 
     # ── Step 2-3: Align and upsert entities (Layer 3 executor) ───────────────
     entity_name_to_id: dict = {}
