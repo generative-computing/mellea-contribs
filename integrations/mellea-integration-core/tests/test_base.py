@@ -144,7 +144,9 @@ def test_handle_sampling_results_failure_with_samples(integration):
 
     result = integration._handle_sampling_results(mock_response)
 
-    assert result == mock_sample
+    # The method extracts content from the first sample and wraps it in a new object
+    assert hasattr(result, "content")
+    assert result.content == "Sample"
 
 
 @patch("mellea_integration.base.SamplingResult", MockSamplingResult)

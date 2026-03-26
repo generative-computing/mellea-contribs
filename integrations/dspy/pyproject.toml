@@ -1,0 +1,56 @@
+[project]
+name = "mellea-dspy"
+version = "0.1.0"
+description = "DSPy integration for Mellea - enabling structured prompting with generative programming"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "dspy>=3.1.3",
+    "mellea>=0.3.2",
+    "mellea-integration-core",
+]
+authors = [
+    {name = "Mellea Contributors"}
+]
+keywords = ["mellea", "dspy", "llm", "generative-programming", "structured-prompting"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/generative-computing/mellea"
+Documentation = "https://mellea.ai/"
+Repository = "https://github.com/generative-computing/mellea-contribs"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mellea_dspy"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as requiring a live Mellea session (deselect with -m 'not integration')",
+]
+
+[tool.uv.sources]
+mellea-integration-core = { path = "../mellea-integration-core" }
