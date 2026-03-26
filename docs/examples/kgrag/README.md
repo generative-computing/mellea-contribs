@@ -1,6 +1,8 @@
 # KG-RAG: Knowledge Graph-Enhanced Retrieval-Augmented Generation
 
-A complete example system demonstrating how to build intelligent retrieval-augmented generation (RAG) using knowledge graphs with the Mellea framework.
+A Mellea-based implementation of the [Bidirection](https://github.com/junhongmit/Bidirection) project, which synergizes LLMs and Knowledge Graphs. The original Bidirection project demonstrates a two-stage framework: a KG Update stage where a LLM extracts knowledge from personal documents to enrich a general-purpose KG, and an LLM Inference stage where the enriched KG enhances LLM performance on downstream tasks.
+
+This example ports the core pipeline into the Mellea framework, so that the infrastructure concerns — LLM session management, graph backend abstraction, entity alignment, generative functions — are handled by the library. Users can focus on domain-specific logic rather than reimplementing the common components from scratch.
 
 ## Overview
 
@@ -120,9 +122,9 @@ Load predefined movie/person data into Neo4j:
 ```bash
 python run_kg_preprocess.py \
   --data-dir ../dataset/movie \
-  --neo4j-uri bolt://localhost:7687 \
-  --neo4j-user neo4j \
-  --neo4j-password password \
+  --db-uri bolt://localhost:7687 \
+  --db-user neo4j \
+  --db-password password \
   --batch-size 500
 ```
 
@@ -142,9 +144,9 @@ Compute embeddings for entities and relations:
 
 ```bash
 python run_kg_embed.py \
-  --neo4j-uri bolt://localhost:7687 \
-  --neo4j-user neo4j \
-  --neo4j-password password \
+  --db-uri bolt://localhost:7687 \
+  --db-user neo4j \
+  --db-password password \
   --batch-size 100
 ```
 
@@ -398,9 +400,7 @@ Large data files are **not tracked in git** to keep repository size manageable.
 
 ```bash
 cd scripts
-python create_tiny_dataset.py --output ../dataset/crag_movie_tiny.jsonl
-# Or truncate from the full set:
-python create_truncated_dataset.py --max-examples 100
+python create_tiny_dataset.py --output ../dataset/crag_movie_tiny.jsonl.bz2
 ```
 
 ### Acquiring the full dataset
@@ -421,7 +421,8 @@ python run_eval.py --input ../output/qa_results.jsonl --mock
 
 ## See Also
 
-- **Core Library**: [mellea_contribs/kg/README.md](../../mellea_contribs/kg/README.md)
+- **Bidirection** (original project): https://github.com/junhongmit/Bidirection
+- **Core Library**: [mellea_contribs/kg/README.md](../../../mellea_contribs/kg/README.md)
 - **Mellea Framework**: https://github.com/generative-computing/mellea
 
 ## License

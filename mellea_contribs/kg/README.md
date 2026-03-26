@@ -342,7 +342,7 @@ docker stop neo4j-test && docker rm neo4j-test
 ### Phase 1: Core KG Modules ✓ COMPLETE
 - ✓ **Layer 1**: Application Scripts (`docs/examples/kgrag/scripts/`)
   - 5 pipeline scripts: run_qa.py, run_kg_preprocess.py, run_kg_embed.py, run_kg_update.py, run_eval.py
-  - 3 dataset scripts: create_demo_dataset.py, create_tiny_dataset.py, create_truncated_dataset.py
+  - 1 dataset script: create_tiny_dataset.py
 
 - ✓ **Layer 2**: Orchestrators (`mellea_contribs/kg/`)
   - `orchestrate_qa_retrieval()` — multi-route QA pipeline
@@ -367,23 +367,21 @@ docker stop neo4j-test && docker rm neo4j-test
 
 ### Phase 2: Run Scripts ✓ COMPLETE
 - ✓ **8 Production-Ready CLI Scripts** (docs/examples/kgrag/scripts/)
-  - Dataset creation: create_demo_dataset.py, create_tiny_dataset.py, create_truncated_dataset.py
+  - Dataset creation: create_tiny_dataset.py
   - Pipeline operations: run_kg_preprocess.py, run_kg_embed.py, run_kg_update.py, run_qa.py, run_eval.py
   - All scripts support --mock flag for testing without database
   - JSONL I/O for seamless pipeline chaining
 
-### Phase 3: Utility Modules ✓ COMPLETE (95 Tests Passing)
+### Phase 3: Utility Modules ✓ COMPLETE
 - ✓ **5 Reusable Utility Modules** (mellea_contribs/kg/utils/)
-  - `data_utils.py` - JSONL I/O, batching, schema validation (27 tests)
-  - `session_manager.py` - Session/backend factories, async resource management (19 tests)
-  - `progress.py` - Logging, progress tracking, JSON output (23 tests)
-  - `eval_utils.py` - Evaluation metrics, result aggregation (26 tests)
-  - All utilities tested with 95 comprehensive unit + integration tests
+  - `data_utils.py` - JSONL I/O, batching, schema validation
+  - `session_manager.py` - Session/backend factories, async resource management
+  - `progress.py` - Logging, progress tracking, JSON output
+  - `eval_utils.py` - Evaluation metrics, result aggregation
 
-### Phase 4: Configuration & Validation ✓ COMPLETE
+### Phase 4: Configuration ✓ COMPLETE
 - ✓ **.env_template** - Configuration template with all variables
 - ✓ **pyproject.toml** - Updated with kg-utils optional dependency group
-- ✓ **sun.sh** - Comprehensive end-to-end test suite validating all phases
 
 ## Utility Modules (Phase 3)
 
@@ -509,51 +507,19 @@ async def evaluate_qa_pipeline():
     await backend.close()
 ```
 
-## Testing & Validation (Phase 3 & 4)
+## Testing
 
-### Running Tests
 ```bash
 # All KG tests
 pytest test/kg/ -v
 
-# Unit tests only (Phase 1, 3)
-pytest test/kg/ --ignore=test/kg/test_scripts/ -v
-
-# Utility module tests (95 tests)
+# Utility module tests only
 pytest test/kg/utils/ -v
 
 # Neo4j tests (requires running Neo4j)
 export NEO4J_URI=bolt://localhost:7687
 pytest test/kg/ -v -m neo4j
 ```
-
-### Comprehensive Validation Suite (sun.sh)
-```bash
-# Run complete end-to-end validation
-./sun.sh
-
-# Quick validation (skip some slower tests)
-./sun.sh --quick
-
-# Unit tests only
-./sun.sh --unit-only
-```
-
-The `sun.sh` script validates:
-- Phase 0: Environment (Python, dependencies, imports)
-- Phase 1: Core KG modules (95+ unit tests)
-- Phase 2: Run scripts (all 8 scripts with mock backend)
-- Phase 3: Utility modules (95 comprehensive tests)
-- Phase 4: Configuration and dependencies
-
-### Test Coverage
-- **Phase 1**: Core modules (entity models, preprocessor, embedder, orchestrators)
-- **Phase 2**: Run scripts (dataset creation, preprocessing, embedding, QA, evaluation)
-- **Phase 3**: Utility modules
-  - JSONL I/O: 27 tests (load, save, append, batch, truncate, shuffle, validate)
-  - Session management: 19 tests (backend creation, session creation, async resources)
-  - Progress/logging: 23 tests (logging levels, JSON output, progress tracking)
-  - Evaluation: 26 tests (exact/fuzzy matching, MRR, precision/recall/F1, aggregation)
 
 ## Key Problems Solved
 
@@ -647,12 +613,8 @@ pip install -e .[kg,kg-utils]
 # Run tests
 pytest test/kg/utils/ -v
 
-# Run full validation
-./sun.sh
-
 # Try an example script
-python docs/examples/kgrag/scripts/create_demo_dataset.py --output /tmp/demo.jsonl
-python docs/examples/kgrag/scripts/run_qa.py --input /tmp/demo.jsonl --mock --output /tmp/qa.jsonl
+python docs/examples/kgrag/scripts/run_qa.py --mock --output /tmp/qa.jsonl
 ```
 
 ### Production Setup (With Neo4j)
@@ -674,10 +636,5 @@ python docs/examples/kgrag/scripts/run_qa.py --input questions.jsonl --output re
 
 ## See Also
 
-- [Main README](../../README.md) - KG-RAG overview and quick start
-- [CLAUDE.md](../../CLAUDE.md) - Development guide and architecture
-- [PHASE4_CONFIGURATION.md](../../PHASE4_CONFIGURATION.md) - Configuration templates and setup
-- [missing_for_run_sh.txt](../../missing_for_run_sh.txt) - Implementation status and progress
-- [Test README](utils/README.md) - Phase 3 utility module tests documentation
+- [Main README](../../README.md) - Repository overview and quick start
 - [Mellea Framework](https://github.com/generative-computing/mellea) - Parent framework
-- [Original PR#3](https://github.com/ydzhu98/mellea/pull/3) - Source of KG-RAG system
