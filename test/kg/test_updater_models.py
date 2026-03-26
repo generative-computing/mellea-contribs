@@ -1,4 +1,4 @@
-"""Tests for Phase 1 KG update configuration and result models."""
+"""Tests for KG update configuration and result models."""
 
 import pytest
 from datetime import datetime

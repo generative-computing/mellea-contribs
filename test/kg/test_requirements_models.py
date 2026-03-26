@@ -1,4 +1,4 @@
-"""Tests for Phase 1 requirement factory functions."""
+"""Tests for requirement factory functions (requirements_models.py)."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Tests for MockGraphBackend."""
+"""Tests for Layer 4: MockGraphBackend."""
 
 import pytest
 
@@ -44,7 +44,7 @@ def mock_backend(mock_nodes, mock_edges):
 
 
 class TestMockGraphBackend:
-    """Tests for MockGraphBackend."""
+    """Tests for Layer 4: MockGraphBackend."""
 
     def test_create_mock_backend(self):
         """Test creating a MockGraphBackend."""

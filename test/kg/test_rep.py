@@ -1,4 +1,4 @@
-"""Tests for Phase 1 representation utilities (rep.py)."""
+"""Tests for representation utilities (rep.py)."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Tests for Layer 1: KGRag pipeline.
+"""Tests for Layer 2: KGRag pipeline.
 
 Structural tests run without an LLM. Qualitative (end-to-end) tests require
 a real Mellea session and are marked @pytest.mark.qualitative so they are

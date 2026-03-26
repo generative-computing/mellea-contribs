@@ -1,4 +1,4 @@
-"""Tests for Phase 1 QA configuration and result models."""
+"""Tests for QA configuration and result models."""
 
 import pytest
 

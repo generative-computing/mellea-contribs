@@ -1,4 +1,4 @@
-"""Tests for Layer 2: Graph Query Components.
+"""Tests for Layer 3: Graph Query Components.
 
 Covers:
 - components/query.py: GraphQuery, CypherQuery, SparqlQuery

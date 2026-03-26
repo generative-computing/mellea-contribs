@@ -1,4 +1,4 @@
-"""Tests for Phase 1 Entity and Relation models."""
+"""Tests for Entity and Relation models."""
 
 import pytest
 

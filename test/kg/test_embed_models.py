@@ -1,4 +1,4 @@
-"""Tests for Phase 1 embedding configuration and result models."""
+"""Tests for embedding configuration and result models."""
 
 import pytest
 

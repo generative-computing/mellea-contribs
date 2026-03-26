@@ -1,4 +1,4 @@
-"""Tests for Phase 1 KGPreprocessor structure and interface."""
+"""Tests for KGPreprocessor structure and interface."""
 
 import pytest
 import inspect

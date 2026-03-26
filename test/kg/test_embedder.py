@@ -1,4 +1,4 @@
-"""Tests for Phase 1 KGEmbedder structure and interface."""
+"""Tests for KGEmbedder structure and interface."""
 
 import pytest
 import inspect

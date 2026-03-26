@@ -1,4 +1,4 @@
-"""Tests for Phase 1 domain-specific examples (movie domain)."""
+"""Tests for domain-specific examples (movie domain)."""
 
 import pytest
 
