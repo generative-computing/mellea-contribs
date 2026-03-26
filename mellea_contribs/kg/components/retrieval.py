@@ -1,8 +1,6 @@
 """Layer 3 retrieval executor functions for KG-RAG.
 
-These executor functions combine Layer 4 backend queries with Layer 3
-@generative LLM calls. They form the bridge between Layer 2 orchestrators
-and Layer 4 backends, so that Layer 2 never touches the backend directly.
+These executor functions combine backend queries with @generative LLM calls.
 """
 
 from typing import Any

@@ -1,12 +1,7 @@
 """KG Preprocessor: Layer 2 library for preprocessing raw data into KG entities/relations.
 
 This module provides generic preprocessing infrastructure for converting raw documents
-into Knowledge Graph entities and relations using the Layer 3 extraction functions.
-
-The architecture follows Mellea's Layer 2 pattern:
-- Layer 2: KGPreprocessor (this module) orchestrates the pipeline
-- Layer 3: extract_entities_and_relations, align_entity_with_kg, etc.
-- Layer 4: GraphBackend for persisting to Neo4j
+into Knowledge Graph entities and relations using LLM-based extraction.
 
 Example::
 
@@ -68,13 +63,10 @@ logger = logging.getLogger(__name__)
 class KGPreprocessor(ABC):
     """Generic base class for preprocessing raw data into KG entities and relations.
 
-    Orchestrates the Layer 3 extraction pipeline and handles entity/relation storage.
-    Subclasses should override get_hints() and optionally post_process_entities/relations().
+    Orchestrates entity/relation extraction from documents and handles storage.
+    Subclasses should override get_hints() and optionally post_process_extraction().
 
-    This is a Layer 2 library that:
-    1. Uses Layer 3 extract_entities_and_relations for LLM extraction
-    2. Optionally calls Layer 3 alignment functions
-    3. Uses Layer 4 GraphBackend for persistence
+    Extraction is performed via LLM, persistence via the provided GraphBackend.
     """
 
     def __init__(

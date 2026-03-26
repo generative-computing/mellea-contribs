@@ -182,48 +182,80 @@ await backend.close()
 
 The system follows a 4-layer architecture:
 
-### Layer 1: Application Orchestration
+```
+Layer 1 (scripts) → Layer 2 (orchestrators) → Layer 3 (components) → Layer 4 (backends)
+```
 
-Entry points for KG-RAG pipelines:
-- **`orchestrate_qa_retrieval()`**: Multi-route question answering with consensus validation
-- **`orchestrate_kg_update()`**: Document-based KG updates with entity/relation alignment
+### Layer 1: Application Scripts (`docs/examples/kgrag/scripts/`)
 
-### Layer 2: Components & Query Building
+CLI entry points that wire together user I/O, sessions, and backends:
+- **`run_qa.py`**: Read questions from JSONL, call `orchestrate_qa_retrieval`, write answers
+- **`run_kg_preprocess.py`**: Load documents, call `KGPreprocessor` subclass, write stats
+- **`run_kg_embed.py`**: Call `KGEmbedder` to compute and store entity embeddings
+- **`run_kg_update.py`**: Call `orchestrate_kg_update` to extract and merge new knowledge
+- **`run_eval.py`**: Load QA results, compute evaluation metrics
 
-Query construction and result formatting:
-- **GraphQuery / CypherQuery / SparqlQuery**: Query type abstractions
-- **GraphResult**: Result formatting with `format_for_llm()` method
-- **natural_language_to_cypher()**: Convert questions to Cypher queries
-- **explain_query_result()**: Format results for LLM consumption
+### Layer 2: Orchestrators (`mellea_contribs/kg/`)
 
-### Layer 3: LLM-Guided Logic (@generative functions)
+Library classes and functions that define the pipeline logic.
 
-All decisions made by LLM through Mellea's @generative framework:
+- **`kgrag.py`**
+  - `KGRag.answer()` — Natural language → Cypher → answer via Layer 3
+  - `orchestrate_qa_retrieval()` — Multi-route Think-on-Graph QA pipeline
+  - `orchestrate_kg_update()` — Document-based KG update pipeline
+- **`preprocessor.py`** — `KGPreprocessor` abstract base class for document preprocessing
+- **`embedder.py`** — `KGEmbedder` for computing and storing entity embeddings
 
-**QA Functions (8):**
-1. `break_down_question()` → Routes: Break complex questions into solving strategies
-2. `extract_topic_entities()` → TopicEntities: Extract search entities from query
-3. `align_topic_entities()` → RelevantEntities: Score entity relevance (0-1 scale)
-4. `prune_relations()` → RelevantRelations: Filter relevant relations from entities
-5. `prune_triplets()` → RelevantRelations: Score triplet relevance for answering
-6. `evaluate_knowledge_sufficiency()` → EvaluationResult: Determine if KG knowledge suffices
-7. `validate_consensus()` → ValidationResult: Validate consensus across routes
-8. `generate_direct_answer()` → DirectAnswer: Generate answer without KG (fallback)
+### Layer 3: Components (`mellea_contribs/kg/components/`)
 
-**Update Functions (5):**
-1. `extract_entities_and_relations()` → ExtractionResult: Extract from documents
-2. `align_entity_with_kg()` → AlignmentResult: Find matching KG entities
-3. `decide_entity_merge()` → MergeDecision: Decide entity merge strategy
-4. `align_relation_with_kg()` → AlignmentResult: Find matching KG relations
-5. `decide_relation_merge()` → MergeDecision: Decide relation merge strategy
+Three sub-groups:
 
-### Layer 4: Backend Abstraction
+**Executor functions** (call both LLM and backend — `retrieval.py`, `persistence.py`):
+- `search_and_align_entities()` — fuzzy/vector search + LLM relevance scoring
+- `traverse_and_prune()` — one hop of graph traversal with LLM-guided pruning
+- `fetch_schema_text()` — retrieve and format graph schema
+- `validate_and_execute_query()` — validate Cypher, LLM-repair if needed, then execute
+- `persist_entities()` — upsert extracted entities into the KG
+- `persist_relations()` — resolve and upsert extracted relations into the KG
+- `align_and_upsert_entity()` — align with existing KG via LLM, then upsert
+- `align_and_upsert_relation()` — align with existing KG via LLM, then upsert
 
-Database operations:
-- **GraphNode / GraphEdge / GraphPath**: Pure dataclasses representing graph data
-- **GraphBackend**: Abstract interface for graph databases
-- **Neo4jBackend**: Production-ready Neo4j implementation
-- **MockGraphBackend**: In-memory testing backend (no infrastructure required)
+**@generative functions** (LLM only, no backend — `generative.py`, `llm_guided.py`):
+
+*QA functions (8):*
+1. `break_down_question()` — break complex questions into solving routes
+2. `extract_topic_entities()` — extract search entities from a route
+3. `align_topic_entities()` — score entity relevance (0–1)
+4. `prune_relations()` — filter relevant relation types per entity
+5. `prune_triplets()` — score triplet relevance for answering
+6. `evaluate_knowledge_sufficiency()` — determine if accumulated knowledge suffices
+7. `validate_consensus()` — validate consensus across routes
+8. `generate_direct_answer()` — generate answer without KG (fallback)
+
+*Update functions (5):*
+1. `extract_entities_and_relations()` — extract from documents
+2. `align_entity_with_kg()` — find matching KG entities
+3. `decide_entity_merge()` — decide entity merge strategy
+4. `align_relation_with_kg()` — find matching KG relations
+5. `decide_relation_merge()` — decide relation merge strategy
+
+*Query construction (2):*
+- `natural_language_to_cypher()` — convert question to Cypher
+- `suggest_query_improvement()` — repair invalid Cypher with LLM
+- `explain_query_result()` — format query results for LLM consumption
+
+**Data components** (no LLM, no backend — `query.py`, `result.py`, `traversal.py`):
+- **GraphQuery / CypherQuery / SparqlQuery** — query type abstractions
+- **GraphResult** — result formatting with `format_for_llm()`
+- **GraphTraversal** — traversal pattern definition
+
+### Layer 4: Backend Abstraction (`mellea_contribs/kg/graph_dbs/`)
+
+Database operations — only called by Layer 3 executor functions:
+- **GraphNode / GraphEdge / GraphPath** (`base.py`): Pure dataclasses representing graph data
+- **GraphBackend** (`base.py`): Abstract interface with methods `search_entities_by_name`, `search_entities_by_embedding`, `get_relation_types`, `get_triplets`, `upsert_entity`, `upsert_relation`, `get_schema`, `validate_query`, `execute_query`, `close`
+- **Neo4jBackend** (`neo4j.py`): Production-ready Neo4j implementation
+- **MockGraphBackend** (`mock.py`): In-memory testing backend (no infrastructure required)
 
 ## Data Structures
 
@@ -308,21 +340,26 @@ docker stop neo4j-test && docker rm neo4j-test
 ## Implementation Status
 
 ### Phase 1: Core KG Modules ✓ COMPLETE
-- ✓ **Layer 1**: Application Orchestration
-  - `orchestrate_qa_retrieval()` - Multi-route QA entry point
-  - `orchestrate_kg_update()` - KG update entry point
+- ✓ **Layer 1**: Application Scripts (`docs/examples/kgrag/scripts/`)
+  - 5 pipeline scripts: run_qa.py, run_kg_preprocess.py, run_kg_embed.py, run_kg_update.py, run_eval.py
+  - 3 dataset scripts: create_demo_dataset.py, create_tiny_dataset.py, create_truncated_dataset.py
 
-- ✓ **Layer 2**: Components
-  - GraphQuery, CypherQuery, SparqlQuery types
-  - GraphResult with format_for_llm()
-  - natural_language_to_cypher, explain_query_result
+- ✓ **Layer 2**: Orchestrators (`mellea_contribs/kg/`)
+  - `orchestrate_qa_retrieval()` — multi-route QA pipeline
+  - `orchestrate_kg_update()` — document-based KG update pipeline
+  - `KGRag` — natural language QA class
+  - `KGPreprocessor` — document preprocessing base class
+  - `KGEmbedder` — entity embedding class
 
-- ✓ **Layer 3**: LLM-Guided Logic
+- ✓ **Layer 3**: Components (`mellea_contribs/kg/components/`)
+  - Executor functions: `search_and_align_entities`, `traverse_and_prune`, `fetch_schema_text`, `validate_and_execute_query`, `persist_entities`, `persist_relations`, `align_and_upsert_entity`, `align_and_upsert_relation`
   - 8 QA @generative functions with full prompts
   - 5 Update @generative functions with full prompts
+  - 3 query-construction @generative functions
+  - GraphQuery, CypherQuery, SparqlQuery, GraphResult, GraphTraversal data components
   - 12 Pydantic models for structured outputs
 
-- ✓ **Layer 4**: Backend Abstraction
+- ✓ **Layer 4**: Backend Abstraction (`mellea_contribs/kg/graph_dbs/`)
   - GraphNode, GraphEdge, GraphPath data structures
   - GraphBackend abstract interface
   - Neo4jBackend production implementation
@@ -593,22 +630,12 @@ Automatically extract new information from documents and intelligently merge wit
 ## Design Notes
 
 - Pure dataclasses (GraphNode, GraphEdge, GraphPath) for data representation
-- Components for queries and results (evolving in Layer 2)
+- Components for queries and results (Layer 3)
 - Async/await throughout for scalability
 - Optional Neo4j dependency - graceful degradation if not installed
 - MockBackend for unit testing without infrastructure
 - All LLM decisions through Mellea's @generative framework (pluggable LLM backends)
 - Structured outputs via Pydantic models (validated at LLM output)
-
-## Migration Notes
-
-This library was adapted from the KGRag system in mellea PR#3. Key differences:
-
-- **Open-ended**: Works with any domain (not movie-specific)
-- **Mellea-integrated**: Uses Mellea's @generative decorators and MelleaSession
-- **Backend-agnostic**: MockBackend for testing, Neo4jBackend for production
-- **Structured API**: Clear Layer 1-4 separation with orchestration entry points
-- **Full type hints**: Pydantic models throughout
 
 ## Quick Reference: Running Everything
 

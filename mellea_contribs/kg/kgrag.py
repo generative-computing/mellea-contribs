@@ -303,7 +303,6 @@ async def orchestrate_qa_retrieval(
         """Run the ToG traversal for one solving route.
 
         Returns dict with keys ``ans``, ``context``, ``route``.
-        Calls Layer 3 executor functions; never calls backend directly.
         """
         # Step A: Extract topic entities (Layer 3 @generative)
         topic_result = await extract_topic_entities(

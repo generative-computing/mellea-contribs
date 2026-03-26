@@ -1,8 +1,4 @@
-"""Generative functions for KG-RAG using Mellea's @generative decorator.
-
-These are Layer 3 @generative functions that call the LLM directly.
-They are pure LLM functions with no backend access.
-"""
+"""Generative functions for KG-RAG using Mellea's @generative decorator."""
 from typing import List
 
 from mellea import generative

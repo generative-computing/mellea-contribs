@@ -1,8 +1,6 @@
 """Layer 3 persistence executor functions for KG updates.
 
-These executor functions wrap Layer 4 backend write operations so that
-Layer 2 orchestrators (KGPreprocessor, orchestrate_kg_update) never need to
-call the backend directly.
+These executor functions wrap backend write operations for entity and relation upserts.
 
 Two patterns are covered:
 
