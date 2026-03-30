@@ -21,7 +21,7 @@ on:
         description: "Skip Ollama setup (default: false)"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref_name }}-${{ inputs.subpackage }}
   cancel-in-progress: true
 
 env:
