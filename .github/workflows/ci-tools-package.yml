@@ -19,4 +19,4 @@ jobs:
     uses: ./.github/workflows/quality-generic.yml
     with:
       subpackage: mellea_contribs/tools_package
-      skip_ollama: true
+      skip_ollama: false
