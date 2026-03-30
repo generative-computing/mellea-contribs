@@ -17,6 +17,8 @@ import re
 import sys
 from typing import Any
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -26,10 +28,15 @@ import yaml
 from mellea import start_session
 
 from mellea.backends import ModelOption
-from tools.benchdrift_runner import (
-    analyze_robustness,
-    run_benchdrift_pipeline,
-)
+
+try:
+    from tools.benchdrift_runner import (
+        analyze_robustness,
+        run_benchdrift_pipeline,
+    )
+    HAS_BENCHDRIFT = True
+except ImportError:
+    HAS_BENCHDRIFT = False
 
 # ANSI
 G = "\033[92m"  # green
@@ -86,6 +93,7 @@ def _extract_answer(response: Any) -> str:
     return text.strip()[:40]
 
 
+@pytest.mark.skipif(not HAS_BENCHDRIFT, reason="benchdrift not installed; install with: pip install -e '.[robustness]'")
 def test_m_program_robustness(cli_overrides=None):
     _suppress_noise()
 
