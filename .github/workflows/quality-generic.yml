@@ -55,7 +55,7 @@ jobs:
             pip install uv
           fi
           echo "Setting up virtual environment and installing dependencies..."
-          uv sync --dev
+          uv sync --all-extras
           echo "Running tests..."
           # Try multiple patterns to support both tests/ and test/ directories
           if [ -d "tests" ]; then
