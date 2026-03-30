@@ -22,7 +22,7 @@ classifiers = [
 
 dependencies = [
     "mellea>=0.3.0",
-    "mellea-integration-core>=0.1.0",
+    "mellea-integration-core",
     "crewai>=0.1.0",
     "pydantic>=2.0.0",
 ]
@@ -118,3 +118,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "mellea.*"
 ignore_missing_imports = true
+
+[tool.uv.sources]
+mellea-integration-core = { path = "../mellea-integration-core" }
