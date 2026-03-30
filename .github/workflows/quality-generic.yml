@@ -44,7 +44,13 @@ jobs:
         if: ${{ !inputs.skip_ollama }}
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
           nohup ollama serve &
+      - name: Pull model granite4:micro (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
           ollama pull granite4:micro
 
       - name: Install dependencies and run tests
