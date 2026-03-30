@@ -5,15 +5,18 @@ on:
     paths:
       - 'mellea_contribs/tools_package/**'
       - '.github/workflows/ci-tools-package.yml'
-      - '.github/workflows/quality-tools-package.yml'
+      - '.github/workflows/quality-generic.yml'
   push:
     branches:
       - main
     paths:
       - 'mellea_contribs/tools_package/**'
       - '.github/workflows/ci-tools-package.yml'
-      - '.github/workflows/quality-tools-package.yml'
+      - '.github/workflows/quality-generic.yml'
 
 jobs:
   test:
-    uses: ./.github/workflows/quality-tools-package.yml
+    uses: ./.github/workflows/quality-generic.yml
+    with:
+      subpackage: mellea_contribs/tools_package
+      skip_ollama: true

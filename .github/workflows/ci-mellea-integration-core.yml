@@ -5,16 +5,19 @@ on:
     paths:
       - 'mellea_contribs/mellea-integration-core/**'
       - '.github/workflows/ci-mellea-integration-core.yml'
-      - '.github/workflows/quality-mellea-integration-core.yml'
+      - '.github/workflows/quality-generic.yml'
   push:
     branches:
       - main
     paths:
       - 'mellea_contribs/mellea-integration-core/**'
       - '.github/workflows/ci-mellea-integration-core.yml'
-      - '.github/workflows/quality-mellea-integration-core.yml'
+      - '.github/workflows/quality-generic.yml'
 
 jobs:
   test:
-    uses: ./.github/workflows/quality-mellea-integration-core.yml
+    uses: ./.github/workflows/quality-generic.yml
+    with:
+      subpackage: mellea_contribs/mellea-integration-core
+      skip_ollama: true
 

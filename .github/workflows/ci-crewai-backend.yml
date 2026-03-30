@@ -5,16 +5,19 @@ on:
     paths:
       - 'mellea_contribs/crewai_backend/**'
       - '.github/workflows/ci-crewai-backend.yml'
-      - '.github/workflows/quality-crewai-backend.yml'
+      - '.github/workflows/quality-generic.yml'
   push:
     branches:
       - main
     paths:
       - 'mellea_contribs/crewai_backend/**'
       - '.github/workflows/ci-crewai-backend.yml'
-      - '.github/workflows/quality-crewai-backend.yml'
+      - '.github/workflows/quality-generic.yml'
 
 jobs:
   test:
-    uses: ./.github/workflows/quality-crewai-backend.yml
+    uses: ./.github/workflows/quality-generic.yml
+    with:
+      subpackage: mellea_contribs/crewai_backend
+      timeout_minutes: 90
 
