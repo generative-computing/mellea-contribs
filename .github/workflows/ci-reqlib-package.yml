@@ -5,15 +5,18 @@ on:
     paths:
       - 'mellea_contribs/reqlib_package/**'
       - '.github/workflows/ci-reqlib-package.yml'
-      - '.github/workflows/quality-reqlib-package.yml'
+      - '.github/workflows/quality-generic.yml'
   push:
     branches:
       - main
     paths:
       - 'mellea_contribs/reqlib_package/**'
       - '.github/workflows/ci-reqlib-package.yml'
-      - '.github/workflows/quality-reqlib-package.yml'
+      - '.github/workflows/quality-generic.yml'
 
 jobs:
   test:
-    uses: ./.github/workflows/quality-reqlib-package.yml
+    uses: ./.github/workflows/quality-generic.yml
+    with:
+      subpackage: mellea_contribs/reqlib_package
+      skip_ollama: true
