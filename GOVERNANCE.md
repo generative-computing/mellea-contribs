@@ -8,17 +8,6 @@ This document defines how packages are structured and maintained, who has author
 
 ## Packages
 
-### Current Packages
-
-| Package | Path | Maintainer(s) |
-|---|---|---|
-| Integration Core | `mellea_contribs/mellea-integration-core/` | <!-- TODO --> |
-| LangChain Integration | `mellea_contribs/langchain_backend/` | <!-- TODO --> |
-| DSPy Integration | `mellea_contribs/dspy_backend/` | <!-- TODO --> |
-| CrewAI Integration | `mellea_contribs/crewai_backend/` | <!-- TODO --> |
-| Requirements Library | `mellea_contribs/reqlib_package/` | <!-- TODO --> |
-| Tools | `mellea_contribs/tools_package/` | <!-- TODO --> |
-
 ### Package Requirements
 
 Every package in the repository must meet the following standards:
@@ -139,6 +128,14 @@ Pull requests require the following before merging:
 4. **No unresolved "request changes" reviews**
 
 For pull requests that span multiple packages, approval is required from a maintainer of each affected package (or a core team member).
+
+### Contributor Responsibility
+
+When a PR is accepted, the maintainers inherit both an asset and a liability: the new functionality is (hopefully) an asset, but the code and documentation required to support it are ongoing liabilities. Reviewers invest real time reading and understanding every PR.
+
+Contributors are responsible for every line they submit. Do not ask others to read and maintain code or documentation that you have not taken the time to read, understand, and refine yourself. This applies regardless of how the code was produced — whether written by hand or generated with AI tools.
+
+**Use of AI tools:** We neither prohibit nor discourage the use of AI coding assistants. However, AI-generated code is not exempt from this standard. If you use AI tools to produce code or documentation, you are expected to review, understand, and take full ownership of the output before submitting it for review. The reviewer's time is not the place to discover what the AI wrote on your behalf.
 
 ## Roles
 
