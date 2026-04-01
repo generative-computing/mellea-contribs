@@ -14,7 +14,7 @@ Every package in the repository must meet the following standards:
 
 - **`pyproject.toml`** — Each package is a self-contained Python project with its own `pyproject.toml` defining dependencies, metadata, and tool configuration.
 - **Tests** — Each package must include a `tests/` (or `test/`) directory with at least one test module. All tests must be runnable via `pytest`. See [Testing](#testing) for details.
-- **CI workflow** — Each package must have a CI workflow file (`.github/workflows/ci-<package-name>.yml`) that calls the shared `quality-generic.yml` reusable workflow. A validation workflow automatically checks that every subpackage has both a CI workflow and a test directory.
+- **CI** — Packages do not need their own CI workflow files. The repository-level CI workflows automatically discover updated packages and run quality checks (linting, type checking, tests) against them.
 - **Documentation** — Each package must include a README with usage documentation. Packages may also include a CONTRIBUTING.md if their contribution workflow has package-specific requirements.
 - **License** — Each package must use a license compatible with the project (Apache 2.0 preferred).
 
@@ -55,7 +55,7 @@ The core team retains override authority on any decision and may intervene when:
 Maintainers are expected to keep their packages in good working order. This means:
 
 - **CI stays green** — Tests should be passing on the main branch. Flaky or broken tests should be addressed promptly, not left failing.
-- **Dependencies stay current** — Packages should remain compatible with supported versions of Mellea core and their framework dependencies. When Mellea core releases a new version, maintainers should verify compatibility and update as needed.
+- **Dependencies stay current** — Packages must specify minimum and maximum compatible versions of Mellea core in their `pyproject.toml` (e.g., `mellea>=0.5.0,<0.7.0`). When Mellea core releases a new version, maintainers should verify compatibility and update these bounds as needed. Packages that fall too far behind supported Mellea versions may be candidates for deprecation or removal.
 - **Python version support** — Packages should support the Python versions tested in CI (currently 3.11, 3.12, and 3.13). When the project adds or drops Python versions, maintainers should update accordingly.
 - **Documentation stays accurate** — READMEs and usage docs should reflect the current state of the package. Outdated documentation is a maintenance issue.
 - **Security issues are addressed** — Dependabot alerts, reported vulnerabilities, and security-related issues should be treated as high priority.
@@ -91,6 +91,26 @@ A package may be retired by the core team if:
 
 Retired packages will be removed from the repository. The core team will make reasonable efforts to notify users and provide a migration path before removal.
 
+### Promotion to Mellea Core
+
+Packages that prove their value in `mellea-contribs` may be promoted directly into Mellea core. Promotion is not automatic — it is a recognition that a package has become essential to the ecosystem.
+
+#### Criteria
+
+The core team will consider factors such as:
+
+- **Stability** — How long the package has been in the repository and its track record of passing CI.
+- **Community adoption** — Evidence of real-world usage, such as downloads, issues filed by users, or adoption by other packages.
+- **Active maintenance** — Whether the maintainer is responsive and keeps the package up to date.
+- **Test coverage and documentation** — The overall quality and completeness of the package's test suite and docs.
+
+#### Process
+
+1. **Open a GitHub Discussion** — Anyone (maintainer, user, or core team member) can propose a package for promotion by opening a discussion in the repository.
+2. **Community input** — The discussion should remain open for a reasonable period to gather feedback from maintainers, users, and the core team.
+3. **Core team decision** — The core team reviews the proposal against the criteria above and makes a final decision.
+4. **Migration** — If approved, the core team coordinates with the package maintainer to migrate the package into Mellea core.
+
 ## Testing
 
 Every package is required to have its own test suite. This section describes project-wide testing conventions; individual packages may layer on additional requirements.
@@ -107,16 +127,6 @@ Every package is required to have its own test suite. This section describes pro
 - **Integration tests** — Tests that require external services (LLM providers, Ollama, APIs) should be placed in a `tests/integration/` subdirectory or marked with `@pytest.mark.integration`. Integration tests are excluded from CI by default (`--ignore=tests/integration`).
 - **Async support** — Use `asyncio_mode = "auto"` in `pyproject.toml` so async tests do not need explicit `@pytest.mark.asyncio` decorators.
 - **Custom markers** — Packages that define custom pytest markers (e.g., `qualitative`, `slow`, `requires_api_key`) should document them in their `pyproject.toml` under `[tool.pytest.ini_options]`.
-
-### How CI Runs Tests
-
-Each package's CI workflow passes the package path to the shared `quality-generic.yml` workflow, which:
-
-1. Sets up the Python matrix (3.11, 3.12, 3.13 by default)
-2. Installs the package's dependencies via `uv sync --dev`
-3. Runs `pytest -v tests/ --ignore=tests/integration` (or `test/`)
-
-Packages that need Ollama or other services for unit tests can configure this through workflow inputs. See the existing CI workflows for examples.
 
 ## Merge Policy
 
