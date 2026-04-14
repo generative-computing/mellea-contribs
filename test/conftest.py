@@ -11,8 +11,17 @@ def gh_run() -> int:
 
 
 def pytest_runtest_setup(item):
-    """Skip qualitative tests when running in CI environment."""
-    # Allow tests *not* marked with `@pytest.mark.qualitative` to run normally.
+    """Skip qualitative and neo4j tests when appropriate."""
+    # Handle neo4j marker - skip if NEO4J_URI not set
+    if item.get_closest_marker("neo4j"):
+        if not os.environ.get("NEO4J_URI"):
+            pytest.skip(
+                reason="Skipping neo4j test: NEO4J_URI environment variable not set. "
+                "Set NEO4J_URI to enable Neo4j integration tests."
+            )
+        return
+
+    # Handle qualitative marker - skip if in CI
     if not item.get_closest_marker("qualitative"):
         return
 
