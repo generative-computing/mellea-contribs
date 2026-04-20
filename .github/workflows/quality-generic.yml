@@ -54,8 +54,10 @@ jobs:
           ollama pull granite4:micro
 
       - name: Install dependencies and run tests
+        env:
+          SUBPACKAGE: ${{ inputs.subpackage }}
         run: |
-          cd ${{ inputs.subpackage }}
+          cd "$SUBPACKAGE"
           if ! command -v uv &> /dev/null; then
             echo "Installing uv..."
             pip install uv
