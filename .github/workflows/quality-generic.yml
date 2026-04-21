@@ -1,0 +1,80 @@
+name: Quality - Generic Subpackage
+
+on:
+  workflow_call:
+    inputs:
+      subpackage:
+        required: true
+        type: string
+        description: "Path to subpackage (e.g., mellea_contribs/dspy_backend)"
+      python_versions:
+        required: false
+        type: string
+        description: "JSON array of Python versions (default: [\"3.11\", \"3.12\", \"3.13\"])"
+      timeout_minutes:
+        required: false
+        type: number
+        description: "Job timeout in minutes (default: 30)"
+      skip_ollama:
+        required: false
+        type: boolean
+        description: "Skip Ollama setup (default: false)"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref_name }}-${{ inputs.subpackage }}
+  cancel-in-progress: true
+
+env:
+  CICD: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes || 30 }}
+    env:
+      SUBPACKAGE: ${{ inputs.subpackage }}
+    strategy:
+      matrix:
+        python-version: ${{ fromJson(inputs.python_versions || '["3.11", "3.12", "3.13"]') }}
+      max-parallel: 1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Ollama (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+      - name: Start serving ollama (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
+          nohup ollama serve &
+      - name: Pull model granite4:micro (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
+          ollama pull granite4:micro
+
+      - name: Install dependencies and run tests
+        run: |
+          cd "$SUBPACKAGE"
+          if ! command -v uv &> /dev/null; then
+            echo "Installing uv..."
+            pip install uv
+          fi
+          echo "Setting up virtual environment and installing dependencies..."
+          uv sync --all-extras
+          echo "Running tests..."
+          # Try multiple patterns to support both tests/ and test/ directories
+          if [ -d "tests" ]; then
+            uv run -- pytest -v tests/ --ignore=tests/integration
+          elif [ -d "test" ]; then
+            uv run -- pytest -v test/ --ignore=test/integration
+          else
+            echo "Error: No tests/ or test/ directory found"
+            exit 1
+          fi
+
+      - name: Send failure message
+        if: failure()
+        run: echo "Tests failed for $SUBPACKAGE. Please verify that tests are working locally."
