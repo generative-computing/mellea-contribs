@@ -77,4 +77,4 @@ jobs:
 
       - name: Send failure message
         if: failure()
-        run: echo "Tests failed for ${{ inputs.subpackage }}. Please verify that tests are working locally."
+        run: echo "Tests failed for $SUBPACKAGE. Please verify that tests are working locally."
