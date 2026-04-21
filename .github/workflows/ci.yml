@@ -48,7 +48,7 @@ jobs:
             CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRTU $BASE_REF HEAD | grep "^mellea_contribs/" || true)
 
             # Extract unique subpackage directories that changed
-            CHANGED_SUBPACKAGES=$(echo "$CHANGED_FILES" | grep -E '^mellea_contribs/[a-zA-Z0-9_-]+$' | sort -u || true)
+            CHANGED_SUBPACKAGES=$(echo "$CHANGED_FILES" | sed 's|^\(mellea_contribs/[^/]*\).*|\1|' | sort -u || true)
 
             if [ -z "$CHANGED_SUBPACKAGES" ]; then
               # If no subpackages changed, check if workflow files changed

@@ -31,6 +31,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes || 30 }}
+    env:
+      SUBPACKAGE: ${{ inputs.subpackage }}
     strategy:
       matrix:
         python-version: ${{ fromJson(inputs.python_versions || '["3.11", "3.12", "3.13"]') }}
@@ -54,8 +56,6 @@ jobs:
           ollama pull granite4:micro
 
       - name: Install dependencies and run tests
-        env:
-          SUBPACKAGE: ${{ inputs.subpackage }}
         run: |
           cd "$SUBPACKAGE"
           if ! command -v uv &> /dev/null; then
