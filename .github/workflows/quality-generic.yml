@@ -31,11 +31,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout_minutes || 30 }}
-<<<<<<< releaseci
-=======
     env:
       SUBPACKAGE: ${{ inputs.subpackage }}
->>>>>>> main
     strategy:
       matrix:
         python-version: ${{ fromJson(inputs.python_versions || '["3.11", "3.12", "3.13"]') }}
@@ -60,11 +57,7 @@ jobs:
 
       - name: Install dependencies and run tests
         run: |
-<<<<<<< releaseci
-          cd ${{ inputs.subpackage }}
-=======
           cd "$SUBPACKAGE"
->>>>>>> main
           if ! command -v uv &> /dev/null; then
             echo "Installing uv..."
             pip install uv
@@ -84,8 +77,4 @@ jobs:
 
       - name: Send failure message
         if: failure()
-<<<<<<< releaseci
-        run: echo "Tests failed for ${{ inputs.subpackage }}. Please verify that tests are working locally."
-=======
         run: echo "Tests failed for $SUBPACKAGE. Please verify that tests are working locally."
->>>>>>> main

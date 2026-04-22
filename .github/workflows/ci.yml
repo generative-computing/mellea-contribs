@@ -30,23 +30,6 @@ jobs:
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.sha }}"
           else
-<<<<<<< releaseci
-            BASE_REF="HEAD~1"
-          fi
-
-          # Get list of changed files (excluding deleted files) using status instead
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRTU $BASE_REF HEAD | grep "^mellea_contribs/" || true)
-
-          # Extract unique subpackage directories that changed
-          CHANGED_SUBPACKAGES=$(echo "$CHANGED_FILES" | grep -o "mellea_contribs/[^/]*" | sort -u || true)
-
-          if [ -z "$CHANGED_SUBPACKAGES" ]; then
-            # If no subpackages changed, check if workflow files changed
-            WORKFLOW_CHANGED=$(git diff --name-only $BASE_REF HEAD | grep -E "\.github/workflows/(ci\.yml|quality-generic\.yml)" || true)
-            if [ -n "$WORKFLOW_CHANGED" ]; then
-              # Test all subpackages if workflow changed
-              CHANGED_SUBPACKAGES=$(find mellea_contribs -maxdepth 1 -mindepth 1 -type d ! -name '__pycache__' ! -name '.pytest_cache' | sort)
-=======
             # Use github.event.before for push events (more reliable than HEAD~1)
             BASE_REF="${{ github.event.before }}"
             # Fallback to HEAD~1 if github.event.before is not available or is all zeros (initial commit)
@@ -74,7 +57,6 @@ jobs:
                 # Test all subpackages if workflow changed
                 CHANGED_SUBPACKAGES=$(find mellea_contribs -maxdepth 1 -mindepth 1 -type d ! -name '__pycache__' ! -name '.pytest_cache' | sort)
               fi
->>>>>>> main
             fi
           fi
 
