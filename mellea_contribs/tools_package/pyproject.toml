@@ -3,11 +3,7 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [project]
-<<<<<<< releaseci
 name = "mellea-tools"
-=======
-name = "mellea-contribs"
->>>>>>> main
 version = "0.0.1"
 authors = [
     { name = "Nathan Fulton", email = "nathan@ibm.com" },
