@@ -12,6 +12,9 @@ env:
   CICD: 1
 
 jobs:
+  # This job dynamically discovers packages by reading their pyproject.toml files.
+  # No need to modify this workflow when adding new packages - just ensure each
+  # package has a pyproject.toml with a [project] name field in mellea_contribs/.
   parse-tag:
     runs-on: ubuntu-latest
     outputs:
@@ -19,7 +22,16 @@ jobs:
       version: ${{ steps.parse.outputs.version }}
       package_dir: ${{ steps.parse.outputs.package_dir }}
     steps:
-      - name: Parse tag
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Python and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install toml
+      
+      - name: Parse tag and discover package
         id: parse
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
@@ -39,29 +51,42 @@ jobs:
           echo "Package name: $PACKAGE_NAME"
           echo "Version: $VERSION"
           
-          # Map package name to directory
-          case "$PACKAGE_NAME" in
-            "mellea-crewai")
-              PACKAGE_DIR="mellea_contribs/crewai_backend"
-              ;;
-            "mellea-dspy")
-              PACKAGE_DIR="mellea_contribs/dspy_backend"
-              ;;
-            "mellea-langchain")
-              PACKAGE_DIR="mellea_contribs/langchain_backend"
-              ;;
-            "mellea-reqlib")
-              PACKAGE_DIR="mellea_contribs/reqlib_package"
-              ;;
-            "mellea-tools")
-              PACKAGE_DIR="mellea_contribs/tools_package"
-              ;;
-            *)
-              echo "Error: Unknown package name '$PACKAGE_NAME'"
-              echo "Valid package names: mellea-crewai, mellea-dspy, mellea-langchain, mellea-reqlib, mellea-tools"
-              exit 1
-              ;;
-          esac
+          # Dynamically discover package directory by scanning pyproject.toml files
+          echo "Discovering packages in mellea_contribs/..."
+          PACKAGE_DIR=""
+          FOUND_PACKAGES=""
+          
+          for dir in mellea_contribs/*/; do
+            if [ -f "${dir}pyproject.toml" ]; then
+              # Extract package name from pyproject.toml
+              PKG_NAME=$(python3 -c "
+import toml
+import sys
+try:
+    data = toml.load('${dir}pyproject.toml')
+    print(data.get('project', {}).get('name', ''))
+except Exception as e:
+    print('', file=sys.stderr)
+" 2>/dev/null)
+              
+              if [ -n "$PKG_NAME" ]; then
+                FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
+                if [ "$PKG_NAME" = "$PACKAGE_NAME" ]; then
+                  PACKAGE_DIR="${dir%/}"
+                  echo "Found matching package: $PKG_NAME in $PACKAGE_DIR"
+                fi
+              fi
+            fi
+          done
+          
+          # Validate that we found the package
+          if [ -z "$PACKAGE_DIR" ]; then
+            echo "Error: Package '$PACKAGE_NAME' not found in any pyproject.toml file"
+            echo ""
+            echo "Available packages:"
+            echo -e "$FOUND_PACKAGES"
+            exit 1
+          fi
           
           echo "Package directory: $PACKAGE_DIR"
           

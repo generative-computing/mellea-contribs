@@ -14,7 +14,9 @@ Each package in the `mellea_contribs` directory can be released independently by
 
 ## Package List
 
-The following packages can be released:
+Packages are automatically discovered from the `mellea_contribs/` directory by reading their `pyproject.toml` files. The package name is taken from the `[project] name` field in each `pyproject.toml`.
+
+**Current packages:**
 
 | Package Name | Directory | Description |
 |--------------|-----------|-------------|
@@ -23,6 +25,12 @@ The following packages can be released:
 | `mellea-langchain` | `mellea_contribs/langchain_backend` | LangChain integration for Mellea |
 | `mellea-reqlib` | `mellea_contribs/reqlib_package` | Requirements library utilities |
 | `mellea-tools` | `mellea_contribs/tools_package` | Additional tools and utilities |
+
+**Adding a new package:**
+To add a new package that can be released, simply:
+1. Create a directory under `mellea_contribs/`
+2. Add a `pyproject.toml` file with a `[project]` section containing a `name` field
+3. The package will be automatically discovered by the release workflow
 
 ## Release Steps
 
@@ -215,7 +223,8 @@ The release process uses two GitHub Actions workflows:
 
 1. **`release-package.yml`**: Main workflow triggered by tags
    - Parses the tag to extract package name and version
-   - Maps package name to directory
+   - **Dynamically discovers packages** by scanning `mellea_contribs/*/pyproject.toml` files
+   - Maps package name to directory automatically (no hardcoded list!)
    - Calls the build workflow
    - Creates GitHub release with artifacts
 
@@ -226,6 +235,16 @@ The release process uses two GitHub Actions workflows:
    - Runs tests
    - Builds wheel and source distribution
    - Uploads artifacts
+
+### Dynamic Package Discovery
+
+The release workflow automatically discovers packages by:
+1. Scanning all directories in `mellea_contribs/`
+2. Reading each `pyproject.toml` file
+3. Extracting the package name from `[project] name`
+4. Building a mapping of package names to directories
+
+This means **no workflow changes are needed when adding new packages** - just ensure your package has a valid `pyproject.toml` with a `[project] name` field.
 
 ## Best Practices
 

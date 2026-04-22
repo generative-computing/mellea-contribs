@@ -26,6 +26,8 @@ git push origin mellea-dspy/v0.2.0
 
 ## Package Names
 
+Packages are automatically discovered from `pyproject.toml` files. Current packages:
+
 | Package Name | Directory |
 |--------------|-----------|
 | `mellea-crewai` | `mellea_contribs/crewai_backend` |
@@ -33,6 +35,8 @@ git push origin mellea-dspy/v0.2.0
 | `mellea-langchain` | `mellea_contribs/langchain_backend` |
 | `mellea-reqlib` | `mellea_contribs/reqlib_package` |
 | `mellea-tools` | `mellea_contribs/tools_package` |
+
+> **Note:** To add a new package, just create a directory under `mellea_contribs/` with a `pyproject.toml` file containing a `[project] name` field. No workflow changes needed!
 
 ## Examples
 
