@@ -19,11 +19,7 @@ classifiers = [
 ]
 
 dependencies = [
-<<<<<<< releaseci
-    "mellea==0.3.2",
-=======
     "mellea>=0.3.2",
->>>>>>> main
 ]
 
 [project.optional-dependencies]
