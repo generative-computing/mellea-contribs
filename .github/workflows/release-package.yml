@@ -3,7 +3,11 @@ name: Release Package
 on:
   push:
     tags:
-      - '*/v*'
+      - 'mellea-*/v[0-9]*'
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write  # Required for creating releases
@@ -154,16 +158,16 @@ except Exception:
           if [ -n "$PREV_TAG" ]; then
             echo "## Changes since ${PREV_TAG#*/v}" >> "$CHANGELOG_FILE"
             echo "" >> "$CHANGELOG_FILE"
-            
+
             # Get commits affecting this package since previous tag
-            COMMIT_COUNT=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" -- "$PACKAGE_DIR" | tee -a "$CHANGELOG_FILE" | wc -l)
-            
+            COMMIT_COUNT=$(git log "${PREV_TAG}..${TAG}" --pretty=tformat:"- %s (%h)" -- "$PACKAGE_DIR" | tee -a "$CHANGELOG_FILE" | wc -l)
+
             # If no commits found in package dir, show all commits between tags
             if [ "$COMMIT_COUNT" -eq 0 ]; then
               echo "" >> "$CHANGELOG_FILE"
               echo "### All commits:" >> "$CHANGELOG_FILE"
               echo "" >> "$CHANGELOG_FILE"
-              git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" >> "$CHANGELOG_FILE" || true
+              git log "${PREV_TAG}..${TAG}" --pretty=tformat:"- %s (%h)" >> "$CHANGELOG_FILE" || true
             fi
           else
             echo "## Initial Release" >> "$CHANGELOG_FILE"
@@ -192,13 +196,14 @@ except Exception:
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
           CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
-        uses: softprops/action-gh-release@v2
+          IS_PRERELEASE: ${{ contains(needs.parse-tag.outputs.version, '-') }}
+        uses: softprops/action-gh-release@d4c34107f27a9a1f45b8ff00b3cb19b4cb6f6027
         with:
           tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
           name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
           body_path: ${{ env.CHANGELOG_FILE }}
           draft: false
-          prerelease: false
+          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
           files: |
             dist/*.whl
             dist/*.tar.gz

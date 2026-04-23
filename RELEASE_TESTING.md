@@ -150,7 +150,7 @@ Expected: ✅ Detects pdm-backend, builds successfully
 
 ### Scenario 6: Test Failures
 
-**Objective**: Verify workflow handles test failures gracefully
+**Objective**: Verify workflow handles test failures correctly
 
 **Steps**:
 1. Introduce a failing test in the package
@@ -161,11 +161,11 @@ Expected: ✅ Detects pdm-backend, builds successfully
 **Expected Results**:
 - ✅ Workflow triggers
 - ✅ Build succeeds
-- ⚠️ Tests run but fail
-- ⚠️ Warning is logged but build continues
-- ✅ Release is still created (tests are non-blocking)
+- ❌ Tests run and fail
+- ❌ Build step fails immediately
+- ❌ Release is not created (tests are blocking)
 
-**Note**: Tests are currently non-blocking to allow releases even if some tests fail. This can be changed by modifying the test step in `build-package.yml`.
+**Note**: Tests are blocking in `build-package.yml`. The release workflow will not proceed if any tests fail, ensuring only tested code is released.
 
 ---
 

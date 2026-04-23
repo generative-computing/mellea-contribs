@@ -71,7 +71,7 @@ mellea_contribs/
   - Requirements validation and sampling strategies
 - **Dependencies**: Multiple (see pyproject.toml for details)
 - **Python Version**: ≥3.11
-- **CI Requirements**: No Ollama needed (skip_ollama=true)
+- **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
 ### 6. **reqlib_package**
@@ -125,8 +125,8 @@ The CI pipeline looks for either `tests/` or `test/` directory. Integration test
 
 #### 4. **Ollama Setup (for backends)**
 Some subpackages require Ollama for testing:
-- **Skip Ollama**: `mellea-integration-core`, `reqlib_package`, `tools_package`
-- **Include Ollama**: `crewai_backend`, `dspy_backend`, `langchain_backend`
+- **Skip Ollama**: `mellea-integration-core`, `reqlib_package`
+- **Include Ollama**: `crewai_backend`, `dspy_backend`, `langchain_backend`, `tools_package`
 
 When Ollama is enabled:
 1. Ollama service is installed and started
