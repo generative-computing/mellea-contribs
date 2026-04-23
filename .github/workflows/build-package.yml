@@ -66,13 +66,7 @@ jobs:
           cd "$PACKAGE_DIR"
           
           # Extract version using Python's tomllib (Python 3.11+)
-          PYPROJECT_VERSION=$(python3 -c "
-import tomllib
-import sys
-with open('pyproject.toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('project', {}).get('version', ''))
-")
+          PYPROJECT_VERSION=$(python3 -c "import tomllib; import sys; f = open('pyproject.toml', 'rb'); data = tomllib.load(f); print(data.get('project', {}).get('version', ''))")
           
           echo "Version in pyproject.toml: $PYPROJECT_VERSION"
           echo "Version from tag: $TAG_VERSION"
@@ -92,12 +86,7 @@ print(data.get('project', {}).get('version', ''))
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |
           cd "$PACKAGE_DIR"
-          BUILD_BACKEND=$(python3 -c "
-import tomllib
-with open('pyproject.toml', 'rb') as f:
-    data = tomllib.load(f)
-print(data.get('build-system', {}).get('build-backend', ''))
-")
+          BUILD_BACKEND=$(python3 -c "import tomllib; f = open('pyproject.toml', 'rb'); data = tomllib.load(f); print(data.get('build-system', {}).get('build-backend', ''))")
           echo "Detected build backend: $BUILD_BACKEND"
           echo "build_backend=$BUILD_BACKEND" >> $GITHUB_OUTPUT
 
