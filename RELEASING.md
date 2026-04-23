@@ -22,6 +22,7 @@ Packages are automatically discovered from the `mellea_contribs/` directory by r
 |--------------|-----------|-------------|
 | `mellea-crewai` | `mellea_contribs/crewai_backend` | CrewAI integration for Mellea |
 | `mellea-dspy` | `mellea_contribs/dspy_backend` | DSPy integration for Mellea |
+| `mellea-integration-core` | `mellea_contribs/mellea-integration-core` | Core abstractions for Mellea framework integrations |
 | `mellea-langchain` | `mellea_contribs/langchain_backend` | LangChain integration for Mellea |
 | `mellea-reqlib` | `mellea_contribs/reqlib_package` | Requirements library utilities |
 | `mellea-tools` | `mellea_contribs/tools_package` | Additional tools and utilities |

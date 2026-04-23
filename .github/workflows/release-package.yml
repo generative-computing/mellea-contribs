@@ -25,22 +25,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Install Python and dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-pip
-          pip3 install toml
-      
       - name: Parse tag and discover package
         id: parse
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Full tag: $TAG"
           
-          # Validate tag format (package-name/vX.Y.Z)
-          if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-            echo "Error: Tag must be in format 'package-name/vX.Y.Z'"
-            echo "Example: mellea-dspy/v0.1.0"
+          # Validate tag format (package-name/vX.Y.Z with optional pre-release suffix)
+          if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Tag must be in format 'package-name/vX.Y.Z' or 'package-name/vX.Y.Z-prerelease'"
+            echo "Example: mellea-dspy/v0.1.0 or mellea-dspy/v0.1.0-beta.1"
             exit 1
           fi
           
@@ -58,16 +52,17 @@ jobs:
           
           for dir in mellea_contribs/*/; do
             if [ -f "${dir}pyproject.toml" ]; then
-              # Extract package name from pyproject.toml
+              # Extract package name from pyproject.toml using tomllib
               PKG_NAME=$(python3 -c "
-import toml
+import tomllib
 import sys
 try:
-    data = toml.load('${dir}pyproject.toml')
+    with open(sys.argv[1], 'rb') as f:
+        data = tomllib.load(f)
     print(data.get('project', {}).get('name', ''))
-except Exception as e:
-    print('', file=sys.stderr)
-" 2>/dev/null)
+except Exception:
+    pass
+" "${dir}pyproject.toml" 2>/dev/null)
               
               if [ -n "$PKG_NAME" ]; then
                 FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
@@ -113,18 +108,22 @@ except Exception as e:
           fetch-depth: 0  # Fetch all history for changelog generation
 
       - name: Download build artifacts
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.parse-tag.outputs.package_name }}-${{ needs.parse-tag.outputs.version }}-dist
+          name: ${{ env.PACKAGE_NAME }}-${{ env.VERSION }}-dist
           path: dist
 
       - name: Generate release notes
         id: release-notes
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+          PACKAGE_DIR: ${{ needs.parse-tag.outputs.package_dir }}
         run: |
-          TAG="${{ needs.parse-tag.outputs.package_name }}/v${{ needs.parse-tag.outputs.version }}"
-          PACKAGE_NAME="${{ needs.parse-tag.outputs.package_name }}"
-          VERSION="${{ needs.parse-tag.outputs.version }}"
-          PACKAGE_DIR="${{ needs.parse-tag.outputs.package_dir }}"
+          TAG="${PACKAGE_NAME}/v${VERSION}"
           
           # Find previous tag for this package
           PREV_TAG=$(git tag -l "${PACKAGE_NAME}/v*" --sort=-version:refname | grep -v "^${TAG}$" | head -n 1 || echo "")
@@ -157,10 +156,10 @@ except Exception as e:
             echo "" >> "$CHANGELOG_FILE"
             
             # Get commits affecting this package since previous tag
-            git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" -- "$PACKAGE_DIR" >> "$CHANGELOG_FILE" || true
+            COMMIT_COUNT=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"- %s (%h)" -- "$PACKAGE_DIR" | tee -a "$CHANGELOG_FILE" | wc -l)
             
             # If no commits found in package dir, show all commits between tags
-            if [ ! -s "$CHANGELOG_FILE" ] || [ $(wc -l < "$CHANGELOG_FILE") -lt 10 ]; then
+            if [ "$COMMIT_COUNT" -eq 0 ]; then
               echo "" >> "$CHANGELOG_FILE"
               echo "### All commits:" >> "$CHANGELOG_FILE"
               echo "" >> "$CHANGELOG_FILE"
@@ -189,11 +188,15 @@ except Exception as e:
           cat SHA256SUMS
 
       - name: Create GitHub Release
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+          CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.parse-tag.outputs.package_name }}/v${{ needs.parse-tag.outputs.version }}
-          name: ${{ needs.parse-tag.outputs.package_name }} v${{ needs.parse-tag.outputs.version }}
-          body_path: ${{ steps.release-notes.outputs.changelog_file }}
+          tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
+          name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
+          body_path: ${{ env.CHANGELOG_FILE }}
           draft: false
           prerelease: false
           files: |
@@ -203,21 +206,22 @@ except Exception as e:
           fail_on_unmatched_files: true
 
       - name: Release summary
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
         run: |
           echo "## Release Created Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package:** ${{ needs.parse-tag.outputs.package_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.parse-tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${{ needs.parse-tag.outputs.package_name }}/v${{ needs.parse-tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Package:** $PACKAGE_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${PACKAGE_NAME}/v${VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Installation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ needs.parse-tag.outputs.package_name }}/v${{ needs.parse-tag.outputs.version }}/${{ needs.parse-tag.outputs.package_name }}-${{ needs.parse-tag.outputs.version }}-py3-none-any.whl" >> $GITHUB_STEP_SUMMARY
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           ls -lh dist/ >> $GITHUB_STEP_SUMMARY
-
-# Made with Bob
