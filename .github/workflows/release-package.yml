@@ -57,16 +57,7 @@ jobs:
           for dir in mellea_contribs/*/; do
             if [ -f "${dir}pyproject.toml" ]; then
               # Extract package name from pyproject.toml using tomllib
-              PKG_NAME=$(python3 -c "
-import tomllib
-import sys
-try:
-    with open(sys.argv[1], 'rb') as f:
-        data = tomllib.load(f)
-    print(data.get('project', {}).get('name', ''))
-except Exception:
-    pass
-" "${dir}pyproject.toml" 2>/dev/null)
+              PKG_NAME=$(python3 -c "import tomllib; import sys; f = open(sys.argv[1], 'rb'); data = tomllib.load(f); print(data.get('project', {}).get('name', ''))" "${dir}pyproject.toml" 2>/dev/null || true)
               
               if [ -n "$PKG_NAME" ]; then
                 FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
