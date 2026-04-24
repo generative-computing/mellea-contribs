@@ -13,6 +13,8 @@ on:
       - 'mellea_contribs/**'
       - '.github/workflows/ci.yml'
       - '.github/workflows/quality-generic.yml'
+      - '.github/workflows/build-gackage.yml'
+      - '.github/workflows/release-gackage.yml'
 
 jobs:
   discover-subpackages:
