@@ -1,0 +1,222 @@
+name: Release Package
+
+on:
+  push:
+    tags:
+      - 'mellea-*/v[0-9]*'
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # Required for creating releases
+
+env:
+  CICD: 1
+
+jobs:
+  # This job dynamically discovers packages by reading their pyproject.toml files.
+  # No need to modify this workflow when adding new packages - just ensure each
+  # package has a pyproject.toml with a [project] name field in mellea_contribs/.
+  parse-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.parse.outputs.package_name }}
+      version: ${{ steps.parse.outputs.version }}
+      package_dir: ${{ steps.parse.outputs.package_dir }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Parse tag and discover package
+        id: parse
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Full tag: $TAG"
+          
+          # Validate tag format (package-name/vX.Y.Z with optional pre-release suffix)
+          if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Tag must be in format 'package-name/vX.Y.Z' or 'package-name/vX.Y.Z-prerelease'"
+            echo "Example: mellea-dspy/v0.1.0 or mellea-dspy/v0.1.0-beta.1"
+            exit 1
+          fi
+          
+          # Extract package name and version
+          PACKAGE_NAME="${TAG%/v*}"
+          VERSION="${TAG#*/v}"
+          
+          echo "Package name: $PACKAGE_NAME"
+          echo "Version: $VERSION"
+          
+          # Dynamically discover package directory by scanning pyproject.toml files
+          echo "Discovering packages in mellea_contribs/..."
+          PACKAGE_DIR=""
+          FOUND_PACKAGES=""
+          
+          for dir in mellea_contribs/*/; do
+            if [ -f "${dir}pyproject.toml" ]; then
+              # Extract package name from pyproject.toml using tomllib
+              PKG_NAME=$(python3 -c "import tomllib; import sys; with open(sys.argv[1], 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('name', ''))" "${dir}pyproject.toml" 2>/dev/null || true)
+              
+              if [ -n "$PKG_NAME" ]; then
+                FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
+                if [ "$PKG_NAME" = "$PACKAGE_NAME" ]; then
+                  PACKAGE_DIR="${dir%/}"
+                  echo "Found matching package: $PKG_NAME in $PACKAGE_DIR"
+                fi
+              fi
+            fi
+          done
+          
+          # Validate that we found the package
+          if [ -z "$PACKAGE_DIR" ]; then
+            echo "Error: Package '$PACKAGE_NAME' not found in any pyproject.toml file"
+            echo ""
+            echo "Available packages:"
+            echo -e "$FOUND_PACKAGES"
+            exit 1
+          fi
+          
+          echo "Package directory: $PACKAGE_DIR"
+          
+          # Output for next jobs
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package_dir=$PACKAGE_DIR" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: parse-tag
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package_dir: ${{ needs.parse-tag.outputs.package_dir }}
+      package_name: ${{ needs.parse-tag.outputs.package_name }}
+      version: ${{ needs.parse-tag.outputs.version }}
+
+  create-release:
+    needs: [parse-tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Download build artifacts
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ env.VERSION }}-dist
+          path: dist
+
+      - name: Generate release notes
+        id: release-notes
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+          PACKAGE_DIR: ${{ needs.parse-tag.outputs.package_dir }}
+        run: |
+          TAG="${PACKAGE_NAME}/v${VERSION}"
+          
+          # Find previous tag for this package
+          PREV_TAG=$(git tag -l "${PACKAGE_NAME}/v*" --sort=-version:refname | grep -v "^${TAG}$" | head -n 1 || echo "")
+          
+          echo "Current tag: $TAG"
+          echo "Previous tag: $PREV_TAG"
+          
+          # Generate changelog
+          CHANGELOG_FILE="release_notes.md"
+          
+          echo "# Release Notes for ${PACKAGE_NAME} v${VERSION}" > "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "## Installation" >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "Download the wheel file from the assets below and install with pip:" >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo '```bash' >> "$CHANGELOG_FILE"
+          echo "pip install ${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
+          echo '```' >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "Or install directly from the release:" >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo '```bash' >> "$CHANGELOG_FILE"
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
+          echo '```' >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since ${PREV_TAG#*/v}" >> "$CHANGELOG_FILE"
+            echo "" >> "$CHANGELOG_FILE"
+
+            # Get commits affecting this package since previous tag
+            COMMIT_COUNT=$(git log "${PREV_TAG}..${TAG}" --pretty=tformat:"- %s (%h)" -- "$PACKAGE_DIR" | tee -a "$CHANGELOG_FILE" | wc -l)
+
+            # If no commits found in package dir, show all commits between tags
+            if [ "$COMMIT_COUNT" -eq 0 ]; then
+              echo "" >> "$CHANGELOG_FILE"
+              echo "### All commits:" >> "$CHANGELOG_FILE"
+              echo "" >> "$CHANGELOG_FILE"
+              git log "${PREV_TAG}..${TAG}" --pretty=tformat:"- %s (%h)" >> "$CHANGELOG_FILE" || true
+            fi
+          else
+            echo "## Initial Release" >> "$CHANGELOG_FILE"
+            echo "" >> "$CHANGELOG_FILE"
+            echo "This is the first release of ${PACKAGE_NAME}." >> "$CHANGELOG_FILE"
+          fi
+          
+          echo "" >> "$CHANGELOG_FILE"
+          echo "## Package Contents" >> "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          echo "This release includes:" >> "$CHANGELOG_FILE"
+          echo "- Wheel distribution (.whl)" >> "$CHANGELOG_FILE"
+          echo "- Source distribution (.tar.gz)" >> "$CHANGELOG_FILE"
+          
+          cat "$CHANGELOG_FILE"
+          echo "changelog_file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+          CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
+        uses: softprops/action-gh-release@d4c34107f27a9a1f45b8ff00b3cb19b4cb6f6027
+        with:
+          tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
+          name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
+          body_path: ${{ env.CHANGELOG_FILE }}
+          draft: false
+          prerelease: ${{ contains(needs.parse-tag.outputs.version, '-') }}
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
+
+      - name: Release summary
+        env:
+          PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
+          VERSION: ${{ needs.parse-tag.outputs.version }}
+        run: |
+          echo "## Release Created Successfully! 🎉" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Package:** $PACKAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** ${PACKAGE_NAME}/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Installation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Artifacts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh dist/ >> "$GITHUB_STEP_SUMMARY"

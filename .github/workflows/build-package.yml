@@ -1,0 +1,168 @@
+name: Build Package
+
+on:
+  workflow_call:
+    inputs:
+      package_dir:
+        required: true
+        type: string
+        description: "Directory path of the package to build (e.g., mellea_contribs/dspy_backend)"
+      package_name:
+        required: true
+        type: string
+        description: "Name of the package (e.g., mellea-dspy)"
+      version:
+        required: true
+        type: string
+        description: "Version to build (e.g., 0.1.0)"
+      python_version:
+        required: false
+        type: string
+        default: "3.12"
+        description: "Python version to use for building"
+    outputs:
+      wheel_path:
+        description: "Path to the built wheel file"
+        value: ${{ jobs.build.outputs.wheel_path }}
+      sdist_path:
+        description: "Path to the built source distribution"
+        value: ${{ jobs.build.outputs.sdist_path }}
+
+env:
+  CICD: 1
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      wheel_path: ${{ steps.find-artifacts.outputs.wheel_path }}
+      sdist_path: ${{ steps.find-artifacts.outputs.sdist_path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate package directory exists
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          if [ ! -d "$PACKAGE_DIR" ]; then
+            echo "Error: Package directory '$PACKAGE_DIR' does not exist"
+            exit 1
+          fi
+          if [ ! -f "$PACKAGE_DIR/pyproject.toml" ]; then
+            echo "Error: pyproject.toml not found in '$PACKAGE_DIR'"
+            exit 1
+          fi
+
+      - name: Extract and validate version from pyproject.toml
+        id: validate-version
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+          TAG_VERSION: ${{ inputs.version }}
+        run: |
+          cd "$PACKAGE_DIR"
+          
+          # Extract version using Python's tomllib (Python 3.11+)
+          PYPROJECT_VERSION=$(python3 -c "import tomllib; import sys; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('version', ''))")
+          
+          echo "Version in pyproject.toml: $PYPROJECT_VERSION"
+          echo "Version from tag: $TAG_VERSION"
+          
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Version mismatch!"
+            echo "  pyproject.toml version: $PYPROJECT_VERSION"
+            echo "  Tag version: $TAG_VERSION"
+            exit 1
+          fi
+          
+          echo "version=$PYPROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Detect build system
+        id: detect-build-system
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          cd "$PACKAGE_DIR"
+          BUILD_BACKEND=$(python3 -c "import tomllib; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('build-system', {}).get('build-backend', ''))")
+          echo "Detected build backend: $BUILD_BACKEND"
+          echo "build_backend=$BUILD_BACKEND" >> "$GITHUB_OUTPUT"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          enable-cache: true
+
+      - name: Install dependencies and build
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+          BUILD_BACKEND: ${{ steps.detect-build-system.outputs.build_backend }}
+        run: |
+          cd "$PACKAGE_DIR"
+          echo "Building with $BUILD_BACKEND..."
+          uv sync --all-extras
+          uv build
+
+      - name: Run tests
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          cd "$PACKAGE_DIR"
+          echo "Running tests..."
+          
+          # Determine test directory (tests/ or test/)
+          if [ -d "tests" ]; then
+            TEST_DIR="tests"
+          elif [ -d "test" ]; then
+            TEST_DIR="test"
+          else
+            echo "Warning: No tests/ or test/ directory found, skipping tests"
+            exit 0
+          fi
+          
+          # Run tests, excluding integration tests - fail if tests fail
+          uv run -- pytest -v "$TEST_DIR/" --ignore="$TEST_DIR/integration"
+
+      - name: Find built artifacts
+        id: find-artifacts
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          cd "$PACKAGE_DIR"
+          
+          # Find wheel file
+          WHEEL_FILE=$(find dist -name "*.whl" -type f | head -n 1)
+          if [ -z "$WHEEL_FILE" ]; then
+            echo "Error: No wheel file found in dist/"
+            exit 1
+          fi
+          
+          # Find source distribution
+          SDIST_FILE=$(find dist -name "*.tar.gz" -type f | head -n 1)
+          if [ -z "$SDIST_FILE" ]; then
+            echo "Error: No source distribution found in dist/"
+            exit 1
+          fi
+          
+          echo "Found wheel: $WHEEL_FILE"
+          echo "Found sdist: $SDIST_FILE"
+          
+          # Output full paths
+          echo "wheel_path=$PACKAGE_DIR/$WHEEL_FILE" >> "$GITHUB_OUTPUT"
+          echo "sdist_path=$PACKAGE_DIR/$SDIST_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          VERSION: ${{ inputs.version }}
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ env.VERSION }}-dist
+          path: |
+            ${{ env.PACKAGE_DIR }}/dist/*.whl
+            ${{ env.PACKAGE_DIR }}/dist/*.tar.gz
+          retention-days: 7
