@@ -36,59 +36,7 @@ jobs:
 
       - name: Parse tag and discover package
         id: parse
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          echo "Full tag: $TAG"
-
-          # Validate tag format (package-name/vX.Y.Z with optional pre-release suffix)
-          if [[ ! "$TAG" =~ ^[a-z0-9-]+/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "Error: Tag must be in format 'package-name/vX.Y.Z' or 'package-name/vX.Y.Z-prerelease'"
-            echo "Example: mellea-dspy/v0.1.0 or mellea-dspy/v0.1.0-beta.1"
-            exit 1
-          fi
-
-          # Extract package name and version
-          PACKAGE_NAME="${TAG%/v*}"
-          VERSION="${TAG#*/v}"
-
-          echo "Package name: $PACKAGE_NAME"
-          echo "Version: $VERSION"
-
-          # Dynamically discover package directory by scanning pyproject.toml files
-          echo "Discovering packages in mellea_contribs/..."
-          PACKAGE_DIR=""
-          FOUND_PACKAGES=""
-
-          for dir in mellea_contribs/*/; do
-            if [ -f "${dir}pyproject.toml" ]; then
-              # Extract package name from pyproject.toml using tomllib
-              PKG_NAME=$(python3 -c "import tomllib; import sys; with open(sys.argv[1], 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('name', ''))" "${dir}pyproject.toml" 2>/dev/null || true)
-
-              if [ -n "$PKG_NAME" ]; then
-                FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
-                if [ "$PKG_NAME" = "$PACKAGE_NAME" ]; then
-                  PACKAGE_DIR="${dir%/}"
-                  echo "Found matching package: $PKG_NAME in $PACKAGE_DIR"
-                fi
-              fi
-            fi
-          done
-
-          # Validate that we found the package
-          if [ -z "$PACKAGE_DIR" ]; then
-            echo "Error: Package '$PACKAGE_NAME' not found in any pyproject.toml file"
-            echo ""
-            echo "Available packages:"
-            echo -e "$FOUND_PACKAGES"
-            exit 1
-          fi
-
-          echo "Package directory: $PACKAGE_DIR"
-
-          # Output for next jobs
-          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "package_dir=$PACKAGE_DIR" >> "$GITHUB_OUTPUT"
+        run: python3 .github/scripts/parse_release_tag.py
 
   build:
     needs: parse-tag
