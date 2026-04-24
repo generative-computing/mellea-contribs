@@ -41,8 +41,8 @@ def main():
         tag_version = sys.argv[2]
         pyproject_version = extract_version(toml_path)
 
-        print(f"Version in pyproject.toml: {pyproject_version}")
-        print(f"Version from tag: {tag_version}")
+        print(f"Version in pyproject.toml: {pyproject_version}", file=sys.stderr)
+        print(f"Version from tag: {tag_version}", file=sys.stderr)
 
         if pyproject_version != tag_version:
             print("Error: Version mismatch!", file=sys.stderr)
@@ -54,7 +54,7 @@ def main():
 
     elif action == 'backend':
         build_backend = extract_build_backend(toml_path)
-        print(f"Detected build backend: {build_backend}")
+        print(f"Detected build backend: {build_backend}", file=sys.stderr)
         print(f"build_backend={build_backend}")
 
     else:
