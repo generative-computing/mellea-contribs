@@ -57,7 +57,7 @@ jobs:
           for dir in mellea_contribs/*/; do
             if [ -f "${dir}pyproject.toml" ]; then
               # Extract package name from pyproject.toml using tomllib
-              PKG_NAME=$(python3 -c "import tomllib; import sys; f = open(sys.argv[1], 'rb'); data = tomllib.load(f); print(data.get('project', {}).get('name', ''))" "${dir}pyproject.toml" 2>/dev/null || true)
+              PKG_NAME=$(python3 -c "import tomllib; import sys; with open(sys.argv[1], 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('name', ''))" "${dir}pyproject.toml" 2>/dev/null || true)
               
               if [ -n "$PKG_NAME" ]; then
                 FOUND_PACKAGES="${FOUND_PACKAGES}  - ${PKG_NAME} -> ${dir%/}\n"
@@ -81,9 +81,9 @@ jobs:
           echo "Package directory: $PACKAGE_DIR"
           
           # Output for next jobs
-          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "package_dir=$PACKAGE_DIR" >> $GITHUB_OUTPUT
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package_dir=$PACKAGE_DIR" >> "$GITHUB_OUTPUT"
 
   build:
     needs: parse-tag
@@ -174,7 +174,7 @@ jobs:
           echo "- Source distribution (.tar.gz)" >> "$CHANGELOG_FILE"
           
           cat "$CHANGELOG_FILE"
-          echo "changelog_file=$CHANGELOG_FILE" >> $GITHUB_OUTPUT
+          echo "changelog_file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Calculate checksums
         run: |
@@ -187,14 +187,13 @@ jobs:
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
           CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
-          IS_PRERELEASE: ${{ contains(needs.parse-tag.outputs.version, '-') }}
         uses: softprops/action-gh-release@d4c34107f27a9a1f45b8ff00b3cb19b4cb6f6027
         with:
           tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
           name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
           body_path: ${{ env.CHANGELOG_FILE }}
           draft: false
-          prerelease: ${{ env.IS_PRERELEASE == 'true' }}
+          prerelease: ${{ contains(needs.parse-tag.outputs.version, '-') }}
           files: |
             dist/*.whl
             dist/*.tar.gz
@@ -206,18 +205,18 @@ jobs:
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
         run: |
-          echo "## Release Created Successfully! 🎉" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package:** $PACKAGE_NAME" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** ${PACKAGE_NAME}/v${VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Installation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          ls -lh dist/ >> $GITHUB_STEP_SUMMARY
+          echo "## Release Created Successfully! 🎉" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Package:** $PACKAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Tag:** ${PACKAGE_NAME}/v${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Installation" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Artifacts" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh dist/ >> "$GITHUB_STEP_SUMMARY"

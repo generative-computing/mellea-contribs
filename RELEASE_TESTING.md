@@ -294,7 +294,7 @@ echo "Package: $PACKAGE_NAME, Version: $VERSION"
 
 # Test version extraction from pyproject.toml
 cd mellea_contribs/dspy_backend
-grep -E '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/'
+python3 -c "import tomllib; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('version', ''))"
 
 # Test build locally
 cd mellea_contribs/dspy_backend
