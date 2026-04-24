@@ -64,21 +64,7 @@ jobs:
           TAG_VERSION: ${{ inputs.version }}
         run: |
           cd "$PACKAGE_DIR"
-          
-          # Extract version using Python's tomllib (Python 3.11+)
-          PYPROJECT_VERSION=$(python3 -c "import tomllib; import sys; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('version', ''))")
-          
-          echo "Version in pyproject.toml: $PYPROJECT_VERSION"
-          echo "Version from tag: $TAG_VERSION"
-          
-          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Version mismatch!"
-            echo "  pyproject.toml version: $PYPROJECT_VERSION"
-            echo "  Tag version: $TAG_VERSION"
-            exit 1
-          fi
-          
-          echo "version=$PYPROJECT_VERSION" >> "$GITHUB_OUTPUT"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" version "$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Detect build system
         id: detect-build-system
@@ -86,9 +72,7 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |
           cd "$PACKAGE_DIR"
-          BUILD_BACKEND=$(python3 -c "import tomllib; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('build-system', {}).get('build-backend', ''))")
-          echo "Detected build backend: $BUILD_BACKEND"
-          echo "build_backend=$BUILD_BACKEND" >> "$GITHUB_OUTPUT"
+          python3 "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" backend >> "$GITHUB_OUTPUT"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
