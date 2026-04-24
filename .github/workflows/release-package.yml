@@ -140,7 +140,7 @@ jobs:
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
           CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
-        uses: softprops/action-gh-release@d4c34107f27a9a1f45b8ff00b3cb19b4cb6f6027
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
           name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
