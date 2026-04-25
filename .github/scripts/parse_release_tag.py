@@ -18,7 +18,7 @@ def main():
 
     # Extract package name and version
     package_name = tag.split("/v")[0]
-    version = tag.split("/v")[1]
+    version = tag.split("/v",1)[1]
 
     print(f"Package name: {package_name}")
     print(f"Version: {version}")

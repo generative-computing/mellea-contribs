@@ -44,6 +44,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          enable-cache: true
+
       - name: Validate package directory exists
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
@@ -64,7 +70,7 @@ jobs:
           TAG_VERSION: ${{ inputs.version }}
         run: |
           cd "$PACKAGE_DIR"
-          python3 "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" version "$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" version "$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Detect build system
         id: detect-build-system
@@ -72,13 +78,7 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |
           cd "$PACKAGE_DIR"
-          python3 "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" backend >> "$GITHUB_OUTPUT"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ inputs.python_version }}
-          enable-cache: true
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" backend >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies and build
         env:
