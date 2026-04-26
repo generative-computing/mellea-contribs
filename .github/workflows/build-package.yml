@@ -80,6 +80,39 @@ jobs:
           cd "$PACKAGE_DIR"
           uv run python "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" backend >> "$GITHUB_OUTPUT"
 
+      - name: Determine if Ollama is needed
+        id: check-ollama
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          # Skip Ollama for packages that don't need it
+          if [[ "$PACKAGE_DIR" == *"mellea-integration-core"* ]] || [[ "$PACKAGE_DIR" == *"reqlib_package"* ]] || [[ "$PACKAGE_DIR" == *"tools_package"* ]]; then
+            echo "skip_ollama=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping Ollama setup for $PACKAGE_DIR"
+          else
+            echo "skip_ollama=false" >> "$GITHUB_OUTPUT"
+            echo "Ollama will be set up for $PACKAGE_DIR"
+          fi
+
+      - name: Free disk space
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Ollama
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start serving ollama
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          nohup ollama serve &
+
+      - name: Pull model granite4:micro
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          ollama pull granite4:micro
+
       - name: Install dependencies and build
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
