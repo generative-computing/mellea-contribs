@@ -44,6 +44,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          enable-cache: true
+
       - name: Validate package directory exists
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
@@ -64,21 +70,7 @@ jobs:
           TAG_VERSION: ${{ inputs.version }}
         run: |
           cd "$PACKAGE_DIR"
-          
-          # Extract version using Python's tomllib (Python 3.11+)
-          PYPROJECT_VERSION=$(python3 -c "import tomllib; import sys; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('project', {}).get('version', ''))")
-          
-          echo "Version in pyproject.toml: $PYPROJECT_VERSION"
-          echo "Version from tag: $TAG_VERSION"
-          
-          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Version mismatch!"
-            echo "  pyproject.toml version: $PYPROJECT_VERSION"
-            echo "  Tag version: $TAG_VERSION"
-            exit 1
-          fi
-          
-          echo "version=$PYPROJECT_VERSION" >> "$GITHUB_OUTPUT"
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" version "$TAG_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Detect build system
         id: detect-build-system
@@ -86,15 +78,40 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |
           cd "$PACKAGE_DIR"
-          BUILD_BACKEND=$(python3 -c "import tomllib; with open('pyproject.toml', 'rb') as f: data = tomllib.load(f); print(data.get('build-system', {}).get('build-backend', ''))")
-          echo "Detected build backend: $BUILD_BACKEND"
-          echo "build_backend=$BUILD_BACKEND" >> "$GITHUB_OUTPUT"
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/validate_build.py" backend >> "$GITHUB_OUTPUT"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ inputs.python_version }}
-          enable-cache: true
+      - name: Determine if Ollama is needed
+        id: check-ollama
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          # Skip Ollama for packages that don't need it
+          if [[ "$PACKAGE_DIR" == *"mellea-integration-core"* ]] || [[ "$PACKAGE_DIR" == *"reqlib_package"* ]] || [[ "$PACKAGE_DIR" == *"tools_package"* ]]; then
+            echo "skip_ollama=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping Ollama setup for $PACKAGE_DIR"
+          else
+            echo "skip_ollama=false" >> "$GITHUB_OUTPUT"
+            echo "Ollama will be set up for $PACKAGE_DIR"
+          fi
+
+      - name: Free disk space
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        uses: ./.github/actions/free-disk-space
+
+      - name: Install Ollama
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start serving ollama
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          nohup ollama serve &
+
+      - name: Pull model granite4:micro
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        run: |
+          ollama pull granite4:micro
 
       - name: Install dependencies and build
         env:
