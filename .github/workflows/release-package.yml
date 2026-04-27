@@ -72,12 +72,17 @@ jobs:
           PACKAGE_DIR: ${{ needs.parse-tag.outputs.package_dir }}
         run: |
           TAG="${PACKAGE_NAME}/v${VERSION}"
+
+          # Convert package name to wheel filename format (replace hyphens with underscores)
+          # This follows PEP 503 normalization for wheel filenames
+          WHEEL_NAME="${PACKAGE_NAME//-/_}"
           
           # Find previous tag for this package
           PREV_TAG=$(git tag -l "${PACKAGE_NAME}/v*" --sort=-version:refname | grep -v "^${TAG}$" | head -n 1 || echo "")
           
           echo "Current tag: $TAG"
           echo "Previous tag: $PREV_TAG"
+          echo "Wheel filename: ${WHEEL_NAME}-${VERSION}-py3-none-any.whl"
           
           # Generate changelog
           CHANGELOG_FILE="release_notes.md"
@@ -89,13 +94,13 @@ jobs:
           echo "Download the wheel file from the assets below and install with pip:" >> "$CHANGELOG_FILE"
           echo "" >> "$CHANGELOG_FILE"
           echo '```bash' >> "$CHANGELOG_FILE"
-          echo "pip install ${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
+          echo "pip install ${WHEEL_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
           echo '```' >> "$CHANGELOG_FILE"
           echo "" >> "$CHANGELOG_FILE"
           echo "Or install directly from the release:" >> "$CHANGELOG_FILE"
           echo "" >> "$CHANGELOG_FILE"
           echo '```bash' >> "$CHANGELOG_FILE"
-          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${WHEEL_NAME}-${VERSION}-py3-none-any.whl" >> "$CHANGELOG_FILE"
           echo '```' >> "$CHANGELOG_FILE"
           echo "" >> "$CHANGELOG_FILE"
           
@@ -158,6 +163,9 @@ jobs:
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
         run: |
+          # Convert package name to wheel filename format (replace hyphens with underscores)
+          WHEEL_NAME="${PACKAGE_NAME//-/_}"
+
           echo "## Release Created Successfully! 🎉" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**Package:** $PACKAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
@@ -167,7 +175,7 @@ jobs:
           echo "### Installation" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo '```bash' >> "$GITHUB_STEP_SUMMARY"
-          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${PACKAGE_NAME}-${VERSION}-py3-none-any.whl" >> "$GITHUB_STEP_SUMMARY"
+          echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${PACKAGE_NAME}/v${VERSION}/${WHEEL_NAME}-${VERSION}-py3-none-any.whl" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Artifacts" >> "$GITHUB_STEP_SUMMARY"
