@@ -65,7 +65,7 @@ jobs:
           # Map subpackages to their configurations
           MATRIX=$(echo "$CHANGED_SUBPACKAGES" | jq -R -s -c 'split("\n")[:-1] | unique | map(select(length > 0)) | map({
             subpackage: .,
-            skip_ollama: (if test("mellea-integration-core") or test("reqlib_package") then true else false end),
+            skip_ollama: (if test("mellea-integration-core") or test("reqlib_package") or test("mcp_tools") then true else false end),
             timeout_minutes: (if test("crewai_backend") then 90 else 30 end)
           })')
 
