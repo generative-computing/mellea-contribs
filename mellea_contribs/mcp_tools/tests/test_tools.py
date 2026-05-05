@@ -6,10 +6,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp.types import (
+    AudioContent,
     BlobResourceContents,
     CallToolResult,
     EmbeddedResource,
     ImageContent,
+    ResourceLink,
     TextContent,
     TextResourceContents,
 )
@@ -279,6 +281,64 @@ class TestSyncWrapper:
             output = tool._call_func()
 
         assert output == "[binary: application/pdf]"
+
+    @pytest.mark.asyncio
+    async def test_audio_content_returns_binary_descriptor(self, connection):
+        call_result = _call_result(AudioContent(type="audio", data="abc123", mimeType="audio/mpeg"))
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[binary: audio/mpeg]"
+
+    @pytest.mark.asyncio
+    async def test_resource_link_resolved_to_text(self, connection):
+        link = ResourceLink(type="resource_link", uri="file://doc.txt", name="doc")
+        call_result = _call_result(link)
+        resource_result = SimpleNamespace(
+            contents=[TextResourceContents(uri="file://doc.txt", text="linked content")]
+        )
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+        session.read_resource = AsyncMock(return_value=resource_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "linked content"
+
+    @pytest.mark.asyncio
+    async def test_resource_link_falls_back_on_read_failure(self, connection):
+        link = ResourceLink(type="resource_link", uri="https://example.com/doc", name="doc")
+        call_result = _call_result(link)
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+        session.read_resource = AsyncMock(side_effect=Exception("not found"))
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[resource: https://example.com/doc]"
 
     @pytest.mark.asyncio
     async def test_is_error_returns_error_string(self, connection):

@@ -167,7 +167,16 @@ async def _execute_tool(connection: dict[str, Any], tool_name: str, kwargs: dict
                 elif isinstance(block, (ImageContent, AudioContent)):
                     parts.append(f"[binary: {block.mimeType}]")
                 elif isinstance(block, ResourceLink):
-                    parts.append(f"[resource: {block.uri}]")
+                    try:
+                        resource_result = await session.read_resource(block.uri)
+                        for item in resource_result.contents:
+                            if isinstance(item, TextResourceContents):
+                                parts.append(item.text)
+                            else:
+                                mime = item.mimeType or "unknown"
+                                parts.append(f"[binary: {mime}]")
+                    except Exception:
+                        parts.append(f"[resource: {block.uri}]")
                 elif isinstance(block, EmbeddedResource):
                     # BlobResourceContents
                     mime = block.resource.mimeType or "unknown"
