@@ -148,9 +148,7 @@ class TestSyncWrapper:
 
             specs = await discover_mcp_tools(connection)
 
-        with _mock_open_session(session), patch(
-            "mellea_mcp.tools.MelleaTool", MockMelleaTool
-        ):
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
             tool = specs[0].as_mellea_tool()
             output = tool._call_func(q="test")
 
@@ -168,9 +166,7 @@ class TestSyncWrapper:
 
             specs = await discover_mcp_tools(connection)
 
-        with _mock_open_session(session), patch(
-            "mellea_mcp.tools.MelleaTool", MockMelleaTool
-        ):
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
             tool = specs[0].as_mellea_tool()
             output = tool._call_func()
 
@@ -187,9 +183,7 @@ class TestSyncWrapper:
 
             specs = await discover_mcp_tools(connection)
 
-        with _mock_open_session(session), patch(
-            "mellea_mcp.tools.MelleaTool", MockMelleaTool
-        ):
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
             tool = specs[0].as_mellea_tool()
             output = tool._call_func()
 
@@ -212,9 +206,7 @@ class TestSyncWrapper:
 
             specs = await discover_mcp_tools(connection)
 
-        with _mock_open_session(session), patch(
-            "mellea_mcp.tools.MelleaTool", MockMelleaTool
-        ):
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
             tool = specs[0].as_mellea_tool()
             tool._call_func(q="test", page=None)
 

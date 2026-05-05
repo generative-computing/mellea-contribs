@@ -3,7 +3,9 @@
 from typing import Any
 
 
-def http_connection(url: str, *, api_key: str | None = None, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def http_connection(
+    url: str, *, api_key: str | None = None, headers: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Build a Streamable HTTP connection config.
 
     Args:
@@ -22,7 +24,9 @@ def http_connection(url: str, *, api_key: str | None = None, headers: dict[str, 
     return {"transport": "streamable_http", "url": url, "headers": h}
 
 
-def sse_connection(url: str, *, api_key: str | None = None, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def sse_connection(
+    url: str, *, api_key: str | None = None, headers: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Build an SSE connection config.
 
     Args:
@@ -41,7 +45,9 @@ def sse_connection(url: str, *, api_key: str | None = None, headers: dict[str, s
     return {"transport": "sse", "url": url, "headers": h}
 
 
-def stdio_connection(command: str, *, args: list[str] | None = None, env: dict[str, str] | None = None) -> dict[str, Any]:
+def stdio_connection(
+    command: str, *, args: list[str] | None = None, env: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Build a stdio connection config.
 
     Args:

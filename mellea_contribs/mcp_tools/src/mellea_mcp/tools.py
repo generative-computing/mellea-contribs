@@ -36,7 +36,7 @@ class MCPToolSpec:
         self.input_schema = input_schema
         self._connection = connection
 
-    def as_mellea_tool(self) -> Any:
+    def as_mellea_tool(self) -> MelleaTool:
         """Create a callable :class:`MelleaTool` from this spec.
 
         The returned tool opens a fresh MCP session per call, which avoids
@@ -131,27 +131,40 @@ async def _open_session(connection: dict[str, Any]):
         raise ValueError(f"Unknown MCP transport: {transport!r}")
 
 
-async def _execute_tool(
-    connection: dict[str, Any], tool_name: str, kwargs: dict[str, Any]
-) -> str:
+async def _execute_tool(connection: dict[str, Any], tool_name: str, kwargs: dict[str, Any]) -> str:
     async with _open_session(connection) as session:
         result = await session.call_tool(tool_name, arguments=kwargs)
         if result.content:
-            parts = [block.text for block in result.content if hasattr(block, "text")]
-            return "\n".join(parts) if parts else str(result.content)
+            parts = []
+            for block in result.content:
+                if hasattr(block, "text"):
+                    parts.append(block.text)
+                elif hasattr(block, "resource") and hasattr(block.resource, "text"):
+                    # EmbeddedResource wrapping a TextResourceContents
+                    parts.append(block.resource.text)
+                elif hasattr(block, "mimeType"):
+                    # ImageContent — binary, not usable as text
+                    parts.append(f"[binary: {block.mimeType}]")
+                elif hasattr(block, "resource"):
+                    # EmbeddedResource wrapping a BlobResourceContents
+                    mime = getattr(block.resource, "mimeType", "unknown")
+                    parts.append(f"[binary: {mime}]")
+            return "\n".join(parts) if parts else ""
         return ""
+
+
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 
 def _make_sync_call(connection: dict[str, Any], tool_name: str) -> Any:
     def sync_call(**kwargs: Any) -> str:
         # Strip None values: MCP servers expect absent fields, not explicit nulls.
         clean = {k: v for k, v in kwargs.items() if v is not None}
-        # Run the async MCP call in a fresh thread (new event loop per call).
-        # Avoids deadlocks with Mellea's background _EventLoopHandler.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(
-                asyncio.run,
-                _execute_tool(connection, tool_name, clean),
-            ).result()
+        # Run the async MCP call in a dedicated worker thread so asyncio.run()
+        # never competes with Mellea's background _EventLoopHandler loop.
+        return _executor.submit(
+            asyncio.run,
+            _execute_tool(connection, tool_name, clean),
+        ).result()
 
     return sync_call
