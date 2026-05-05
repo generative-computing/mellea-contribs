@@ -891,8 +891,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
-    { name = "mcp", specifier = ">=1.0.0" },
-    { name = "mellea", specifier = ">=0.3.2" },
+    { name = "mcp", specifier = ">=1.27.0" },
+    { name = "mellea", specifier = ">=0.4.2" },
 ]
 
 [package.metadata.requires-dev]

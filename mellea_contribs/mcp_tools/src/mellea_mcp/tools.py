@@ -1,7 +1,9 @@
 """MCP tool discovery and MelleaTool wrapping."""
 
 import asyncio
+import atexit
 import concurrent.futures
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -9,7 +11,14 @@ import httpx
 from mcp import ClientSession, StdioServerParameters, stdio_client
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import EmbeddedResource, ImageContent, TextContent, TextResourceContents
+from mcp.types import (
+    AudioContent,
+    EmbeddedResource,
+    ImageContent,
+    ResourceLink,
+    TextContent,
+    TextResourceContents,
+)
 from mellea.backends import MelleaTool
 
 
@@ -98,8 +107,12 @@ async def _open_session(connection: dict[str, Any]):
     """Open a fresh MCP ClientSession for the given connection config."""
     transport = connection.get("transport", "streamable_http")
 
+    connect_timeout: float = connection.get("connect_timeout", 30.0)
+    read_timeout: float = connection.get("read_timeout", 300.0)
+
     if transport == "streamable_http":
-        async with httpx.AsyncClient(headers=connection.get("headers", {})) as http_client:
+        timeout = httpx.Timeout(connect=connect_timeout, read=read_timeout, write=connect_timeout, pool=connect_timeout)
+        async with httpx.AsyncClient(headers=connection.get("headers", {}), timeout=timeout) as http_client:
             async with streamable_http_client(
                 connection["url"],
                 http_client=http_client,
@@ -112,6 +125,8 @@ async def _open_session(connection: dict[str, Any]):
         async with sse_client(
             url=connection["url"],
             headers=connection.get("headers", {}),
+            timeout=connect_timeout,
+            sse_read_timeout=read_timeout,
         ) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -123,10 +138,11 @@ async def _open_session(connection: dict[str, Any]):
             args=connection.get("args", []),
             env=connection.get("env"),
         )
-        async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                yield session
+        async with asyncio.timeout(read_timeout):
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
 
     else:
         raise ValueError(f"Unknown MCP transport: {transport!r}")
@@ -148,8 +164,10 @@ async def _execute_tool(connection: dict[str, Any], tool_name: str, kwargs: dict
                     block.resource, TextResourceContents
                 ):
                     parts.append(block.resource.text)
-                elif isinstance(block, ImageContent):
+                elif isinstance(block, (ImageContent, AudioContent)):
                     parts.append(f"[binary: {block.mimeType}]")
+                elif isinstance(block, ResourceLink):
+                    parts.append(f"[resource: {block.uri}]")
                 elif isinstance(block, EmbeddedResource):
                     # BlobResourceContents
                     mime = block.resource.mimeType or "unknown"
@@ -159,9 +177,10 @@ async def _execute_tool(connection: dict[str, Any], tool_name: str, kwargs: dict
 
 
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+atexit.register(_executor.shutdown, wait=False)
 
 
-def _make_sync_call(connection: dict[str, Any], tool_name: str) -> Any:
+def _make_sync_call(connection: dict[str, Any], tool_name: str) -> Callable[..., str]:
     def sync_call(**kwargs: Any) -> str:
         # Strip None values: MCP servers expect absent fields, not explicit nulls.
         clean = {k: v for k, v in kwargs.items() if v is not None}
