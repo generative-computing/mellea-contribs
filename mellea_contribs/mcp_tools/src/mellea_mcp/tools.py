@@ -9,6 +9,7 @@ import httpx
 from mcp import ClientSession, StdioServerParameters, stdio_client
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.types import EmbeddedResource, ImageContent, TextContent, TextResourceContents
 from mellea.backends import MelleaTool
 
 
@@ -134,20 +135,24 @@ async def _open_session(connection: dict[str, Any]):
 async def _execute_tool(connection: dict[str, Any], tool_name: str, kwargs: dict[str, Any]) -> str:
     async with _open_session(connection) as session:
         result = await session.call_tool(tool_name, arguments=kwargs)
+        if result.isError:
+            error_parts = [b.text for b in (result.content or []) if isinstance(b, TextContent)]
+            error_msg = "\n".join(error_parts) if error_parts else "tool call failed"
+            return f"[tool error] {error_msg}"
         if result.content:
             parts = []
             for block in result.content:
-                if hasattr(block, "text"):
+                if isinstance(block, TextContent):
                     parts.append(block.text)
-                elif hasattr(block, "resource") and hasattr(block.resource, "text"):
-                    # EmbeddedResource wrapping a TextResourceContents
+                elif isinstance(block, EmbeddedResource) and isinstance(
+                    block.resource, TextResourceContents
+                ):
                     parts.append(block.resource.text)
-                elif hasattr(block, "mimeType"):
-                    # ImageContent — binary, not usable as text
+                elif isinstance(block, ImageContent):
                     parts.append(f"[binary: {block.mimeType}]")
-                elif hasattr(block, "resource"):
-                    # EmbeddedResource wrapping a BlobResourceContents
-                    mime = getattr(block.resource, "mimeType", "unknown")
+                elif isinstance(block, EmbeddedResource):
+                    # BlobResourceContents
+                    mime = block.resource.mimeType or "unknown"
                     parts.append(f"[binary: {mime}]")
             return "\n".join(parts) if parts else ""
         return ""

@@ -5,6 +5,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp.types import (
+    BlobResourceContents,
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
+    TextContent,
+    TextResourceContents,
+)
 
 from mellea_mcp.connections import http_connection
 
@@ -135,11 +143,14 @@ class TestAsMelleaTool:
         assert fn["parameters"] == schema
 
 
+def _call_result(*blocks, is_error=False):
+    return CallToolResult(content=list(blocks), isError=is_error)
+
+
 class TestSyncWrapper:
     @pytest.mark.asyncio
     async def test_extracts_text_from_content_blocks(self, connection):
-        content_block = SimpleNamespace(text="hello world")
-        call_result = SimpleNamespace(content=[content_block])
+        call_result = _call_result(TextContent(type="text", text="hello world"))
         session = _make_session(_make_mcp_tool("my_tool"))
         session.call_tool = AsyncMock(return_value=call_result)
 
@@ -156,8 +167,10 @@ class TestSyncWrapper:
 
     @pytest.mark.asyncio
     async def test_joins_multiple_content_blocks(self, connection):
-        blocks = [SimpleNamespace(text="line1"), SimpleNamespace(text="line2")]
-        call_result = SimpleNamespace(content=blocks)
+        call_result = _call_result(
+            TextContent(type="text", text="line1"),
+            TextContent(type="text", text="line2"),
+        )
         session = _make_session(_make_mcp_tool("my_tool"))
         session.call_tool = AsyncMock(return_value=call_result)
 
@@ -174,7 +187,7 @@ class TestSyncWrapper:
 
     @pytest.mark.asyncio
     async def test_empty_content_returns_empty_string(self, connection):
-        call_result = SimpleNamespace(content=[])
+        call_result = _call_result()
         session = _make_session(_make_mcp_tool("my_tool"))
         session.call_tool = AsyncMock(return_value=call_result)
 
@@ -196,7 +209,7 @@ class TestSyncWrapper:
 
         async def _capture(tool_name, *, arguments):
             received.append(arguments)
-            return SimpleNamespace(content=[])
+            return _call_result()
 
         session = _make_session(_make_mcp_tool("my_tool"))
         session.call_tool = _capture
@@ -211,3 +224,92 @@ class TestSyncWrapper:
             tool._call_func(q="test", page=None)
 
         assert received == [{"q": "test"}]
+
+    @pytest.mark.asyncio
+    async def test_embedded_resource_text_extracted(self, connection):
+        resource = TextResourceContents(uri="file://doc.txt", text="resource text")
+        call_result = _call_result(EmbeddedResource(type="resource", resource=resource))
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "resource text"
+
+    @pytest.mark.asyncio
+    async def test_image_content_returns_binary_descriptor(self, connection):
+        call_result = _call_result(ImageContent(type="image", data="abc123", mimeType="image/png"))
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[binary: image/png]"
+
+    @pytest.mark.asyncio
+    async def test_blob_resource_returns_binary_descriptor(self, connection):
+        resource = BlobResourceContents(
+            uri="file://data.pdf", blob="abc123", mimeType="application/pdf"
+        )
+        call_result = _call_result(EmbeddedResource(type="resource", resource=resource))
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[binary: application/pdf]"
+
+    @pytest.mark.asyncio
+    async def test_is_error_returns_error_string(self, connection):
+        call_result = _call_result(TextContent(type="text", text="not found"), is_error=True)
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[tool error] not found"
+
+    @pytest.mark.asyncio
+    async def test_is_error_no_content_returns_fallback(self, connection):
+        call_result = _call_result(is_error=True)
+        session = _make_session(_make_mcp_tool("my_tool"))
+        session.call_tool = AsyncMock(return_value=call_result)
+
+        with _mock_open_session(session):
+            from mellea_mcp.tools import discover_mcp_tools
+
+            specs = await discover_mcp_tools(connection)
+
+        with _mock_open_session(session), patch("mellea_mcp.tools.MelleaTool", MockMelleaTool):
+            tool = specs[0].as_mellea_tool()
+            output = tool._call_func()
+
+        assert output == "[tool error] tool call failed"
