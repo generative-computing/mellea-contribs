@@ -20,6 +20,7 @@ mellea_contribs/
 ├── langchain_backend/            # LangChain integration with Mellea
 ├── tools_package/                # Generative tools and utilities library
 ├── reqlib_package/               # Requirements library for validation
+├── mcp_tools/                    # Expose MCP server tools as Mellea tools
 └── __init__.py                   # Package initialization
 ```
 
@@ -79,7 +80,7 @@ mellea_contribs/
   - Requirements validation and sampling strategies
 - **Dependencies**: Multiple (see pyproject.toml for details)
 - **Python Version**: ≥3.11
-- **CI Requirements**: No Ollama needed (skip_ollama=true)
+- **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
 ### 6. **reqlib_package**
@@ -88,6 +89,17 @@ mellea_contribs/
   - Requirement specification and validation
   - Integration with Mellea's validation framework
 - **Dependencies**: `mellea>=0.3.x`
+- **Python Version**: ≥3.11
+- **CI Requirements**: No Ollama needed (skip_ollama=true)
+- **Timeout**: 30 minutes
+
+### 7. **mcp_tools**
+- **Purpose**: Bridges MCP (Model Context Protocol) server tools into Mellea's native tool-calling system
+- **Key Features**:
+  - Discover tools from any MCP server via HTTP, SSE, or stdio
+  - Wrap MCP tools as `MelleaTool` instances for use in agents and `react()` loops
+  - Short-lived per-call sessions (no session lifetime management required)
+- **Dependencies**: `mellea>=0.4.2`, `mcp>=1.27.0`, `httpx>=0.27`
 - **Python Version**: ≥3.11
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
@@ -133,8 +145,8 @@ The CI pipeline looks for either `tests/` or `test/` directory. Integration test
 
 #### 4. **Ollama Setup (for backends)**
 Some subpackages require Ollama for testing:
-- **Skip Ollama**: `mellea-integration-core`, `reqlib_package`, `tools_package`
-- **Include Ollama**: `crewai_backend`, `dspy_backend`, `langchain_backend`
+- **Skip Ollama**: `mellea-integration-core`, `reqlib_package`, `mcp_tools`
+- **Include Ollama**: `crewai_backend`, `dspy_backend`, `langchain_backend`, `tools_package`
 
 When Ollama is enabled:
 1. Ollama service is installed and started
