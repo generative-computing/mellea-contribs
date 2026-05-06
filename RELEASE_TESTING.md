@@ -272,7 +272,7 @@ pip install .
 
 Before merging workflow changes, verify:
 
-- [ ] All 5 packages can be released successfully
+- [ ] All packages can be released successfully
 - [ ] Version validation works
 - [ ] Tag format validation works
 - [ ] Both build systems (hatchling and pdm) work
@@ -368,7 +368,7 @@ Verify security aspects:
 
 After workflow changes, test:
 
-1. All 5 packages release successfully
+1. All packages release successfully
 2. Previous releases are not affected
 3. Tag history is preserved
 4. Release notes remain accessible

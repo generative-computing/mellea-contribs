@@ -34,6 +34,7 @@ Packages are automatically discovered from `pyproject.toml` files. Current packa
 | `mellea-dspy` | `mellea_contribs/dspy_backend` |
 | `mellea-integration-core` | `mellea_contribs/mellea-integration-core` |
 | `mellea-langchain` | `mellea_contribs/langchain_backend` |
+| `mellea-mcp` | `mellea_contribs/mcp_tools` |
 | `mellea-reqlib` | `mellea_contribs/reqlib_package` |
 | `mellea-tools` | `mellea_contribs/tools_package` |
 

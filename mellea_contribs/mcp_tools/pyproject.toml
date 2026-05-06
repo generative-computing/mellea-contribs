@@ -8,7 +8,7 @@ version = "0.1.0"
 authors = [
     { name = "Mellea Contributors", email = "melleaadmin@ibm.com" },
 ]
-description = "MCP client tool loading for Mellea agents"
+description = "Expose MCP server tools as Mellea tools"
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [

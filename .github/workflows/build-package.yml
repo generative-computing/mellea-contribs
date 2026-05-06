@@ -86,7 +86,7 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |
           # Skip Ollama for packages that don't need it
-          if [[ "$PACKAGE_DIR" == *"mellea-integration-core"* ]] || [[ "$PACKAGE_DIR" == *"reqlib_package"* ]] || [[ "$PACKAGE_DIR" == *"tools_package"* ]] || [[ "$PACKAGE_DIR" == *"mcp_tools"* ]]; then
+          if [[ "$PACKAGE_DIR" == *"mellea-integration-core"* ]] || [[ "$PACKAGE_DIR" == *"reqlib_package"* ]] || [[ "$PACKAGE_DIR" == *"mcp_tools"* ]]; then
             echo "skip_ollama=true" >> "$GITHUB_OUTPUT"
             echo "Skipping Ollama setup for $PACKAGE_DIR"
           else
