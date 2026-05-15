@@ -2,10 +2,8 @@ name: CI - All Subpackages
 
 on:
   pull_request:
-    paths:
-      - 'mellea_contribs/**'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/quality-generic.yml'
+    # No paths filter — must always run so the required check always reports.
+  merge_group:
   push:
     branches:
       - main
@@ -31,13 +29,16 @@ jobs:
           # Determine the base for comparison
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.sha }}"
+          elif [ "${{ github.event_name }}" == "merge_group" ]; then
+            BASE_REF="${{ github.event.merge_group.base_sha }}"
           else
             # Use github.event.before for push events (more reliable than HEAD~1)
             BASE_REF="${{ github.event.before }}"
-            # Fallback to HEAD~1 if github.event.before is not available or is all zeros (initial commit)
-            if [ -z "$BASE_REF" ] || [ "$BASE_REF" == "0000000000000000000000000000000000000000" ]; then
-              BASE_REF="HEAD~1"
-            fi
+          fi
+
+          # Fallback to HEAD~1 if the event base is not available or is all zeros (initial commit)
+          if [ -z "$BASE_REF" ] || [ "$BASE_REF" == "0000000000000000000000000000000000000000" ]; then
+            BASE_REF="HEAD~1"
           fi
 
           # Validate that BASE_REF exists before proceeding
