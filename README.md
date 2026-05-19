@@ -11,7 +11,6 @@ the [Mellea](https://github.com/generative-computing/mellea) ecosystem. This is 
 
 This repo contains multiple framework integrations and supporting libraries for the Mellea generative programming framework. Each subpackage is independently testable but shares common dependencies through `mellea-integration-core`. The CI pipeline automatically discovers changes and runs appropriate tests with Python 3.11-3.13, Ollama support for backends, and configurable timeouts per package.
 
-[//]: # ([![arXiv]&#40;https://img.shields.io/badge/arXiv-2408.09869-b31b1b.svg&#41;]&#40;https://arxiv.org/abs/2408.09869&#41;)
 [![Website](https://img.shields.io/badge/website-mellea.ai-blue)](https://mellea.ai/)
 [![Docs](https://img.shields.io/badge/docs-docs.mellea.ai-brightgreen)](https://docs.mellea.ai/)
 [![PyPI version](https://img.shields.io/pypi/v/mellea)](https://pypi.org/project/mellea/)
