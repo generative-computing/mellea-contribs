@@ -19,7 +19,7 @@ This repo contains multiple framework integrations and supporting libraries for 
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![GitHub License](https://img.shields.io/github/license/generative-computing/mellea)](https://github.com/generative-computing/mellea/blob/main/LICENSE)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-3.0-4baaaa.svg)](CODE_OF_CONDUCT.md)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-3.0-4baaaa.svg)](https://github.com/generative-computing/mellea/blob/main/CODE_OF_CONDUCT.md)
 
 # Mellea Contribs Overview
 This document explains the organization of the `mellea-contribs` directory and the requirements for running CI/CD.
