@@ -107,7 +107,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 
 ## Tools
 
-- **[Robustness Testing](docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
+- **[Robustness Testing](mellea_contribs/tools_package/docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
 
 ## CI/CD Requirements
 
