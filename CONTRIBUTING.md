@@ -8,6 +8,6 @@ To contribute:
 
 If a contribution in mellea-contribs matures and proves broadly useful, it can graduate to the standard library via an issue in the core repository.
 
-# Contribute to the Mellea Core Respository
+# Contribute to the Mellea Core Repository
 
 Check out the documentation for contributing to [Mellea](https://github.com/generative-computing/mellea/blob/main/CONTRIBUTING.md).
