@@ -39,7 +39,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 
 ## Subpackage Descriptions
 
-### 1. <a id="mellea-integration-core">**Mellea Integration Core**</a>
+### 1. <a id="mellea-integration-core">**[Mellea Integration Core](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/mellea-integration-core)**</a>
 - **Purpose**: Core abstractions and utilities for building clean, maintainable integrations between Mellea and various AI frameworks
 - **Key Features**:
   - Base integration class with common patterns
@@ -52,7 +52,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 2. <a id="crewai_backend">**CrewAI Backend**</a>
+### 2. <a id="crewai_backend">**[CrewAI Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/crewai_backend)**</a>
 - **Purpose**: Enables CrewAI agents to use Mellea's generative programming capabilities
 - **Key Features**:
   - CrewAI agent integration with Mellea
@@ -63,7 +63,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 90 minutes (extended due to complex integration tests)
 
-### 3. <a id="dspy_backend">**DSPy Backend**</a>
+### 3. <a id="dspy_backend">**[DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)**</a>
 - **Purpose**: DSPy integration enabling structured prompting with generative programming
 - **Key Features**:
   - DSPy module integration with Mellea
@@ -74,7 +74,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 4. <a id="langchain_backend">**Langchain Backend**</a>
+### 4. <a id="langchain_backend">**[Langchain Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/langchain_backend)**</a>
 - **Purpose**: LangChain integration for using Mellea within LangChain applications
 - **Key Features**:
   - LangChain language model integration with Mellea
@@ -85,7 +85,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 5. <a id="tools_package">**Tools Package**</a>
+### 5. <a id="tools_package">**[Tools Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/tools_package)**</a>
 - **Purpose**: Incubating generative programming tools and utilities
 - **Key Features**:
   - Various tools for generative programming
@@ -96,7 +96,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 6. <a id="reqlib_package">**Requirements Library Package**</a>
+### 6. <a id="reqlib_package">**[Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/reqlib_package)**</a>
 - **Purpose**: Requirements library for validation and constraints in generative systems
 - **Key Features**:
   - Requirement specification and validation
