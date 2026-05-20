@@ -84,7 +84,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 5. [Tools Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/tools_package)
+### [Tools Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/tools_package)
 - **Purpose**: Incubating generative programming tools and utilities
 - **Key Features**:
   - Various tools for generative programming
