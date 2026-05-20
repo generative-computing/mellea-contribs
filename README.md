@@ -1,31 +1,44 @@
 <img src="https://github.com/generative-computing/mellea-contribs/raw/main/mellea-contribs.jpg" height=100>
 
-
 # Mellea Contribs
 
-The `mellea-contribs` repository is an incubation point for contributions to
-the Mellea ecosystem.
+`mellea-contribs` is an incubation point for contributions to
+the [Mellea ecosystem](https://github.com/generative-computing). This is the home for experimental and specialized extensions that are not yet part of the standard library. It is the right place for:
 
-# Mellea Contributions Directory Structure
+* Domain-specific Components (legal, medical, code review, etc.)
+* Experimental Sampling Strategies under active research
+* Backend integrations for niche or self-hosted providers
 
-This document explains the organization of the `mellea_contribs` directory and the requirements for running CI/CD.
+This repo contains multiple framework integrations and supporting libraries for the Mellea generative programming framework. Each subpackage is independently testable but shares common dependencies through `mellea-integration-core`. The CI pipeline automatically discovers changes and runs appropriate tests with Python 3.11-3.13, Ollama support for backends, and configurable timeouts per package.
 
-## Directory Structure Overview
+[![Website](https://img.shields.io/badge/website-mellea.ai-blue)](https://mellea.ai/)
+[![Docs](https://img.shields.io/badge/docs-docs.mellea.ai-brightgreen)](https://docs.mellea.ai/)
+[![PyPI version](https://img.shields.io/pypi/v/mellea)](https://pypi.org/project/mellea/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mellea)](https://pypi.org/project/mellea/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![GitHub License](https://img.shields.io/github/license/generative-computing/mellea)](https://github.com/generative-computing/mellea/blob/main/LICENSE)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-3.0-4baaaa.svg)](https://github.com/generative-computing/mellea/blob/main/CODE_OF_CONDUCT.md)
 
-```
-mellea_contribs/
-├── mellea-integration-core/      # Core abstractions for framework integrations
-├── crewai_backend/               # CrewAI integration with Mellea
-├── dspy_backend/                 # DSPy integration with Mellea
-├── langchain_backend/            # LangChain integration with Mellea
-├── tools_package/                # Generative tools and utilities library
-├── reqlib_package/               # Requirements library for validation
-└── __init__.py                   # Package initialization
-```
+# Mellea Contribs Overview
+This document explains the organization of the `mellea-contribs` directory and the requirements for running CI/CD.
+
+## Resource List
+
+| Resource | Description |
+| --- | --- |
+| [mellea-integration-core/](#mellea-integration-core)| Core abstractions for framework integrations | 
+| [crewai_backend/](#crewai-backend) | CrewAI integration with Mellea | 
+| [dspy_backend/](#dspy-backend) | DSPy integration with Mellea | 
+| [langchain_backend/](#langchain-backend) | LangChain integration with Mellea | 
+| [tools_package/](#tools-package) | Generative tools and utilities library | 
+| [reqlib_package/](#reqlib-package) | Requirements library for validation | 
+
 
 ## Subpackage Descriptions
 
-### 1. **mellea-integration-core**
+### [Mellea Integration Core](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/mellea-integration-core)
 - **Purpose**: Core abstractions and utilities for building clean, maintainable integrations between Mellea and various AI frameworks
 - **Key Features**:
   - Base integration class with common patterns
@@ -38,7 +51,7 @@ mellea_contribs/
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 2. **crewai_backend**
+### [CrewAI Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/crewai_backend)
 - **Purpose**: Enables CrewAI agents to use Mellea's generative programming capabilities
 - **Key Features**:
   - CrewAI agent integration with Mellea
@@ -49,7 +62,7 @@ mellea_contribs/
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 90 minutes (extended due to complex integration tests)
 
-### 3. **dspy_backend**
+### [DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)
 - **Purpose**: DSPy integration enabling structured prompting with generative programming
 - **Key Features**:
   - DSPy module integration with Mellea
@@ -60,7 +73,7 @@ mellea_contribs/
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 4. **langchain_backend**
+### [Langchain Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/langchain_backend)
 - **Purpose**: LangChain integration for using Mellea within LangChain applications
 - **Key Features**:
   - LangChain language model integration with Mellea
@@ -71,7 +84,7 @@ mellea_contribs/
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 5. **tools_package**
+### [Tools Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/tools_package)
 - **Purpose**: Incubating generative programming tools and utilities
 - **Key Features**:
   - Various tools for generative programming
@@ -82,7 +95,7 @@ mellea_contribs/
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 6. **reqlib_package**
+### [Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/reqlib_package)
 - **Purpose**: Requirements library for validation and constraints in generative systems
 - **Key Features**:
   - Requirement specification and validation
@@ -91,6 +104,10 @@ mellea_contribs/
 - **Python Version**: ≥3.11
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
+
+## Tools
+
+- **[Robustness Testing](mellea_contribs/tools_package/docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
 
 ## CI/CD Requirements
 
@@ -313,11 +330,3 @@ ruff format src/
 mypy src/
 ```
 
-## Summary
-
-The `mellea_contribs` directory contains multiple framework integrations and supporting libraries for the Mellea generative programming framework. Each subpackage is independently testable but shares common dependencies through `mellea-integration-core`. The CI pipeline automatically discovers changes and runs appropriate tests with Python 3.11-3.13, Ollama support for backends, and configurable timeouts per package.
-
-
-## Tools
-
-- **[Robustness Testing](docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
