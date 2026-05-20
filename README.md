@@ -29,11 +29,11 @@ This document explains the organization of the `mellea-contribs` directory and t
 | Resource | Description |
 | --- | --- |
 | [mellea-integration-core/](#mellea-integration-core)| Core abstractions for framework integrations | 
-| [crewai_backend/](#crewai_backend) | CrewAI integration with Mellea | 
-| [dspy_backend/](#dspy_backend) | DSPy integration with Mellea | 
-| [langchain_backend/](#langchain_backend) | LangChain integration with Mellea | 
-| [tools_package/](#tools_package) | Generative tools and utilities library | 
-| [reqlib_package/](#reqlib_package) | Requirements library for validation | 
+| [crewai_backend/](#crewai-backend) | CrewAI integration with Mellea | 
+| [dspy_backend/](#dspy-backend) | DSPy integration with Mellea | 
+| [langchain_backend/](#langchain-backend) | LangChain integration with Mellea | 
+| [tools_package/](#tools-package) | Generative tools and utilities library | 
+| [reqlib_package/](#reqlib-package) | Requirements library for validation | 
 
 
 ## Subpackage Descriptions
