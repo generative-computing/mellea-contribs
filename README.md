@@ -95,7 +95,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 6. [Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/reqlib_package)
+### [Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/reqlib_package)
 - **Purpose**: Requirements library for validation and constraints in generative systems
 - **Key Features**:
   - Requirement specification and validation
