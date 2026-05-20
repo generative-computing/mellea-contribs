@@ -62,7 +62,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 90 minutes (extended due to complex integration tests)
 
-### 3. [DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)
+### [DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)
 - **Purpose**: DSPy integration enabling structured prompting with generative programming
 - **Key Features**:
   - DSPy module integration with Mellea
