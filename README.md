@@ -3,7 +3,7 @@
 # Mellea Contribs
 
 `mellea-contribs` is an incubation point for contributions to
-the [Mellea](https://github.com/generative-computing/mellea) ecosystem. This is the home for experimental and specialized extensions that are not yet part of the standard library. It is the right place for:
+the [Mellea ecosystem](https://github.com/generative-computing). This is the home for experimental and specialized extensions that are not yet part of the standard library. It is the right place for:
 
 * Domain-specific Components (legal, medical, code review, etc.)
 * Experimental Sampling Strategies under active research
