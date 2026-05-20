@@ -38,7 +38,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 
 ## Subpackage Descriptions
 
-### 1. [Mellea Integration Core](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/mellea-integration-core)
+### [Mellea Integration Core](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/mellea-integration-core)
 - **Purpose**: Core abstractions and utilities for building clean, maintainable integrations between Mellea and various AI frameworks
 - **Key Features**:
   - Base integration class with common patterns
