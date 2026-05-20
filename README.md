@@ -73,7 +73,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
 
-### 4. <a id="langchain_backend">**[Langchain Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/langchain_backend)**</a>
+### 4. [Langchain Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/langchain_backend)
 - **Purpose**: LangChain integration for using Mellea within LangChain applications
 - **Key Features**:
   - LangChain language model integration with Mellea
