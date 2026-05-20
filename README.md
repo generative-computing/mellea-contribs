@@ -51,7 +51,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: No Ollama needed (skip_ollama=true)
 - **Timeout**: 30 minutes
 
-### 2. [CrewAI Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/crewai_backend)
+### [CrewAI Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/crewai_backend)
 - **Purpose**: Enables CrewAI agents to use Mellea's generative programming capabilities
 - **Key Features**:
   - CrewAI agent integration with Mellea
