@@ -1,6 +1,5 @@
 <img src="https://github.com/generative-computing/mellea-contribs/raw/main/mellea-contribs.jpg" height=100>
 
-# Mellea Contribs
 
 `mellea-contribs` is an incubation point for contributions to
 the [Mellea ecosystem](https://github.com/generative-computing). This is the home for experimental and specialized extensions that are not yet part of the standard library. It is the right place for:
