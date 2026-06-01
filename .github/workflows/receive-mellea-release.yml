@@ -1,0 +1,101 @@
+name: "Receive mellea release"
+
+# Listens for repository_dispatch from mellea (event_type=mellea-released)
+# and bumps every pyproject.toml's version + mellea>= constraint to the
+# released version. Refreshes every uv.lock. Opens a PR.
+#
+# Triggered by mellea/.github/workflows/dispatch-to-contribs.yml. Also
+# supports workflow_dispatch for manual recovery.
+
+on:
+  repository_dispatch:
+    types: [mellea-released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Mellea version to sync (manual / recovery)"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: no version provided (neither workflow_dispatch input nor client_payload.version)"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Syncing mellea-contribs to mellea v${VERSION}"
+
+      - name: Checkout mellea-contribs
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Update versions across every pyproject.toml
+        run: |
+          uv run python .github/scripts/update_contribs_versions.py \
+            . "${{ steps.version.outputs.version }}"
+
+      - name: Refresh per-subpackage uv.lock files
+        run: |
+          # Walk every uv.lock that has a sibling pyproject.toml; re-lock its
+          # containing dir with the new mellea version pinned.
+          while IFS= read -r lockfile; do
+            dir=$(dirname "$lockfile")
+            if [ -f "$dir/pyproject.toml" ]; then
+              echo "Re-locking $dir"
+              (cd "$dir" && uv lock --upgrade-package mellea)
+            fi
+          done < <(find . -name "uv.lock" -not -path "./.venv/*" -not -path "./.git/*")
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          BRANCH_NAME="sync-mellea-${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Defensive: if no changes were produced (contribs is already on this version),
+          # exit cleanly without opening an empty PR.
+          if git diff --quiet; then
+            echo "No changes produced — contribs already at v${VERSION}. Skipping PR."
+            exit 0
+          fi
+
+          git checkout -b "${BRANCH_NAME}"
+          git add -A
+          git commit -m "chore: sync mellea version to v${VERSION}"
+          git push origin "${BRANCH_NAME}"
+
+          gh pr create \
+            --title "chore: sync mellea version to v${VERSION}" \
+            --body "Automated PR to sync the mellea dependency and bump every contribs subpackage's version after mellea v${VERSION} release.
+
+          **Changes:**
+          - Updated every \`pyproject.toml\`'s \`project.version\` to \`${VERSION}\`.
+          - Updated every \`pyproject.toml\`'s \`mellea>=\` dependency to \`mellea>=${VERSION}\`.
+          - Refreshed every \`uv.lock\`.
+
+          **Testing:**
+          Please verify CI passes and the new mellea version is compatible with every contribs subpackage." \
+            --head "${BRANCH_NAME}" \
+            --base main
