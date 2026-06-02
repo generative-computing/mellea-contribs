@@ -1,0 +1,68 @@
+name: Package CI (per-subpackage)
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        required: true
+        type: string
+
+jobs:
+  package-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # Default; subpackages override via [tool.mellea-contribs.ci]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Read [tool.mellea-contribs.ci] flags
+        id: ci-flags
+        working-directory: ${{ inputs.package }}
+        run: |
+          uv run --with tomli_w python -c "
+          import tomllib, json, os
+          data = tomllib.loads(open('pyproject.toml').read())
+          ci = data.get('tool', {}).get('mellea-contribs', {}).get('ci', {})
+          out = {
+              'skip_ollama': bool(ci.get('skip_ollama', False)),
+              'timeout_minutes': int(ci.get('timeout_minutes', 30)),
+              'python_versions': ci.get('python_versions', ['3.12']),
+          }
+          for k, v in out.items():
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  if k == 'python_versions':
+                      f.write(f'{k}={json.dumps(v)}\n')
+                  else:
+                      f.write(f'{k}={str(v).lower() if isinstance(v, bool) else v}\n')
+          "
+
+      # NOTE: Ollama installation lives outside the matrix (single-version test for v1).
+      - name: Install Ollama
+        if: steps.ci-flags.outputs.skip_ollama != 'true'
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Start Ollama
+        if: steps.ci-flags.outputs.skip_ollama != 'true'
+        run: nohup ollama serve &
+
+      - name: Pull granite4:micro
+        if: steps.ci-flags.outputs.skip_ollama != 'true'
+        run: ollama pull granite4:micro
+
+      - name: Sync dependencies
+        working-directory: ${{ inputs.package }}
+        run: uv sync --all-extras
+
+      - name: Lint
+        working-directory: ${{ inputs.package }}
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+
+      - name: Type-check
+        working-directory: ${{ inputs.package }}
+        run: uv run mypy .
+
+      - name: Test
+        working-directory: ${{ inputs.package }}
+        run: uv run pytest -m "not qualitative and not e2e"
