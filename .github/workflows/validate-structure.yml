@@ -1,0 +1,15 @@
+name: validate-structure
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Run validate-structure
+        run: uv run python .github/scripts/validate_package_contract.py
