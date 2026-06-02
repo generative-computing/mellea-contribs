@@ -1,15 +1,20 @@
 name: "Receive mellea release"
 
 # Listens for repository_dispatch from mellea (event_type=mellea-released)
-# and bumps every pyproject.toml's version + mellea>= constraint to the
-# released version. Refreshes every uv.lock. Opens a PR.
+# and opens one bump PR per subpackage in dependency-tier order. The same
+# workflow re-runs when a tier-N bump PR merges, advancing to tier-(N+1).
 #
-# Triggered by mellea/.github/workflows/dispatch-to-contribs.yml. Also
-# supports workflow_dispatch for manual recovery.
+# Triggered by:
+#   - mellea/.github/workflows/dispatch-to-contribs.yml (initial event)
+#   - pull_request closed-merged where head starts with sync-mellea-
+#     (advances tiers as PRs land)
+#   - workflow_dispatch (manual recovery)
 
 on:
   repository_dispatch:
     types: [mellea-released]
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
       version:
@@ -22,18 +27,31 @@ permissions:
 
 jobs:
   sync:
+    # Only act on tier-advancement PRs that actually merged. Other PR
+    # close events are ignored.
+    if: |
+      github.event_name == 'repository_dispatch' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'closed' &&
+       github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.head.ref, 'sync-mellea-'))
     runs-on: ubuntu-latest
     steps:
       - name: Resolve version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
-          else
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             VERSION="${{ github.event.client_payload.version }}"
+          else
+            # pull_request: extract version from branch name (sync-mellea-<ver>-<pkg>)
+            BRANCH="${{ github.event.pull_request.head.ref }}"
+            VERSION=$(echo "$BRANCH" | sed -E 's/^sync-mellea-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
           fi
           if [ -z "$VERSION" ]; then
-            echo "ERROR: no version provided (neither workflow_dispatch input nor client_payload.version)"
+            echo "ERROR: could not resolve mellea version from event payload."
             exit 1
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -43,59 +61,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Update versions across every pyproject.toml
+      - name: Configure git for bot commits
         run: |
-          uv run python .github/scripts/update_contribs_versions.py \
-            . "${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Refresh per-subpackage uv.lock files
-        run: |
-          # Walk every uv.lock that has a sibling pyproject.toml; re-lock its
-          # containing dir with the new mellea version pinned.
-          while IFS= read -r lockfile; do
-            dir=$(dirname "$lockfile")
-            if [ -f "$dir/pyproject.toml" ]; then
-              echo "Re-locking $dir"
-              (cd "$dir" && uv lock --upgrade-package mellea)
-            fi
-          done < <(find . -name "uv.lock" -not -path "./.venv/*" -not -path "./.git/*")
-
-      - name: Open PR
+      - name: Open per-package bump PRs for the active tier
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          BRANCH_NAME="sync-mellea-${VERSION}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Defensive: if no changes were produced (contribs is already on this version),
-          # exit cleanly without opening an empty PR.
-          if git diff --quiet; then
-            echo "No changes produced — contribs already at v${VERSION}. Skipping PR."
-            exit 0
-          fi
-
-          git checkout -b "${BRANCH_NAME}"
-          git add -A
-          git commit -m "chore: sync mellea version to v${VERSION}"
-          git push origin "${BRANCH_NAME}"
-
-          gh pr create \
-            --title "chore: sync mellea version to v${VERSION}" \
-            --body "Automated PR to sync the mellea dependency and bump every contribs subpackage's version after mellea v${VERSION} release.
-
-          **Changes:**
-          - Updated every \`pyproject.toml\`'s \`project.version\` to \`${VERSION}\`.
-          - Updated every \`pyproject.toml\`'s \`mellea>=\` dependency to \`mellea>=${VERSION}\`.
-          - Refreshed every \`uv.lock\`.
-
-          **Testing:**
-          Please verify CI passes and the new mellea version is compatible with every contribs subpackage." \
-            --head "${BRANCH_NAME}" \
-            --base main
+          uv run python .github/scripts/open_per_package_bump_prs.py . "$VERSION"
