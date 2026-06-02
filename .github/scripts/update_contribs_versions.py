@@ -1,12 +1,19 @@
-"""Update version + mellea>= constraints across every pyproject.toml in a contribs checkout.
+"""Update [project] version across every pyproject.toml in a contribs checkout.
 
-Used by .github/workflows/sync-contribs-version.yml after every published mellea release.
+Used by .github/workflows/receive-mellea-release.yml after every published
+mellea release. Bumps only ``[project] version`` so contribs's release
+version tracks mellea exactly. Does NOT rewrite the ``mellea>=`` constraint
+line — that floor is owned by each subpackage and only raised when CI
+proves something below it breaks (sliding-window model).
 
-Idempotent: running twice with the same version produces no edits. Leaves `==`
-exact pins alone (subpackages that pin exact mellea versions own their own bumps).
+Idempotent: running twice with the same version produces no edits. Edits
+are line-based regex substitutions, not full TOML round-trip, so
+formatting and comments are preserved.
 
-Edits are line-based regex substitutions, not full TOML round-trip, so formatting
-and comments are preserved.
+Errors loudly when a subpackage declares ``mellea`` without an explicit
+version constraint (bare ``mellea``, ``mellea[extras]``, or ``mellea @
+git+...``). The receiver cannot reason about those forms; the right fix
+is to declare an explicit ``>=`` or ``==`` constraint in the source.
 """
 
 from __future__ import annotations
@@ -18,21 +25,54 @@ from pathlib import Path
 
 EXCLUDED = {".venv", "dist", "build", ".git", "__pycache__", "node_modules"}
 
-# Matches a "mellea" or "mellea[extras]" dep line that uses `>=` or `>`. Leaves
-# `==`, `<`, `<=`, `~=`, `!=`, and bare name (no operator) alone — `==` because
-# subpackages opting into exact pins own their own bumps; the others because
-# they're unusual enough that we'd rather surface them via a failing PR than
-# silently rewrite.
-_DEP_MELLEA_RE = re.compile(r'(\s*)"mellea(\[[^\]]+\])?>=[^"]*"')
+# Matches any "mellea..." dep line. Used to inspect each line and decide
+# whether it's an acceptable form (>=, ==) or a rejected form (bare, git+,
+# or unknown operator).
+_MELLEA_LINE_RE = re.compile(r'"mellea(\[[^\]]+\])?(?P<spec>[^"]*)"')
+
+
+class UnacceptableMelleaLine(ValueError):
+    """Raised when a pyproject.toml has a mellea dep line we can't reason about."""
+
+
+def _validate_mellea_lines(text: str, path: Path) -> None:
+    """Raise UnacceptableMelleaLine if any `mellea` dep is bare or git-ref'd.
+
+    Acceptable forms: `mellea>=X.Y.Z`, `mellea==X.Y.Z`,
+    `mellea[extras]>=X.Y.Z`, `mellea[extras]==X.Y.Z`.
+
+    Rejected: bare `mellea`, `mellea[extras]` without operator, `mellea @ git+...`.
+    """
+    for match in _MELLEA_LINE_RE.finditer(text):
+        spec = match.group("spec").strip()
+        if not spec:
+            raise UnacceptableMelleaLine(
+                f"{path}: bare `mellea` dependency without version constraint. "
+                "Use `mellea>=X.Y.Z` or `mellea==X.Y.Z`."
+            )
+        if spec.startswith("@"):
+            raise UnacceptableMelleaLine(
+                f"{path}: mellea declared as a git/url ref ({spec!r}). "
+                "Replace with `mellea>=X.Y.Z` or `mellea==X.Y.Z` before merging."
+            )
+        if not (spec.startswith(">=") or spec.startswith("==")):
+            raise UnacceptableMelleaLine(
+                f"{path}: mellea constraint uses an operator we won't auto-bump ({spec!r}). "
+                "Use `mellea>=X.Y.Z` or `mellea==X.Y.Z`."
+            )
 
 
 def update_pyproject(path: Path, target_version: str) -> bool:
-    """Edit a single pyproject.toml in-place. Return True if the file changed."""
+    """Edit a single pyproject.toml in-place. Return True if the file changed.
+
+    Validates mellea dep lines first; raises UnacceptableMelleaLine if any
+    line uses a form the receiver cannot reason about.
+    """
     text = path.read_text()
+    _validate_mellea_lines(text, path)
     original = text
 
     text = _set_project_version(text, target_version)
-    text = _rewrite_mellea_deps(text, target_version)
 
     if text == original:
         return False
@@ -77,24 +117,11 @@ def _set_project_version(text: str, target: str) -> str:
     return text
 
 
-def _rewrite_mellea_deps(text: str, target: str) -> str:
-    """Rewrite `"mellea>=X"` and `"mellea[extras]>=X"` to use the target version.
-
-    Leaves `==` pins, other operators, and non-mellea deps untouched.
-    """
-
-    def _sub(m: re.Match[str]) -> str:
-        leading_ws = m.group(1)
-        extras = m.group(2) or ""
-        return f'{leading_ws}"mellea{extras}>={target}"'
-
-    return _DEP_MELLEA_RE.sub(_sub, text)
-
-
 def update_repo(root: Path, target_version: str) -> list[Path]:
     """Walk the repo and update every relevant pyproject.toml.
 
     Returns a list of changed paths in deterministic (sorted) order.
+    Raises UnacceptableMelleaLine on the first malformed mellea dep line.
     """
     changed: list[Path] = []
     for path in sorted(root.rglob("pyproject.toml")):
@@ -117,7 +144,12 @@ def main() -> int:
         print(f"error: {args.repo_root} is not a directory", file=sys.stderr)
         return 1
 
-    changed = update_repo(args.repo_root, args.version)
+    try:
+        changed = update_repo(args.repo_root, args.version)
+    except UnacceptableMelleaLine as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     if not changed:
         print("No pyproject.toml files needed updating.")
         return 0
