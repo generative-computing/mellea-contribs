@@ -310,6 +310,54 @@ This means **no workflow changes are needed when adding new packages** - just en
 
 6. **Coordinate Releases**: If multiple packages depend on each other, release them in dependency order
 
+## Smoke + auto-issue bot
+
+A daily smoke job (`.github/workflows/smoke-against-mellea-main.yml`)
+runs each opted-in subpackage's tests against `mellea @ main` at
+07:17 UTC. The matrix is read from `.github/smoke-matrix.json`; while
+that list is empty the smoke job is skipped. Each subpackage opts in
+by appending its path to the `subpackages` array as part of its
+migration PR.
+
+When a subpackage's smoke job goes red, the auto-issue bot
+(`.github/scripts/auto_issue_bot.py`) tracks consecutive failures and
+opens a tracking issue once the second consecutive red lands. Issues
+are labelled `contribs-broken` and assigned to the package's OWNERS.
+
+A second daily workflow (`.github/workflows/auto-issue-archival.yml`)
+runs at 08:00 UTC and applies the archival timeline based on how long
+the `contribs-broken` label has continuously been present on each
+tracking issue:
+
+- **Day 7** — a reminder comment is posted to escalate the failure.
+- **Day 14** — the bot posts a notice that the subpackage will be
+  called out as broken in the next contribs release notes. When you
+  cut a release while a tracking issue is at or past day 14, mention
+  the affected subpackages explicitly in the release notes.
+- **Day 21** — the bot applies the `archived` label and posts a final
+  comment. Contribs maintainers move the subpackage to the archived
+  layout in a follow-up PR.
+
+Recovery (a green smoke run) clears the `contribs-broken` label,
+posts a "smoke green again on `<date>`, fixed in `<sha>`" comment,
+resets the archival clock, and leaves the issue open for a human to
+close. Removing the `contribs-broken` label by hand has the same
+effect — the timeline is driven by the label, not the issue's open
+state.
+
+The bot's persistent state lives at
+`.github/bot-state/auto_issue_bot.json` on a bot-managed branch and
+is updated by each invocation. To run the bot locally against the
+in-memory fake (no GitHub API calls):
+
+```bash
+uv run python .github/scripts/auto_issue_bot.py \
+    --action record-failure \
+    --package mellea_contribs/dspy_backend \
+    --run-url https://example/run/1 \
+    --fake
+```
+
 ## Support
 
 For issues with the release process:
