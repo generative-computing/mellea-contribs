@@ -25,10 +25,11 @@ from pathlib import Path
 
 EXCLUDED = {".venv", "dist", "build", ".git", "__pycache__", "node_modules"}
 
-# Matches any "mellea..." dep line. Used to inspect each line and decide
-# whether it's an acceptable form (>=, ==) or a rejected form (bare, git+,
-# or unknown operator).
-_MELLEA_LINE_RE = re.compile(r'"mellea(\[[^\]]+\])?(?P<spec>[^"]*)"')
+# Matches a "mellea" or "mellea[extras]" dep line — the bare `mellea` package
+# only, not sibling distributions like `mellea-contribs-X` or `mellea-tools`.
+# The negative lookahead `(?![a-zA-Z0-9_-])` ensures we don't accidentally
+# match the prefix of a longer package name.
+_MELLEA_LINE_RE = re.compile(r'"mellea(?![a-zA-Z0-9_-])(\[[^\]]+\])?(?P<spec>[^"]*)"')
 
 
 class UnacceptableMelleaLine(ValueError):
