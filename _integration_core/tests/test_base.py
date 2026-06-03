@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mellea_integration import BaseMessageConverter, MelleaIntegrationBase
+from mellea_contribs._integration_core import BaseMessageConverter, MelleaIntegrationBase
 
 
 # Mock SamplingResult class for testing
@@ -125,7 +125,7 @@ async def test_agenerate_with_mellea_instruct(integration, mock_session):
     mock_session.achat.assert_not_called()
 
 
-@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
+@patch("mellea_contribs._integration_core.core.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_success(integration):
     """Test handling successful sampling results."""
     mock_result = Mock(content="Success")
@@ -136,7 +136,7 @@ def test_handle_sampling_results_success(integration):
     assert result == mock_result
 
 
-@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
+@patch("mellea_contribs._integration_core.core.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_failure_with_samples(integration):
     """Test handling failed sampling with available samples."""
     mock_sample = Mock(content="Sample")
@@ -149,7 +149,7 @@ def test_handle_sampling_results_failure_with_samples(integration):
     assert result.content == "Sample"
 
 
-@patch("mellea_integration.base.SamplingResult", MockSamplingResult)
+@patch("mellea_contribs._integration_core.core.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_failure_no_samples(integration):
     """Test handling failed sampling without samples raises error."""
     mock_response = MockSamplingResult(success=False, result=None, sample_generations=[])

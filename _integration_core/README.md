@@ -12,17 +12,17 @@ This package provides a **hybrid approach** to framework integration:
 
 ## Features
 
-- ✅ **Base Integration Class**: Common patterns for all framework adapters
-- ✅ **Message Conversion**: Utilities for converting between framework and Mellea formats
-- ✅ **Tool Conversion**: Utilities for handling tool calling across frameworks
-- ✅ **Requirements Support**: Built-in support for Mellea's validation features
-- ✅ **Async Support**: Both sync and async generation patterns
-- ✅ **Type Safety**: Protocol-based design with type hints (note: some `Any` types used for framework flexibility)
+- **Base Integration Class**: Common patterns for all framework adapters
+- **Message Conversion**: Utilities for converting between framework and Mellea formats
+- **Tool Conversion**: Utilities for handling tool calling across frameworks
+- **Requirements Support**: Built-in support for Mellea's validation features
+- **Async Support**: Both sync and async generation patterns
+- **Type Safety**: Protocol-based design with type hints (note: some `Any` types used for framework flexibility)
 
 ## Installation
 
 ```bash
-pip install mellea-integration-core
+pip install mellea-contribs-integration-core
 ```
 
 ## Quick Start
@@ -30,12 +30,12 @@ pip install mellea-integration-core
 ### Creating a Framework Integration
 
 ```python
-from mellea_integration import MelleaIntegrationBase, BaseMessageConverter
+from mellea_contribs._integration_core import MelleaIntegrationBase, BaseMessageConverter
 from typing import Any
 
 class MyFrameworkMessageConverter(BaseMessageConverter):
     """Convert MyFramework messages to/from Mellea format."""
-    
+
     def to_mellea(self, messages: Any) -> list[Any]:
         # Convert framework messages to Mellea Message objects
         mellea_messages = []
@@ -47,7 +47,7 @@ class MyFrameworkMessageConverter(BaseMessageConverter):
                 )
             )
         return mellea_messages
-    
+
     def from_mellea(self, response: Any) -> Any:
         # Convert Mellea response to framework format
         content = self.extract_content_from_response(response)
@@ -55,40 +55,40 @@ class MyFrameworkMessageConverter(BaseMessageConverter):
 
 class MyFrameworkAdapter(MelleaIntegrationBase):
     """Adapter for MyFramework using Mellea."""
-    
+
     def __init__(self, mellea_session: Any, **kwargs: Any):
         super().__init__(
             mellea_session=mellea_session,
             message_converter=MyFrameworkMessageConverter(),
             **kwargs
         )
-    
+
     def generate(self, messages: Any, **kwargs: Any) -> Any:
         # Prepare inputs
         prompt, model_options, tool_calls_enabled = self._prepare_generation(
             messages, kwargs.get("tools"), **kwargs
         )
-        
+
         # Generate with Mellea
         response = self._generate_with_mellea(
             prompt, model_options, tool_calls_enabled,
             kwargs.get("requirements"), kwargs.get("strategy")
         )
-        
+
         # Convert response
         return self.message_converter.from_mellea(response)
-    
+
     async def agenerate(self, messages: Any, **kwargs: Any) -> Any:
         # Async version
         prompt, model_options, tool_calls_enabled = self._prepare_generation(
             messages, kwargs.get("tools"), **kwargs
         )
-        
+
         response = await self._agenerate_with_mellea(
             prompt, model_options, tool_calls_enabled,
             kwargs.get("requirements"), kwargs.get("strategy")
         )
-        
+
         return self.message_converter.from_mellea(response)
 ```
 
@@ -160,7 +160,7 @@ Utilities for tool conversion:
 
 ```python
 from mellea import start_session
-from mellea_integration import MelleaIntegrationBase
+from mellea_contribs._integration_core import MelleaIntegrationBase
 
 # Create Mellea session
 m = start_session()
@@ -246,7 +246,7 @@ pip install -e ".[dev]"
 pytest
 
 # Run with coverage
-pytest --cov=mellea_integration --cov-report=html
+pytest --cov=mellea_contribs._integration_core --cov-report=html
 ```
 
 ### Code Quality
@@ -259,7 +259,7 @@ ruff format .
 ruff check .
 
 # Type checking
-mypy src/mellea_integration
+mypy mellea_contribs/_integration_core
 ```
 
 ## Contributing
@@ -283,6 +283,5 @@ Apache License 2.0 - see LICENSE file for details.
 
 ---
 
-**Version**: 0.1.0  
-**Status**: Alpha  
-**Built with ❤️ for the Mellea community**
+**Version**: 0.1.0
+**Status**: Alpha
