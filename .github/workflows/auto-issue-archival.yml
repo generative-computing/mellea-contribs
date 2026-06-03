@@ -1,0 +1,28 @@
+name: auto-issue-archival
+
+# Daily archival pass. Walks the bot's persistent state, advances the
+# label-applied-days counter for each subpackage that still carries the
+# `contribs-broken` label, and applies the day-7 reminder, day-14
+# release-notes mention, and day-21 archival label.
+
+"on":
+  schedule:
+    - cron: "0 8 * * *"  # 08:00 UTC daily, ~45 minutes after smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  archival:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Apply archival timeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          uv run python .github/scripts/auto_issue_bot.py --action apply-archival

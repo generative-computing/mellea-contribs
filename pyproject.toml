@@ -44,4 +44,5 @@ dev = [
     "pyyaml",
     "pre-commit>=3",
     "pytest>=7",
+    "PyGithub>=2.1",
 ]
