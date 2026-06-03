@@ -5,10 +5,10 @@ maintainable integrations between Mellea and various AI frameworks
 (LangChain, CrewAI, DSPy, etc.).
 """
 
-from .base import MelleaIntegrationBase
-from .message_converter import BaseMessageConverter
-from .tool_converter import BaseToolConverter
-from .types import GenerationResult, MessageConverter, ModelOptions, ToolConverter
+from .core.base import MelleaIntegrationBase
+from .core.message_converter import BaseMessageConverter
+from .core.tool_converter import BaseToolConverter
+from .core.types import GenerationResult, MessageConverter, ModelOptions, ToolConverter
 
 __version__ = "0.1.0"
 

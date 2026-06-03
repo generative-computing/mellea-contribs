@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from mellea_integration import BaseToolConverter
+from mellea_contribs._integration_core import BaseToolConverter
 
 
 class TestToolConverter(BaseToolConverter):

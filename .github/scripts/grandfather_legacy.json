@@ -5,7 +5,6 @@
     "mellea_contribs/dspy_backend",
     "mellea_contribs/crewai_backend",
     "mellea_contribs/langchain_backend",
-    "mellea_contribs/mellea-integration-core",
     "mellea_contribs/reqlib_package",
     "mellea_contribs/tools_package"
   ]

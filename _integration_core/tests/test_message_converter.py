@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from mellea_integration import BaseMessageConverter
+from mellea_contribs._integration_core import BaseMessageConverter
 
 
 class TestMessageConverter(BaseMessageConverter):
