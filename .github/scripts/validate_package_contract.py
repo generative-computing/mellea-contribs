@@ -44,6 +44,7 @@ META_DIRS = {
     "__pycache__",
     ".pytest_cache",
     "docs",
+    "config",
     NAMESPACE_PKG,
 }
 
@@ -88,6 +89,10 @@ def _bad_mellea_constraint(dep: str) -> str | None:
     package name (no operator, git/url ref, or unsupported operator) is
     rejected so the receiver workflow can reason about the line.
 
+    Sibling distribution names like ``mellea-contribs-integration-core`` and
+    ``mellea-tools`` start with ``mellea`` but are NOT the upstream mellea
+    package — they're skipped here.
+
     Returns None if dep is not a mellea line or is acceptable.
     """
     s = dep.strip()
@@ -99,7 +104,14 @@ def _bad_mellea_constraint(dep: str) -> str | None:
         spec = s[close + 1 :].strip()
         head = "mellea[...]"
     elif s.startswith("mellea"):
-        spec = s[len("mellea") :].strip()
+        # Disambiguate from sibling distribution names (mellea-X, mellea_X).
+        # The bare `mellea` package is followed by an operator, whitespace,
+        # `@` (git ref), or end-of-string — never by a hyphen, underscore,
+        # letter, or digit.
+        rest = s[len("mellea") :]
+        if rest and rest[0] in "-_" or (rest and rest[0].isalnum()):
+            return None  # Sibling distribution name, not the upstream mellea package.
+        spec = rest.strip()
         head = "mellea"
     else:
         return None  # Not a mellea line.

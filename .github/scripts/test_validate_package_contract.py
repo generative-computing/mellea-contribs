@@ -220,6 +220,31 @@ def test_mellea_extras_with_explicit_constraint_passes(tmp_path: Path) -> None:
     assert violations == []
 
 
+def test_sibling_distribution_names_not_flagged(tmp_path: Path) -> None:
+    """`mellea-contribs-X` and `mellea-tools` are sibling dists, not the upstream package.
+
+    They start with `mellea` but should NOT trigger the explicit-constraint
+    rule — they're contribs subpackages depending on each other, not the
+    upstream mellea package.
+    """
+    setup_core_paths(tmp_path)
+    setup_grandfather(tmp_path)
+    setup_minimal_subpackage(tmp_path, "demo")
+    pp = tmp_path / "demo" / "pyproject.toml"
+    # Add a sibling-dependency dep alongside the explicit `mellea>=` line.
+    pp.write_text(
+        pp.read_text().replace(
+            '"mellea>=0.6.0"',
+            '"mellea>=0.6.0",\n    "mellea-contribs-integration-core",\n    "mellea-tools"',
+        )
+    )
+    violations = validate_repo(tmp_path)
+    assert violations == [], (
+        "sibling distribution names should not trigger the mellea-constraint rule; "
+        f"got: {[str(v) for v in violations]}"
+    )
+
+
 def test_grandfathered_legacy_dir_skipped(tmp_path: Path) -> None:
     setup_core_paths(tmp_path)
     setup_grandfather(tmp_path, paths=["mellea_contribs/legacy_thing"])
