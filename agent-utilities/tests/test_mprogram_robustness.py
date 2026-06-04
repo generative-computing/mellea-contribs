@@ -19,9 +19,6 @@ from typing import Any
 
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
 from pathlib import Path
 
 import yaml
@@ -30,7 +27,7 @@ from mellea import start_session
 from mellea.backends import ModelOption
 
 try:
-    from tools.benchdrift_runner import (
+    from mellea_contribs.agent_utilities.core.benchdrift_runner import (
         analyze_robustness,
         run_benchdrift_pipeline,
     )

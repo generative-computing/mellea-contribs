@@ -5,32 +5,27 @@ Test how consistently your m-program answers semantic variations of a problem. U
 ## Setup
 
 ```bash
-# 1. Install BenchDrift (demo-ui branch)
-git clone -b demo-ui https://github.com/IBM/BenchDrift.git BenchDrift-Pipeline
-cd BenchDrift-Pipeline && pip install -e . && cd ..
+# 1. Install agent-utilities with the robustness extra (pulls in BenchDrift)
+pip install "mellea-contribs-agent-utilities[robustness]"
 
-# 2. Install Mellea + Mellea-Contribs
-pip install -e path/to/mellea
-pip install -e "path/to/mellea-contribs[robustness]"
-
-# 3. Ollama (for m-program backend)
+# 2. Ollama (for m-program backend)
 ollama serve
 ollama pull qwen2.5:3b       # m-program backend (or any model you want to test)
 
-# 4. (Optional) For fast variation generation via Groq
+# 3. (Optional) For fast variation generation via Groq
 export GROQ_API_KEY=gsk_your_key_here    # get from https://console.groq.com/keys
 ```
 
 ## Run
 
 ```bash
-cd mellea-contribs
+cd agent-utilities
 
 # Using Groq for fast variation generation (recommended)
-python test/test_mprogram_robustness.py --backend-model qwen2.5:3b --gen-model groq/llama-3.3-70b-versatile --top-k 5 --no-enrich
+python tests/test_mprogram_robustness.py --backend-model qwen2.5:3b --gen-model groq/llama-3.3-70b-versatile --top-k 5 --no-enrich
 
 # Using Ollama only (slower, no API key needed)
-python test/test_mprogram_robustness.py --backend-model qwen2.5:3b --gen-model qwen3:8b --top-k 5 --no-enrich
+python tests/test_mprogram_robustness.py --backend-model qwen2.5:3b --gen-model qwen3:8b --top-k 5 --no-enrich
 ```
 
 ## CLI Options
@@ -47,9 +42,9 @@ python test/test_mprogram_robustness.py --backend-model qwen2.5:3b --gen-model q
 | `--use-llm-judge` | off | Use LLM judge for answer evaluation (slower, more accurate) |
 
 **Model format:** `--gen-model`, `--judge-model`, and `--backend-model` accept `client/model` format. Supported clients: `ollama`, `groq`, `rits`, `vllm`, `openai`.
-- `qwen3:8b` → Ollama local (default)
-- `glm-5:cloud` → Ollama cloud
-- `groq/llama-3.3-70b-versatile` → Groq cloud
+- `qwen3:8b` -> Ollama local (default)
+- `glm-5:cloud` -> Ollama cloud
+- `groq/llama-3.3-70b-versatile` -> Groq cloud
 
 You can mix clients — e.g., Groq for fast variation generation + Ollama for m-program testing:
 ```bash
