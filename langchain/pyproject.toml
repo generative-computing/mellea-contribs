@@ -1,0 +1,71 @@
+[project]
+name = "mellea-contribs-langchain"
+version = "0.1.0"
+description = "LangChain-compatible chat model that wraps Mellea."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Mellea Contributors" }]
+keywords = ["mellea", "contribs", "langchain"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "mellea>=0.3.2",
+    "mellea-contribs-integration-core",
+    "langchain-core>=0.3.2",
+    "pydantic>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/generative-computing/mellea"
+Repository = "https://github.com/generative-computing/mellea-contribs"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mellea_contribs"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+mellea-contribs-integration-core = { path = "../_integration_core" }
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[tool.mellea-contribs.ci]
+skip_ollama = false
+timeout_minutes = 30
+python_versions = ["3.12"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast, hermetic",
+    "integration: requires local services",
+    "e2e: end-to-end against an LLM",
+    "qualitative: checks LLM output quality",
+    "langchain: Tests for LangChain integration",
+    "streaming: Tests for streaming functionality",
+    "tool_calling: Tests for tool calling",
+]
