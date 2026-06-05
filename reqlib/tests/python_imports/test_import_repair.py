@@ -4,9 +4,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from reqlib.common_aliases import COMMON_ALIASES, MODULE_RELOCATIONS
-from reqlib.import_repair import PythonImportRepair, extract_python_code
-from reqlib.import_resolution import (
+from mellea_contribs.reqlib.stdlib.reqlib.common_aliases import (
+    COMMON_ALIASES,
+    MODULE_RELOCATIONS,
+)
+from mellea_contribs.reqlib.stdlib.reqlib.import_repair import (
+    PythonImportRepair,
+    extract_python_code,
+)
+from mellea_contribs.reqlib.stdlib.reqlib.import_resolution import (
     find_undefined_names,
     get_installed_packages,
     is_module_available,
@@ -430,7 +436,6 @@ class TestPythonImportRepairClass:
         """Test validation with valid imports passes."""
         req = PythonImportRepair()
 
-        # Mock the mellea Context
         mock_output = MagicMock()
         mock_output.value = """```python
 import os
