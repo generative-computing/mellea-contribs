@@ -1,12 +1,26 @@
 # Contributing to `mellea-contribs`
 
-To contribute:
-* Open an issue on mellea-contribs describing your extension.
-* Fork the repository and create a branch.
-* Follow the coding standards from the contributing guide (linked below).
-* Open a pull request referencing the issue.
+`mellea-contribs` is a monorepo of bleeding-edge contributions that extend Mellea
+without going through core review. Subpackages here are opinionated, leaf-installed,
+and evictable: when one falls behind a recent mellea release or breaks against
+`mellea@main` for too long, it gets archived. Code that is stable, broadly useful,
+and on the core roadmap belongs in [mellea](https://github.com/generative-computing/mellea)
+itself, not here. If a contribs subpackage matures into something everyone wants
+in core, file an issue in the core repo and propose graduation.
 
-If a contribution in mellea-contribs matures and proves broadly useful, it can graduate to the standard library via an issue in the core repository.
+## Where to go next
+
+- **Adding a new contribs subpackage?** See [`docs/contributing/new-subpackage.md`](docs/contributing/new-subpackage.md).
+- **Cutting or testing a release?** See [`RELEASING.md`](RELEASING.md) and [`RELEASE_TESTING.md`](RELEASE_TESTING.md).
+
+## Quick links
+
+- **Cookiecutter template**: [`cookiecutter/`](cookiecutter/) — scaffolds a new subpackage onto the layout `validate-structure` enforces.
+- **Daily smoke matrix**: [`.github/smoke-matrix.json`](.github/smoke-matrix.json) — subpackages exercised every night against `mellea@main`.
+- **Structural contract**: [`.github/scripts/validate_package_contract.py`](.github/scripts/validate_package_contract.py) — what every PR is checked against.
+- **Issues**: <https://github.com/generative-computing/mellea-contribs/issues>.
+- **Owners**: each subpackage's `OWNERS` file lists the GitHub usernames on the hook for it. Auto-issues @-mention every owner.
+- **Code of Conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Applies to everyone, human or AI.
 
 ## Developer Certificate of Origin (DCO)
 
