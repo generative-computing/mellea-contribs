@@ -1,6 +1,8 @@
 from mellea.stdlib.components import TemplateRepresentation
 
-from reqlib.grounding_context_formatter import GroundingContextFormatter
+from mellea_contribs.reqlib.stdlib.reqlib.grounding_context_formatter import (
+    GroundingContextFormatter,
+)
 
 
 def print_header(title):
@@ -97,62 +99,3 @@ def test_empty_context_renders_empty():
     print("OUTPUT: ", repr(result))
 
     print("PASS?", result == "")
-
-
-if __name__ == "__main__":
-    print("\nRunning GroundingContextFormatter tests...\n")
-
-    test_skips_empty_fields()
-    test_serializes_multiple_fields()
-    test_returns_template_representation()
-    test_empty_context_renders_empty()
-
-    # Example 1: TaP/SRE agent
-    tap_user_prompt = """Analyze the entity and update the investigation summary.
-        ================================================
-        ## ENTITY FOR ANALYSIS
-        Entity: flagd-5c56f7c9db-wwc9k
-        Type: Pod
-        Depth in exploration: 2
-        TRAVERSAL PATH (Primary Failure → Current): [flagd-config]
-        Alert Context for this entity: [service is down]"""
-
-    tap_grounding_context = {
-        "observability_raw": {
-            "focal_entity": {
-                "id": "2bbba94bf8d4ab09",
-                "name": "flagd-5c56f7c9db-wwc9k",
-                "type": "Pod",
-                "namespace": "otel-demo",
-            },
-            "stack_report": {
-                "physical": {
-                    "cluster": {"id": "3ec5b5c761c1afad", "name": "k8s-cluster-root"}
-                },
-                "controller": {
-                    "self": {"id": "2bbba94bf8d4ab09", "name": "flagd-5c56f7c9db-wwc9k"}
-                },
-                "service_interactions": {"incoming": [], "outgoing": []},
-            },
-        }
-    }
-
-    _test_long_user_prompt_and_context(
-        tap_user_prompt, tap_grounding_context, "TaP / SRE Example"
-    )
-
-    # Example 2: Simple Weather / Temperature agent
-    weather_user_prompt = "Please provide the current temperature for the given city."
-    weather_grounding_context = {
-        "city_info": {
-            "name": "San Francisco",
-            "country": "USA",
-            "coordinates": {"lat": 37.7749, "lon": -122.4194},
-        }
-    }
-
-    _test_long_user_prompt_and_context(
-        weather_user_prompt, weather_grounding_context, "Weather Agent Example"
-    )
-
-    print("\nAll tests completed.\n")
