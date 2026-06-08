@@ -10,7 +10,7 @@ name: smoke-against-mellea-main
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # auto_issue_bot.py writes per-package state under .github/bot-state/
   issues: write
 
 jobs:
