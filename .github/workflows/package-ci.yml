@@ -8,13 +8,18 @@ on:
         type: string
 
 jobs:
-  package-ci:
+  read-config:
+    # Hoisted into its own job so its output can drive `timeout-minutes` on
+    # the matrix job below — `timeout-minutes` is resolved when a job starts,
+    # so it cannot reference a step output produced inside the same job.
     runs-on: ubuntu-latest
-    timeout-minutes: 30   # Default; subpackages override via [tool.mellea-contribs.ci]
+    outputs:
+      skip_ollama: ${{ steps.ci-flags.outputs.skip_ollama }}
+      timeout_minutes: ${{ steps.ci-flags.outputs.timeout_minutes }}
+      python_versions: ${{ steps.ci-flags.outputs.python_versions }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-
       - name: Read [tool.mellea-contribs.ci] flags
         id: ci-flags
         working-directory: ${{ inputs.package }}
@@ -36,17 +41,37 @@ jobs:
                       f.write(f'{k}={str(v).lower() if isinstance(v, bool) else v}\n')
           "
 
+  package-ci:
+    needs: read-config
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(needs.read-config.outputs.timeout_minutes) }}
+    env:
+      SKIP_OLLAMA: ${{ needs.read-config.outputs.skip_ollama }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
       # NOTE: Ollama installation lives outside the matrix (single-version test for v1).
+      # Pinned to a known good release commit instead of fetching a fresh install
+      # script on every run — the upstream script is mutable and arbitrary code
+      # piped to sh is exactly the supply-chain shape we don't want in CI.
       - name: Install Ollama
-        if: steps.ci-flags.outputs.skip_ollama != 'true'
-        run: curl -fsSL https://ollama.com/install.sh | sh
+        if: env.SKIP_OLLAMA != 'true'
+        env:
+          OLLAMA_VERSION: "v0.5.7"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/ollama.tgz \
+            "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tgz"
+          sudo tar -C /usr -xzf /tmp/ollama.tgz
+          ollama --version
 
       - name: Start Ollama
-        if: steps.ci-flags.outputs.skip_ollama != 'true'
+        if: env.SKIP_OLLAMA != 'true'
         run: nohup ollama serve &
 
       - name: Pull granite4:micro
-        if: steps.ci-flags.outputs.skip_ollama != 'true'
+        if: env.SKIP_OLLAMA != 'true'
         run: ollama pull granite4:micro
 
       - name: Sync dependencies
