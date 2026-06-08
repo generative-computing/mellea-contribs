@@ -25,9 +25,11 @@ The bot exposes two execution modes:
   :class:`FakeGitHub`. The unit tests drive the bot end to end through
   this fake.
 * **Real mode** uses :class:`RealGitHub`, a thin wrapper over PyGithub.
-  Persistent state is stored as JSON on a bot-managed branch in the
-  repository (see :func:`_load_persistent_state` /
-  :func:`_save_persistent_state`).
+  Persistent state is stored as one JSON file per subpackage on a
+  bot-managed branch (``.github/bot-state/<package>.json``). Each file
+  holds only that package's counters, so concurrent smoke legs touch
+  disjoint paths and never race on the GitHub Contents API's blob-SHA
+  CAS check. See :func:`_load_package_state` / :func:`_save_package_state`.
 """
 
 from __future__ import annotations
@@ -53,8 +55,12 @@ DAY_21_ARCHIVAL = 21
 CONTRIBS_BROKEN_LABEL = "contribs-broken"
 ARCHIVED_LABEL = "archived"
 
-# Path inside the bot-managed branch where persistent state lives.
-STATE_FILE_PATH = ".github/bot-state/auto_issue_bot.json"
+# Directory inside the bot-managed branch where per-package state files live.
+# Each subpackage gets its own ``<dir>/<safe-name>.json`` so that concurrent
+# smoke legs only ever read-modify-write disjoint paths and cannot race on
+# the GitHub Contents API's blob-SHA CAS check. See ``_package_state_path``
+# for how subpackage names are mapped to filenames.
+STATE_DIR_PATH = ".github/bot-state"
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +108,56 @@ class BotState:
                 k: list(v) for k, v in data.get("milestones_posted", {}).items()
             },
         )
+
+    def to_per_package_json(self, package: str) -> str:
+        """Serialize just one package's slots to a flat JSON document.
+
+        Per-package state lives at ``.github/bot-state/<safe>.json`` on
+        the bot-state branch; storing only the requested package's keys
+        means concurrent smoke legs touch disjoint paths and never share
+        a blob SHA.
+        """
+        payload: dict[str, Any] = {
+            "consecutive_failures": self.consecutive_failures.get(package, 0),
+            "last_failure_run_url": self.last_failure_run_url.get(package, ""),
+            "label_applied_days": self.label_applied_days.get(package, 0),
+            "milestones_posted": list(self.milestones_posted.get(package, [])),
+        }
+        if package in self.open_issue_numbers:
+            payload["open_issue_number"] = self.open_issue_numbers[package]
+        return json.dumps(payload, indent=2, sort_keys=True)
+
+    @classmethod
+    def from_per_package_json(cls, package: str, text: str) -> "BotState":
+        """Hydrate a :class:`BotState` from one package's flat document.
+
+        The returned state is populated only for ``package``; other
+        packages have no entries. ``apply-archival`` merges multiple
+        single-package states by reading each file in turn.
+        """
+        data = json.loads(text)
+        state = cls()
+        state.consecutive_failures[package] = int(data.get("consecutive_failures", 0))
+        state.last_failure_run_url[package] = str(data.get("last_failure_run_url", ""))
+        state.label_applied_days[package] = int(data.get("label_applied_days", 0))
+        state.milestones_posted[package] = list(data.get("milestones_posted", []))
+        issue_n = data.get("open_issue_number")
+        if issue_n is not None:
+            state.open_issue_numbers[package] = int(issue_n)
+        return state
+
+    def merge_from(self, other: "BotState") -> None:
+        """Copy ``other``'s package slots into ``self`` (last-write-wins).
+
+        Used by ``apply-archival`` to build a single in-memory
+        :class:`BotState` from N per-package files.
+        """
+        self.consecutive_failures.update(other.consecutive_failures)
+        self.open_issue_numbers.update(other.open_issue_numbers)
+        self.label_applied_days.update(other.label_applied_days)
+        self.last_failure_run_url.update(other.last_failure_run_url)
+        for k, v in other.milestones_posted.items():
+            self.milestones_posted[k] = list(v)
 
 
 # ---------------------------------------------------------------------------
@@ -414,45 +470,107 @@ class RealGitHub:
         return [lbl.name for lbl in self.repo.get_issue(issue_number).labels]
 
 
-def _load_persistent_state(repo: Any, branch: str) -> BotState:
-    """Fetch the bot-state JSON from a managed branch (real-mode only).
+def _package_state_path(package: str) -> str:
+    """Return the bot-state file path for a given subpackage.
 
-    Returns a fresh :class:`BotState` if the file (or the branch) does
-    not exist yet.
+    The package name is the directory name in the contribs repo (e.g.
+    ``dspy``, ``_integration_core``). We slash-replace defensively even
+    though current names are flat — subpackages may be nested under a
+    namespace one day.
     """
+    safe = package.replace("/", "__")
+    return f"{STATE_DIR_PATH}/{safe}.json"
+
+
+def _load_package_state(repo: Any, branch: str, package: str) -> BotState:
+    """Fetch the per-package state file from the managed branch.
+
+    Returns a fresh :class:`BotState` populated only with the requested
+    package's slots if the file (or the branch) does not exist yet —
+    this is the first-failure path.
+
+    Raises :class:`github.GithubException` for anything other than 404,
+    so authentication and permission problems surface at the call site
+    instead of being swallowed into an empty state.
+    """
+    from github import GithubException  # type: ignore[import-not-found]
+
+    path = _package_state_path(package)
     try:
-        contents = repo.get_contents(STATE_FILE_PATH, ref=branch)
-    except Exception:  # pragma: no cover - first run / missing branch
+        contents = repo.get_contents(path, ref=branch)
+    except GithubException as e:
+        if e.status != 404:
+            raise
         return BotState()
     decoded = contents.decoded_content.decode("utf-8")
-    return BotState.from_json(decoded)
+    return BotState.from_per_package_json(package, decoded)
 
 
-def _save_persistent_state(
+def _save_package_state(
     repo: Any,
     branch: str,
+    package: str,
     state: BotState,
     *,
     commit_message: str,
 ) -> None:
-    """Write the bot-state JSON back to the managed branch."""
-    payload = state.to_json()
+    """Write the per-package state slice back to the managed branch.
+
+    Concurrent smoke legs target different paths, so the GitHub Contents
+    API's blob-SHA CAS check never conflicts across legs. Within a single
+    leg the get_contents → update_file pair still races against any
+    workflow_dispatch invocation that targets the same package, so 404
+    is the only swallowed status; everything else is raised.
+    """
+    from github import GithubException  # type: ignore[import-not-found]
+
+    path = _package_state_path(package)
+    payload = state.to_per_package_json(package)
     try:
-        existing = repo.get_contents(STATE_FILE_PATH, ref=branch)
-        repo.update_file(
-            path=STATE_FILE_PATH,
-            message=commit_message,
-            content=payload,
-            sha=existing.sha,
-            branch=branch,
-        )
-    except Exception:  # pragma: no cover - first commit on the branch
+        existing = repo.get_contents(path, ref=branch)
+    except GithubException as e:
+        if e.status != 404:
+            raise
         repo.create_file(
-            path=STATE_FILE_PATH,
+            path=path,
             message=commit_message,
             content=payload,
             branch=branch,
         )
+        return
+    repo.update_file(
+        path=path,
+        message=commit_message,
+        content=payload,
+        sha=existing.sha,
+        branch=branch,
+    )
+
+
+def _list_tracked_packages(repo: Any, branch: str) -> list[str]:
+    """Enumerate every subpackage with a state file on the managed branch.
+
+    Used by ``apply-archival`` to walk all tracked packages without
+    relying on a single combined state document. Returns an empty list
+    if the directory (or branch) does not exist yet.
+    """
+    from github import GithubException  # type: ignore[import-not-found]
+
+    try:
+        entries = repo.get_contents(STATE_DIR_PATH, ref=branch)
+    except GithubException as e:
+        if e.status != 404:
+            raise
+        return []
+    if not isinstance(entries, list):
+        entries = [entries]
+    packages: list[str] = []
+    for entry in entries:
+        name = getattr(entry, "name", "")
+        if not name.endswith(".json"):
+            continue
+        packages.append(name[:-len(".json")].replace("__", "/"))
+    return packages
 
 
 def _real_main(args: argparse.Namespace) -> int:  # pragma: no cover
@@ -476,25 +594,51 @@ def _real_main(args: argparse.Namespace) -> int:  # pragma: no cover
     repo = gh_api.get_repo(repo_full_name)
     gh = RealGitHub(repo=repo)
 
-    state = _load_persistent_state(repo, branch)
+    if args.action in ("record-failure", "record-recovery"):
+        if not args.package:
+            print(f"--package is required for {args.action}", file=sys.stderr)
+            return 2
 
-    if args.action == "record-failure":
-        record_failure(gh, state, package=args.package, run_url=args.run_url)
-        msg = f"bot: record failure for {args.package}"
-    elif args.action == "record-recovery":
-        record_recovery(
-            gh, state, package=args.package, commit_sha=args.commit_sha
+        state = _load_package_state(repo, branch, args.package)
+
+        if args.action == "record-failure":
+            record_failure(gh, state, package=args.package, run_url=args.run_url)
+            msg = f"bot: record failure for {args.package}"
+        else:
+            record_recovery(
+                gh, state, package=args.package, commit_sha=args.commit_sha
+            )
+            msg = f"bot: record recovery for {args.package}"
+
+        _save_package_state(
+            repo, branch, args.package, state, commit_message=msg
         )
-        msg = f"bot: record recovery for {args.package}"
-    elif args.action == "apply-archival":
-        apply_archival_timeline(gh, state)
-        msg = "bot: apply archival timeline"
-    else:
-        print(f"Unknown action: {args.action}", file=sys.stderr)
-        return 2
+        return 0
 
-    _save_persistent_state(repo, branch, state, commit_message=msg)
-    return 0
+    if args.action == "apply-archival":
+        # Archival walks every tracked package. Load each per-package
+        # file separately, run the timeline against the merged state,
+        # then write each package's slot back to its own file. Archival
+        # runs from a single workflow job (no matrix) so the
+        # read-then-walk-then-write order is safe — no peer is editing
+        # state mid-walk.
+        packages = _list_tracked_packages(repo, branch)
+        merged = BotState()
+        for pkg in packages:
+            merged.merge_from(_load_package_state(repo, branch, pkg))
+        apply_archival_timeline(gh, merged)
+        for pkg in packages:
+            _save_package_state(
+                repo,
+                branch,
+                pkg,
+                merged,
+                commit_message=f"bot: apply archival timeline for {pkg}",
+            )
+        return 0
+
+    print(f"Unknown action: {args.action}", file=sys.stderr)
+    return 2
 
 
 # ---------------------------------------------------------------------------
