@@ -55,7 +55,10 @@ jobs:
         working-directory: ${{ matrix.package }}
         run: uv run pytest -m "not qualitative and not e2e"
       - name: Record failure with auto-issue bot
-        if: failure() && steps.pytest.outcome == 'failure'
+        # Catch install/sync failures too, not just pytest failures —
+        # `steps.pytest.outcome` is unset when an earlier step (e.g. uv sync)
+        # broke before pytest ran, and we want those reported.
+        if: failure()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
