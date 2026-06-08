@@ -52,7 +52,7 @@ jobs:
 
             if [ -z "$CHANGED_SUBPACKAGES" ]; then
               # If no subpackages changed, check if workflow files changed
-              WORKFLOW_CHANGED=$(git diff --name-only $BASE_REF HEAD | grep -E "\.github/workflows/(ci\.yml|quality-generic\.yml)" || true)
+              WORKFLOW_CHANGED=$(git diff --name-only $BASE_REF HEAD | grep -E "\.github/workflows/(legacy-ci\.yml|quality-generic\.yml)" || true)
               if [ -n "$WORKFLOW_CHANGED" ]; then
                 # Test all subpackages if workflow changed
                 CHANGED_SUBPACKAGES=$(find mellea_contribs -maxdepth 1 -mindepth 1 -type d ! -name '__pycache__' ! -name '.pytest_cache' | sort)

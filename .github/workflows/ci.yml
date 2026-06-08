@@ -37,7 +37,10 @@ jobs:
           if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             BASE_SHA="HEAD~1"
           fi
-          CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD || git ls-files)
+          # Fail loud rather than fall through to `git ls-files` — the latter
+          # silently runs the full matrix on every PR if the base ref is bad,
+          # which masks the real problem (missing fetch depth, wrong base sha).
+          CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD)
           uv run python .github/scripts/discover_subpackages.py \
             --changed-files "${CHANGED}" \
             --base-ref "${BASE_REF}" \
