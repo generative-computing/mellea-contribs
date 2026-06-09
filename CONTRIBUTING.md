@@ -11,7 +11,7 @@ in core, file an issue in the core repo and propose graduation.
 ## Where to go next
 
 - **Adding a new contribs subpackage?** See [`docs/contributing/new-subpackage.md`](docs/contributing/new-subpackage.md).
-- **Cutting or testing a release?** See [`RELEASING.md`](RELEASING.md) and [`RELEASE_TESTING.md`](RELEASE_TESTING.md).
+- **Cutting a release?** See [`RELEASING.md`](RELEASING.md).
 
 ## Quick links
 
