@@ -1,10 +1,7 @@
 # Adding a new `mellea-contribs` subpackage
 
-> Companion guide: if instead you're moving code out of mellea core into contribs,
-> see [`migrating-from-mellea.md`](migrating-from-mellea.md).
-
-This walks through landing a working idea — code in your fork or a local
-script — as a real contribs subpackage. The friction is intentional but small:
+This walks through landing a working idea (code in your fork or a local
+script) as a real contribs subpackage. The friction is intentional but small:
 cookiecutter scaffolds the layout, CI enforces the contract, and the daily smoke
 keeps you honest against `mellea@main`.
 
@@ -157,7 +154,9 @@ plus `validate-structure`.
 
 When the contribs repo cuts its next coordinated release, your subpackage's
 wheel is built and attached as an asset of one GitHub Release at a single
-version. Users install it via the meta-package's extras URL:
+version (see [`RELEASING.md`](../../RELEASING.md) for the full pipeline). The
+meta-package wheel declares your subpackage as an extra, so users install it
+via the GitHub Releases `latest` redirector:
 
 ```bash
 pip install "mellea-contribs[my-thing] @ https://github.com/generative-computing/mellea-contribs/releases/latest/download/mellea_contribs-py3-none-any.whl"
