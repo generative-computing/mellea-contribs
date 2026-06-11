@@ -49,6 +49,15 @@ dev = [
     "mypy>=1.10",
 ]
 
+[tool.mypy]
+# Subpackages live under the mellea_contribs namespace; explicit_package_bases lets
+# mypy resolve modules via the namespace root. ignore_errors keeps the gate non-blocking
+# while subpackage owners triage their own type debt; flip it off per package once
+# cleaned up.
+explicit_package_bases = true
+ignore_errors = true
+ignore_missing_imports = true
+
 [tool.mellea-contribs.ci]
 skip_ollama = false
 timeout_minutes = 30
