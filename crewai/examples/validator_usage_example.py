@@ -16,11 +16,7 @@ import logging
 from crewai import Agent, Crew, Task
 from mellea import start_session
 
-from mellea_contribs.crewai import (
-    MelleaLLM,
-    create_guardrail,
-    create_guardrails,
-)
+from mellea_contribs.crewai import MelleaLLM, create_guardrail, create_guardrails
 
 # Configure logging to show validation details
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
@@ -101,12 +97,16 @@ def example_2_multiple_guardrails():
     # Create multiple requirements
     print("\n1. Creating multiple requirements...")
     requirements = [
-        simple_validate(lambda x: 50 <= len(x.split()) <= 150, "Must be between 50-150 words"),
+        simple_validate(
+            lambda x: 50 <= len(x.split()) <= 150, "Must be between 50-150 words"
+        ),
         simple_validate(
             lambda x: "AI" in x or "artificial intelligence" in x.lower(),
             "Must mention AI or artificial intelligence",
         ),
-        simple_validate(lambda x: x.strip() == x, "Must not have leading/trailing whitespace"),
+        simple_validate(
+            lambda x: x.strip() == x, "Must not have leading/trailing whitespace"
+        ),
     ]
     print(f"   Created {len(requirements)} requirements")
 

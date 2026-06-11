@@ -35,9 +35,7 @@ class TestSingleAgentCrew:
         )
 
         task = Task(
-            description="Research AI trends",
-            expected_output="Task output",
-            agent=agent,
+            description="Research AI trends", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -78,9 +76,7 @@ class TestSingleAgentCrew:
         )
 
         task = Task(
-            description="Research AI trends",
-            expected_output="Task output",
-            agent=agent,
+            description="Research AI trends", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -105,9 +101,7 @@ class TestSingleAgentCrew:
         )
 
         task = Task(
-            description="Research AI trends",
-            expected_output="Task output",
-            agent=agent,
+            description="Research AI trends", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -155,9 +149,7 @@ class TestAgentWithTools:
         )
 
         task = Task(
-            description="Echo hello",
-            expected_output="Task output",
-            agent=agent,
+            description="Echo hello", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -200,9 +192,7 @@ class TestAgentWithTools:
         )
 
         task = Task(
-            description="Add 5 plus 5",
-            expected_output="Task output",
-            agent=agent,
+            description="Add 5 plus 5", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -211,7 +201,9 @@ class TestAgentWithTools:
         # Tool should have been executed and result should be 10
         assert "10" in str(result.raw)
 
-    def test_full_crew_kickoff_with_tool_agent(self, mock_mellea_session, simple_crewai_tool):
+    def test_full_crew_kickoff_with_tool_agent(
+        self, mock_mellea_session, simple_crewai_tool
+    ):
         """Test end-to-end crew.kickoff() with tool-equipped agent."""
         from crewai import Agent, Crew, Task
 
@@ -243,9 +235,7 @@ class TestAgentWithTools:
         )
 
         task = Task(
-            description="Echo crew test",
-            expected_output="Task output",
-            agent=agent,
+            description="Echo crew test", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -277,22 +267,12 @@ class TestRequirementsIntegration:
         mock_mellea_session.instruct.return_value = mock_response
 
         requirements = ["Be professional", "Be concise"]
-        llm = MelleaLLM(
-            mellea_session=mock_mellea_session,
-            requirements=requirements,
-        )
+        llm = MelleaLLM(mellea_session=mock_mellea_session, requirements=requirements)
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
         task = Task(
-            description="Write response",
-            expected_output="Task output",
-            agent=agent,
+            description="Write response", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -321,22 +301,12 @@ class TestRequirementsIntegration:
         mock_mellea_session.instruct.return_value = mock_response
 
         mock_strategy = Mock()
-        llm = MelleaLLM(
-            mellea_session=mock_mellea_session,
-            strategy=mock_strategy,
-        )
+        llm = MelleaLLM(mellea_session=mock_mellea_session, strategy=mock_strategy)
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
         task = Task(
-            description="Write response",
-            expected_output="Task output",
-            agent=agent,
+            description="Write response", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -373,17 +343,10 @@ class TestRequirementsIntegration:
             strategy=mock_strategy,
         )
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
         task = Task(
-            description="Write response",
-            expected_output="Task output",
-            agent=agent,
+            description="Write response", expected_output="Task output", agent=agent
         )
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
@@ -391,7 +354,9 @@ class TestRequirementsIntegration:
 
         # Verify both are in instruct call
         instruct_call_kwargs = mock_mellea_session.instruct.call_args[1]
-        assert "requirements" in instruct_call_kwargs or "strategy" in instruct_call_kwargs
+        assert (
+            "requirements" in instruct_call_kwargs or "strategy" in instruct_call_kwargs
+        )
 
 
 class TestTokenUsageTracking:
@@ -405,18 +370,9 @@ class TestTokenUsageTracking:
 
         llm = MelleaLLM(mellea_session=mock_mellea_session)
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
-        task = Task(
-            description="Test",
-            expected_output="Task output",
-            agent=agent,
-        )
+        task = Task(description="Test", expected_output="Task output", agent=agent)
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
         crew.kickoff()
@@ -580,10 +536,7 @@ class TestAsyncCallDirect:
         mock_mellea_session.ainstruct = async_instruct
 
         requirements = ["Be professional"]
-        llm = MelleaLLM(
-            mellea_session=mock_mellea_session,
-            requirements=requirements,
-        )
+        llm = MelleaLLM(mellea_session=mock_mellea_session, requirements=requirements)
 
         with patch.object(mock_mellea_session, "ainstruct", side_effect=async_instruct):
             with patch.object(mock_mellea_session, "achat"):
@@ -653,16 +606,10 @@ class TestRealCrewAIIntegration:
         from mellea_contribs.crewai import MelleaLLM
 
         llm = MelleaLLM(
-            mellea_session=mellea_session,
-            requirements=["Keep response short"],
+            mellea_session=mellea_session, requirements=["Keep response short"]
         )
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
         task = Task(
             description="Answer in one sentence",
@@ -690,18 +637,9 @@ class TestRealCrewAIIntegration:
 
         llm = MelleaLLM(mellea_session=mellea_session)
 
-        agent = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
-        task = Task(
-            description="Say test",
-            expected_output="Task output",
-            agent=agent,
-        )
+        task = Task(description="Say test", expected_output="Task output", agent=agent)
 
         crew = Crew(agents=[agent], tasks=[task], verbose=False)
         crew.kickoff()
@@ -727,30 +665,18 @@ class TestRealCrewAIIntegration:
 
         # Create two agents
         agent1 = Agent(
-            role="Researcher",
-            goal="Research",
-            backstory="Researcher",
-            llm=llm,
+            role="Researcher", goal="Research", backstory="Researcher", llm=llm
         )
 
-        agent2 = Agent(
-            role="Writer",
-            goal="Write",
-            backstory="Writer",
-            llm=llm,
-        )
+        agent2 = Agent(role="Writer", goal="Write", backstory="Writer", llm=llm)
 
         # Create two tasks
         task1 = Task(
-            description="Say research data",
-            expected_output="Task output",
-            agent=agent1,
+            description="Say research data", expected_output="Task output", agent=agent1
         )
 
         task2 = Task(
-            description="Write summary",
-            expected_output="Task output",
-            agent=agent2,
+            description="Write summary", expected_output="Task output", agent=agent2
         )
 
         crew = Crew(agents=[agent1, agent2], tasks=[task1, task2], verbose=False)

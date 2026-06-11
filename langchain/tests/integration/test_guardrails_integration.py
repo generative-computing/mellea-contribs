@@ -9,7 +9,11 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from mellea_contribs.langchain import MelleaChatModel, MelleaGuardrail, MelleaOutputParser
+from mellea_contribs.langchain import (
+    MelleaChatModel,
+    MelleaGuardrail,
+    MelleaOutputParser,
+)
 
 # ==============================================================================
 # Shared Fixtures
@@ -68,7 +72,9 @@ class TestOutputParserInChain:
         # Create parser with word count requirement
         parser = MelleaOutputParser(
             requirements=[
-                simple_validate(lambda x: len(x.split()) >= 5, "Must have at least 5 words"),
+                simple_validate(
+                    lambda x: len(x.split()) >= 5, "Must have at least 5 words"
+                )
             ]
         )
 
@@ -87,7 +93,9 @@ class TestOutputParserInChain:
 
         parser = MelleaOutputParser(
             requirements=[
-                simple_validate(lambda x: len(x.split()) >= 10, "Must have at least 10 words"),
+                simple_validate(
+                    lambda x: len(x.split()) >= 10, "Must have at least 10 words"
+                )
             ]
         )
 
@@ -123,9 +131,7 @@ class TestOutputParserInChain:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 100, "Must be very long"),
-            ],
+            requirements=[simple_validate(lambda x: len(x) > 100, "Must be very long")],
             strict=False,
         )
 
@@ -142,9 +148,7 @@ class TestOutputParserInChain:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 5, "Must have content"),
-            ]
+            requirements=[simple_validate(lambda x: len(x) > 5, "Must have content")]
         )
 
         prompt = ChatPromptTemplate.from_messages([("human", "{input}")])
@@ -195,7 +199,7 @@ class TestGuardrailWithChain:
 
         guardrail = MelleaGuardrail(
             requirements=[
-                simple_validate(lambda x: len(x) > 10, "Must be substantial"),
+                simple_validate(lambda x: len(x) > 10, "Must be substantial")
             ],
             name="validator",
         )
@@ -215,7 +219,7 @@ class TestGuardrailWithChain:
         # Create separate guardrails
         length_guard = MelleaGuardrail(
             requirements=[
-                simple_validate(lambda x: len(x) > 10, "Must be long enough"),
+                simple_validate(lambda x: len(x) > 10, "Must be long enough")
             ],
             name="length",
         )
@@ -249,9 +253,7 @@ class TestParserAndGuardrailTogether:
 
         # Parser checks basic format
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 5, "Must have content"),
-            ]
+            requirements=[simple_validate(lambda x: len(x) > 5, "Must have content")]
         )
 
         prompt = ChatPromptTemplate.from_messages([("human", "{input}")])
@@ -262,7 +264,7 @@ class TestParserAndGuardrailTogether:
         # Guardrail does additional semantic checks
         guardrail = MelleaGuardrail(
             requirements=[
-                simple_validate(lambda x: "valid" in x.lower(), "Must mention validity"),
+                simple_validate(lambda x: "valid" in x.lower(), "Must mention validity")
             ],
             name="semantic_check",
         )
@@ -277,9 +279,7 @@ class TestParserAndGuardrailTogether:
 
         # Strict parser
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 100, "Must be very long"),
-            ],
+            requirements=[simple_validate(lambda x: len(x) > 100, "Must be very long")],
             strict=True,
         )
 
@@ -292,9 +292,7 @@ class TestParserAndGuardrailTogether:
 
         # But guardrail just reports
         guardrail = MelleaGuardrail(
-            requirements=[
-                simple_validate(lambda x: len(x) > 100, "Must be very long"),
-            ],
+            requirements=[simple_validate(lambda x: len(x) > 100, "Must be very long")],
             name="lenient_check",
         )
 
@@ -314,9 +312,7 @@ class TestAsyncIntegration:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 5, "Must have content"),
-            ]
+            requirements=[simple_validate(lambda x: len(x) > 5, "Must have content")]
         )
 
         prompt = ChatPromptTemplate.from_messages([("human", "{input}")])
@@ -333,9 +329,7 @@ class TestAsyncIntegration:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 100, "Must be very long"),
-            ]
+            requirements=[simple_validate(lambda x: len(x) > 100, "Must be very long")]
         )
 
         prompt = ChatPromptTemplate.from_messages([("human", "{input}")])
@@ -372,7 +366,9 @@ class TestComplexValidationScenarios:
         # Stage 2: Content validation (guardrail)
         content_guard = MelleaGuardrail(
             requirements=[
-                simple_validate(lambda x: "professional" in x.lower(), "Must be professional"),
+                simple_validate(
+                    lambda x: "professional" in x.lower(), "Must be professional"
+                )
             ],
             name="content_check",
         )
@@ -405,7 +401,7 @@ class TestComplexValidationScenarios:
             # Fall back to lenient validation
             lenient_guard = MelleaGuardrail(
                 requirements=[
-                    simple_validate(lambda x: len(x) > 5, "Must have some content"),
+                    simple_validate(lambda x: len(x) > 5, "Must have some content")
                 ],
                 name="lenient",
             )
@@ -465,7 +461,7 @@ class TestErrorRecovery:
 
         parser = MelleaOutputParser(
             requirements=[
-                simple_validate(lambda x: len(x) > 10, "Must be substantial"),
+                simple_validate(lambda x: len(x) > 10, "Must be substantial")
             ],
             strict=False,  # Non-strict to allow retry logic
         )
@@ -479,7 +475,7 @@ class TestErrorRecovery:
         # Check with guardrail
         guardrail = MelleaGuardrail(
             requirements=[
-                simple_validate(lambda x: len(x) > 10, "Must be substantial"),
+                simple_validate(lambda x: len(x) > 10, "Must be substantial")
             ],
             name="checker",
         )
@@ -500,9 +496,7 @@ class TestErrorRecovery:
         custom_template = "VALIDATION ERROR: {errors}\nPlease fix the output."
 
         parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) > 100, "Output too short"),
-            ],
+            requirements=[simple_validate(lambda x: len(x) > 100, "Output too short")],
             error_message_template=custom_template,
         )
 

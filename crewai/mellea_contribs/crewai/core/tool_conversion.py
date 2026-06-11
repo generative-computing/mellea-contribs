@@ -46,7 +46,9 @@ class CrewAIToolConverter(BaseToolConverter):
             dictionaries that contain tools (as CrewAI sometimes passes).
         """
         if not CREWAI_AVAILABLE:
-            raise ImportError("CrewAI is not installed. Please install it with: pip install crewai")
+            raise ImportError(
+                "CrewAI is not installed. Please install it with: pip install crewai"
+            )
 
         mellea_tools = []
 
@@ -75,9 +77,7 @@ class CrewAIToolConverter(BaseToolConverter):
 
                 # Create Mellea tool with correct constructor signature
                 mellea_tool = MelleaTool(  # type: ignore
-                    name=name,
-                    tool_call=function,
-                    as_json_tool=schema,
+                    name=name, tool_call=function, as_json_tool=schema
                 )
                 mellea_tools.append(mellea_tool)
             else:

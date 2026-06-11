@@ -53,11 +53,15 @@ class LangChainMessageConverter(BaseMessageConverter):
         for msg in messages:
             if isinstance(msg, SystemMessage):
                 mellea_messages.append(
-                    self.create_mellea_message("system", self.normalize_content(msg.content))
+                    self.create_mellea_message(
+                        "system", self.normalize_content(msg.content)
+                    )
                 )
             elif isinstance(msg, HumanMessage):
                 mellea_messages.append(
-                    self.create_mellea_message("user", self.normalize_content(msg.content))
+                    self.create_mellea_message(
+                        "user", self.normalize_content(msg.content)
+                    )
                 )
             elif isinstance(msg, AIMessage):
                 # TODO: Preserve tool_calls when Mellea's Message API supports it
@@ -89,7 +93,9 @@ class LangChainMessageConverter(BaseMessageConverter):
             else:
                 # Fallback for unknown message types - treat as user message
                 mellea_messages.append(
-                    self.create_mellea_message("user", self.normalize_content(msg.content))
+                    self.create_mellea_message(
+                        "user", self.normalize_content(msg.content)
+                    )
                 )
 
         return mellea_messages
@@ -112,7 +118,9 @@ class LangChainMessageConverter(BaseMessageConverter):
 
         # Create AIMessage with or without tool_calls
         if tool_calls:
-            message = AIMessage(content=content if content else "", tool_calls=tool_calls)
+            message = AIMessage(
+                content=content if content else "", tool_calls=tool_calls
+            )
         else:
             message = AIMessage(content=content)
 
@@ -122,7 +130,9 @@ class LangChainMessageConverter(BaseMessageConverter):
         )
 
         # Create ChatResult with llm_output if provided
-        return ChatResult(generations=[generation], llm_output=kwargs.get("llm_output", {}))
+        return ChatResult(
+            generations=[generation], llm_output=kwargs.get("llm_output", {})
+        )
 
     def _extract_tool_calls(self, response: Any) -> list[dict[str, Any]]:
         """Extract tool calls from Mellea response.

@@ -83,7 +83,9 @@ def _test_long_user_prompt_and_context(user_prompt, grounding_context, example_n
     print("OUTPUT TYPE:", type(result))
     print("TEMPLATE / CONTENT (first 500 chars):\n", content[:500], "...\n")
 
-    context_key_check = next(iter(grounding_context.keys())) if grounding_context else ""
+    context_key_check = (
+        next(iter(grounding_context.keys())) if grounding_context else ""
+    )
     pass_condition = (user_prompt.strip().splitlines()[0] in content) and (
         context_key_check in content
     )

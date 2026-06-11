@@ -80,7 +80,9 @@ def search_database(query: str) -> str:
     if not results:
         return json.dumps({"message": "No products found", "results": []})
 
-    return json.dumps({"message": f"Found {len(results)} product(s)", "results": results})
+    return json.dumps(
+        {"message": f"Found {len(results)} product(s)", "results": results}
+    )
 
 
 @tool("calculate_total")
@@ -171,12 +173,7 @@ def main():
 
     # Define tools list
     print("\n3. Defining tools...")
-    tools = [
-        search_database,
-        calculate_total,
-        check_inventory,
-        get_current_time,
-    ]
+    tools = [search_database, calculate_total, check_inventory, get_current_time]
     print("   Tools defined:")
     for t in tools:
         print(f"      - {t.name}: {t.description}")
@@ -219,11 +216,7 @@ def main():
 
     # Create crew and execute
     print("\n6. Creating crew and executing task...")
-    crew = Crew(
-        agents=[sales_assistant],
-        tasks=[inquiry_task],
-        verbose=True,
-    )
+    crew = Crew(agents=[sales_assistant], tasks=[inquiry_task], verbose=True)
 
     print("\n" + "=" * 60)
     print("Executing Crew with Tools...")

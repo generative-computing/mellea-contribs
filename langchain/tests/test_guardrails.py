@@ -48,7 +48,9 @@ class TestMelleaOutputParser:
         """Test initialization with custom error message template."""
         requirements = [simple_validate(lambda x: True, "Test")]
         template = "Custom error: {errors}"
-        parser = MelleaOutputParser(requirements=requirements, error_message_template=template)
+        parser = MelleaOutputParser(
+            requirements=requirements, error_message_template=template
+        )
 
         assert parser.error_message_template == template
 
@@ -72,9 +74,7 @@ class TestMelleaOutputParser:
 
     def test_parse_invalid_output_strict_mode(self):
         """Test parsing invalid output raises exception in strict mode."""
-        requirements = [
-            simple_validate(lambda x: len(x) < 10, "Under 10 chars"),
-        ]
+        requirements = [simple_validate(lambda x: len(x) < 10, "Under 10 chars")]
         parser = MelleaOutputParser(requirements=requirements, strict=True)
 
         text = "This is a very long message that exceeds the limit"
@@ -87,9 +87,7 @@ class TestMelleaOutputParser:
 
     def test_parse_invalid_output_non_strict_mode(self):
         """Test parsing invalid output returns text in non-strict mode."""
-        requirements = [
-            simple_validate(lambda x: len(x) < 10, "Under 10 chars"),
-        ]
+        requirements = [simple_validate(lambda x: len(x) < 10, "Under 10 chars")]
         parser = MelleaOutputParser(requirements=requirements, strict=False)
 
         text = "This is a very long message that exceeds the limit"
@@ -123,9 +121,7 @@ class TestMelleaOutputParser:
         def buggy_validator(text):
             raise ValueError("Validation error")
 
-        requirements = [
-            simple_validate(buggy_validator, "Buggy requirement"),
-        ]
+        requirements = [simple_validate(buggy_validator, "Buggy requirement")]
         parser = MelleaOutputParser(requirements=requirements, strict=True)
 
         with pytest.raises(OutputParserException) as exc_info:
@@ -164,9 +160,7 @@ class TestMelleaOutputParser:
 
     def test_parse_empty_text(self):
         """Test parsing empty text."""
-        requirements = [
-            simple_validate(lambda x: len(x) > 0, "Not empty"),
-        ]
+        requirements = [simple_validate(lambda x: len(x) > 0, "Not empty")]
         parser = MelleaOutputParser(requirements=requirements, strict=True)
 
         with pytest.raises(OutputParserException):
@@ -174,9 +168,7 @@ class TestMelleaOutputParser:
 
     def test_parse_with_special_characters(self):
         """Test parsing text with special characters."""
-        requirements = [
-            simple_validate(lambda x: len(x) < 100, "Under 100 chars"),
-        ]
+        requirements = [simple_validate(lambda x: len(x) < 100, "Under 100 chars")]
         parser = MelleaOutputParser(requirements=requirements)
 
         text = "Test with special chars: @#$%^&*()_+-=[]{}|;':\",./<>?"
@@ -190,9 +182,7 @@ class TestMelleaGuardrail:
 
     def test_init_with_valid_requirements(self):
         """Test initialization with valid requirements."""
-        requirements = [
-            simple_validate(lambda x: len(x) < 100, "Under 100 chars"),
-        ]
+        requirements = [simple_validate(lambda x: len(x) < 100, "Under 100 chars")]
         guardrail = MelleaGuardrail(requirements=requirements, name="test_guard")
 
         assert guardrail.name == "test_guard"
@@ -276,9 +266,7 @@ class TestMelleaGuardrail:
         def buggy_validator(text):
             raise ValueError("Validation error")
 
-        requirements = [
-            simple_validate(buggy_validator, "Buggy requirement"),
-        ]
+        requirements = [simple_validate(buggy_validator, "Buggy requirement")]
         guardrail = MelleaGuardrail(requirements=requirements)
 
         result = guardrail.validate("test")
@@ -366,7 +354,9 @@ class TestValidationResult:
 
     def test_create_validation_result(self):
         """Test creating ValidationResult."""
-        result = ValidationResult(passed=True, text="test", errors=[], metadata={"key": "value"})
+        result = ValidationResult(
+            passed=True, text="test", errors=[], metadata={"key": "value"}
+        )
 
         assert result.passed is True
         assert result.text == "test"
@@ -403,7 +393,9 @@ class TestIntegration:
         guardrail = MelleaGuardrail(requirements=requirements)
 
         valid_text = "This is a test"
-        invalid_text = "This is a very long message without the required word and exceeds limit"
+        invalid_text = (
+            "This is a very long message without the required word and exceeds limit"
+        )
 
         # Both should pass for valid text
         parser_result = parser.parse(valid_text)

@@ -145,10 +145,7 @@ def test_from_mellea_not_implemented():
 def test_full_conversion_flow(converter):
     """Test complete message conversion flow."""
     # Framework messages
-    messages = [
-        {"content": "Hello"},
-        {"content": "World"},
-    ]
+    messages = [{"content": "Hello"}, {"content": "World"}]
 
     # Convert to Mellea
     mellea_messages = converter.to_mellea(messages)

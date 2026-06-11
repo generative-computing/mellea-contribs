@@ -31,6 +31,7 @@ try:
         analyze_robustness,
         run_benchdrift_pipeline,
     )
+
     HAS_BENCHDRIFT = True
 except ImportError:
     HAS_BENCHDRIFT = False
@@ -90,7 +91,10 @@ def _extract_answer(response: Any) -> str:
     return text.strip()[:40]
 
 
-@pytest.mark.skipif(not HAS_BENCHDRIFT, reason="benchdrift not installed; install with: pip install -e '.[robustness]'")
+@pytest.mark.skipif(
+    not HAS_BENCHDRIFT,
+    reason="benchdrift not installed; install with: pip install -e '.[robustness]'",
+)
 def test_m_program_robustness(cli_overrides=None):
     _suppress_noise()
 

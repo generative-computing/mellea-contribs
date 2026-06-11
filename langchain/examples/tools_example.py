@@ -91,7 +91,9 @@ def main():
     print("Example 2: Multiple Tools")
     print("=" * 60)
 
-    model_with_tools = chat_model.bind_tools([get_current_weather, calculate_sum, web_search])
+    model_with_tools = chat_model.bind_tools(
+        [get_current_weather, calculate_sum, web_search]
+    )
 
     response = model_with_tools.invoke([HumanMessage(content="What is 25 + 17?")])
 
@@ -111,7 +113,11 @@ def main():
     print("=" * 60)
 
     response = model_with_tools.invoke(
-        [HumanMessage(content="Search for Python tutorials and tell me the weather in New York")]
+        [
+            HumanMessage(
+                content="Search for Python tutorials and tell me the weather in New York"
+            )
+        ]
     )
 
     print(f"\nResponse: {response.content}")

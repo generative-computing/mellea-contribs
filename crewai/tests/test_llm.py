@@ -23,9 +23,7 @@ class TestMelleaLLMBasic:
 
         # Initialize MelleaLLM
         llm = MelleaLLM(
-            mellea_session=mock_session,
-            model="test-model",
-            temperature=0.7,
+            mellea_session=mock_session, model="test-model", temperature=0.7
         )
 
         assert llm.mellea_session == mock_session
@@ -39,10 +37,7 @@ class TestMelleaLLMBasic:
         mock_session = Mock()
         requirements = ["req1", "req2"]
 
-        llm = MelleaLLM(
-            mellea_session=mock_session,
-            requirements=requirements,
-        )
+        llm = MelleaLLM(mellea_session=mock_session, requirements=requirements)
 
         assert llm._requirements == requirements
 
@@ -53,10 +48,7 @@ class TestMelleaLLMBasic:
         mock_session = Mock()
         mock_strategy = Mock()
 
-        llm = MelleaLLM(
-            mellea_session=mock_session,
-            strategy=mock_strategy,
-        )
+        llm = MelleaLLM(mellea_session=mock_session, strategy=mock_strategy)
 
         assert llm._strategy == mock_strategy
 
@@ -135,10 +127,7 @@ class TestMelleaLLMCall:
         mock_session.instruct.return_value = mock_response
 
         requirements = ["req1", "req2"]
-        llm = MelleaLLM(
-            mellea_session=mock_session,
-            requirements=requirements,
-        )
+        llm = MelleaLLM(mellea_session=mock_session, requirements=requirements)
 
         result = llm.call("Hello")
 

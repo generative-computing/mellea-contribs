@@ -215,7 +215,9 @@ def main():
 
     # Show token usage for each agent
     print("\n6. Token usage by agent:")
-    print(f"   Researcher: {researcher_llm.get_token_usage_summary().total_tokens} tokens")
+    print(
+        f"   Researcher: {researcher_llm.get_token_usage_summary().total_tokens} tokens"
+    )
     print(f"   Analyst: {analyst_llm.get_token_usage_summary().total_tokens} tokens")
     print(f"   Writer: {writer_llm.get_token_usage_summary().total_tokens} tokens")
     print(f"   Editor: {editor_llm.get_token_usage_summary().total_tokens} tokens")

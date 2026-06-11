@@ -191,7 +191,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 if not tools:
                     if from_task and hasattr(from_task, "tools") and from_task.tools:
                         tools = from_task.tools
-                    elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
+                    elif (
+                        from_agent and hasattr(from_agent, "tools") and from_agent.tools
+                    ):
                         tools = from_agent.tools
 
                 # Prepare generation using base class (handles message/tool conversion)
@@ -227,10 +229,16 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 # Check various places for tool calls
                 # Only consider it a tool call if it's a non-empty list
                 if hasattr(response, "tool_calls") and response.tool_calls:
-                    if isinstance(response.tool_calls, list) and len(response.tool_calls) > 0:
+                    if (
+                        isinstance(response.tool_calls, list)
+                        and len(response.tool_calls) > 0
+                    ):
                         tool_calls = response.tool_calls
                 elif hasattr(response, "_tool_calls") and response._tool_calls:
-                    if isinstance(response._tool_calls, list) and len(response._tool_calls) > 0:
+                    if (
+                        isinstance(response._tool_calls, list)
+                        and len(response._tool_calls) > 0
+                    ):
                         tool_calls = response._tool_calls
                 elif isinstance(result, list) and len(result) > 0:
                     # Check if result is a list of ToolCall objects
@@ -288,10 +296,14 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                             tool_args = tool_call.function.arguments
                         else:
                             tool_name = (
-                                tool_call.name if hasattr(tool_call, "name") else str(tool_call)
+                                tool_call.name
+                                if hasattr(tool_call, "name")
+                                else str(tool_call)
                             )
                             tool_args = (
-                                tool_call.arguments if hasattr(tool_call, "arguments") else {}
+                                tool_call.arguments
+                                if hasattr(tool_call, "arguments")
+                                else {}
                             )
 
                         tool_result = self._handle_tool_execution(
@@ -311,8 +323,12 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         response.usage
                         if isinstance(response.usage, dict)
                         else {
-                            "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                            "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+                            "prompt_tokens": getattr(
+                                response.usage, "prompt_tokens", 0
+                            ),
+                            "completion_tokens": getattr(
+                                response.usage, "completion_tokens", 0
+                            ),
                             "total_tokens": getattr(response.usage, "total_tokens", 0),
                         }
                     )
@@ -377,7 +393,9 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 if not tools:
                     if from_task and hasattr(from_task, "tools") and from_task.tools:
                         tools = from_task.tools
-                    elif from_agent and hasattr(from_agent, "tools") and from_agent.tools:
+                    elif (
+                        from_agent and hasattr(from_agent, "tools") and from_agent.tools
+                    ):
                         tools = from_agent.tools
 
                 # Prepare generation using base class (handles message/tool conversion)
@@ -410,10 +428,16 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                 tool_calls = None
                 # Only consider it a tool call if it's a non-empty list
                 if hasattr(response, "tool_calls") and response.tool_calls:
-                    if isinstance(response.tool_calls, list) and len(response.tool_calls) > 0:
+                    if (
+                        isinstance(response.tool_calls, list)
+                        and len(response.tool_calls) > 0
+                    ):
                         tool_calls = response.tool_calls
                 elif hasattr(response, "_tool_calls") and response._tool_calls:
-                    if isinstance(response._tool_calls, list) and len(response._tool_calls) > 0:
+                    if (
+                        isinstance(response._tool_calls, list)
+                        and len(response._tool_calls) > 0
+                    ):
                         tool_calls = response._tool_calls
                 elif isinstance(result, list) and len(result) > 0:
                     # Check if result is a list of ToolCall objects
@@ -471,10 +495,14 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                             tool_args = tool_call.function.arguments
                         else:
                             tool_name = (
-                                tool_call.name if hasattr(tool_call, "name") else str(tool_call)
+                                tool_call.name
+                                if hasattr(tool_call, "name")
+                                else str(tool_call)
                             )
                             tool_args = (
-                                tool_call.arguments if hasattr(tool_call, "arguments") else {}
+                                tool_call.arguments
+                                if hasattr(tool_call, "arguments")
+                                else {}
                             )
 
                         tool_result = self._handle_tool_execution(
@@ -494,8 +522,12 @@ class MelleaLLM(BaseLLM, MelleaIntegrationBase):
                         response.usage
                         if isinstance(response.usage, dict)
                         else {
-                            "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                            "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+                            "prompt_tokens": getattr(
+                                response.usage, "prompt_tokens", 0
+                            ),
+                            "completion_tokens": getattr(
+                                response.usage, "completion_tokens", 0
+                            ),
                             "total_tokens": getattr(response.usage, "total_tokens", 0),
                         }
                     )

@@ -96,10 +96,7 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
         """
         # Initialize BaseChatModel first (Pydantic model)
         BaseChatModel.__init__(
-            self,
-            mellea_session=mellea_session,
-            model_name=model_name,
-            **kwargs,
+            self, mellea_session=mellea_session, model_name=model_name, **kwargs
         )
 
         # Then initialize MelleaIntegrationBase attributes manually
@@ -197,11 +194,13 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
 
         # Extract requirements/strategy from kwargs or model_options
         # (can be passed directly or in model_options dict)
-        requirements = kwargs.get("requirements") or model_options.pop("requirements", None)
-        strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
-        return_sampling_results = kwargs.get("return_sampling_results", False) or model_options.pop(
-            "return_sampling_results", False
+        requirements = kwargs.get("requirements") or model_options.pop(
+            "requirements", None
         )
+        strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
+        return_sampling_results = kwargs.get(
+            "return_sampling_results", False
+        ) or model_options.pop("return_sampling_results", False)
 
         # Generate with Mellea using base class method
         response = self._generate_with_mellea(
@@ -275,11 +274,13 @@ class MelleaChatModel(BaseChatModel, MelleaIntegrationBase):
 
         # Extract requirements/strategy from kwargs or model_options
         # (can be passed directly or in model_options dict)
-        requirements = kwargs.get("requirements") or model_options.pop("requirements", None)
-        strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
-        return_sampling_results = kwargs.get("return_sampling_results", False) or model_options.pop(
-            "return_sampling_results", False
+        requirements = kwargs.get("requirements") or model_options.pop(
+            "requirements", None
         )
+        strategy = kwargs.get("strategy") or model_options.pop("strategy", None)
+        return_sampling_results = kwargs.get(
+            "return_sampling_results", False
+        ) or model_options.pop("return_sampling_results", False)
 
         # Generate with Mellea using base class async method
         response = await self._agenerate_with_mellea(

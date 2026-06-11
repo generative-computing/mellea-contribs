@@ -39,7 +39,9 @@ def example_basic_parser():
     parser = MelleaOutputParser(
         requirements=[
             simple_validate(lambda x: len(x.split()) < 100, "Must be under 100 words"),
-            simple_validate(lambda x: x.strip() == x, "Must not have leading/trailing whitespace"),
+            simple_validate(
+                lambda x: x.strip() == x, "Must not have leading/trailing whitespace"
+            ),
             simple_validate(
                 lambda x: "AI" in x or "artificial intelligence" in x.lower(),
                 "Must mention AI or artificial intelligence",
@@ -78,12 +80,14 @@ def example_non_strict_mode():
             simple_validate(
                 lambda x: len(x) < 50,  # Very strict limit
                 "Must be under 50 characters",
-            ),
+            )
         ],
         strict=False,  # Won't raise exception on failure
     )
 
-    prompt = ChatPromptTemplate.from_template("Write a detailed explanation about {topic}.")
+    prompt = ChatPromptTemplate.from_template(
+        "Write a detailed explanation about {topic}."
+    )
 
     chain = prompt | model | parser
 
@@ -120,13 +124,17 @@ def example_format_instructions():
     print(instructions)
 
     # Use instructions in prompt
-    prompt = ChatPromptTemplate.from_template("Write about {topic}.\n\n{format_instructions}")
+    prompt = ChatPromptTemplate.from_template(
+        "Write about {topic}.\n\n{format_instructions}"
+    )
 
     chain = prompt | model | parser
 
     print("\n2. Testing with format instructions in prompt...")
     try:
-        result = chain.invoke({"topic": "quantum computing", "format_instructions": instructions})
+        result = chain.invoke(
+            {"topic": "quantum computing", "format_instructions": instructions}
+        )
         print(f"✓ Success! Output:\n{result}\n")
     except Exception as e:
         print(f"✗ Failed: {e}\n")
@@ -193,7 +201,7 @@ def example_error_handling():
             simple_validate(
                 lambda x: len(x) < 20,  # Very strict
                 "Must be under 20 characters",
-            ),
+            )
         ],
         strict=True,
     )
@@ -213,9 +221,7 @@ def example_error_handling():
         # In production, you might retry with relaxed requirements
         print("2. Retrying with relaxed requirements...")
         relaxed_parser = MelleaOutputParser(
-            requirements=[
-                simple_validate(lambda x: len(x) < 200, "Under 200 chars"),
-            ],
+            requirements=[simple_validate(lambda x: len(x) < 200, "Under 200 chars")],
             strict=False,
         )
         relaxed_chain = prompt | model | relaxed_parser

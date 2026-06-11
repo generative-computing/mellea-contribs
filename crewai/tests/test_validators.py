@@ -1,9 +1,6 @@
 """Unit tests for validators module."""
 
-from mellea_contribs.crewai.core.validators import (
-    create_guardrail,
-    create_guardrails,
-)
+from mellea_contribs.crewai.core.validators import create_guardrail, create_guardrails
 
 
 # Helper function to create simple validators

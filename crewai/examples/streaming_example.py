@@ -101,11 +101,7 @@ def main():
 
     # Create crew
     print("\n6. Creating crew...")
-    crew = Crew(
-        agents=[storyteller],
-        tasks=[story_task],
-        verbose=False,
-    )
+    crew = Crew(agents=[storyteller], tasks=[story_task], verbose=False)
     print("   Crew created")
 
     # Execute with streaming
@@ -145,7 +141,10 @@ def main():
         try:
             messages = [
                 {"role": "system", "content": "You are a haiku poet."},
-                {"role": "user", "content": "Write a haiku about artificial intelligence."},
+                {
+                    "role": "user",
+                    "content": "Write a haiku about artificial intelligence.",
+                },
             ]
 
             haiku_result = llm.call(messages)

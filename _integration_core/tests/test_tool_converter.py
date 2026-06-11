@@ -40,7 +40,9 @@ def test_extract_tool_schema_with_args_schema(converter):
     mock_args_schema = Mock()
     mock_args_schema.schema.return_value = {"type": "object", "properties": {}}
 
-    tool = Mock(name="test_tool", description="Test description", args_schema=mock_args_schema)
+    tool = Mock(
+        name="test_tool", description="Test description", args_schema=mock_args_schema
+    )
 
     schema = converter.extract_tool_schema(tool)
 

@@ -79,7 +79,9 @@ class FakeMelleaSession:
         self.last_return_sampling_results = return_sampling_results
 
         if return_sampling_results:
-            return FakeSamplingResult(success=True, result_content=self.response_content)
+            return FakeSamplingResult(
+                success=True, result_content=self.response_content
+            )
         return FakeMelleaResponse(self.response_content)
 
     async def ainstruct(
@@ -99,7 +101,9 @@ class FakeMelleaSession:
         self.last_return_sampling_results = return_sampling_results
 
         if return_sampling_results:
-            return FakeSamplingResult(success=True, result_content=self.response_content)
+            return FakeSamplingResult(
+                success=True, result_content=self.response_content
+            )
         return FakeMelleaResponse(self.response_content)
 
 
@@ -242,10 +246,7 @@ class TestMessageConversionIntegration:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         system_text = "You are a helpful assistant"
-        messages = [
-            SystemMessage(content=system_text),
-            HumanMessage(content="Hello"),
-        ]
+        messages = [SystemMessage(content=system_text), HumanMessage(content="Hello")]
 
         chat_model.invoke(messages)
 
@@ -338,9 +339,7 @@ class TestToolCallingIntegration:
 
     def test_tool_response_parsed_to_ai_message(self):
         """Session returns [ToolCall...] string → AIMessage has .tool_calls."""
-        tool_call_string = (
-            "[ToolCall(function=Function(name='get_weather', arguments={'location': 'NYC'}))]"
-        )
+        tool_call_string = "[ToolCall(function=Function(name='get_weather', arguments={'location': 'NYC'}))]"
         fake_session = FakeMelleaSession(response_content=tool_call_string)
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
@@ -379,7 +378,9 @@ class TestToolCallingIntegration:
 
     def test_tool_not_found_returns_error_result(self):
         """Model called tool not in bound list → error result stored."""
-        tool_call_string = "[ToolCall(function=Function(name='unknown_tool', arguments={}))]"
+        tool_call_string = (
+            "[ToolCall(function=Function(name='unknown_tool', arguments={}))]"
+        )
         fake_session = FakeMelleaSession(response_content=tool_call_string)
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
@@ -442,8 +443,7 @@ class TestRequirementsAndStrategyIntegration:
         strategy = MockStrategy()
 
         chat_model.invoke(
-            messages,
-            model_options={"requirements": requirements, "strategy": strategy},
+            messages, model_options={"requirements": requirements, "strategy": strategy}
         )
 
         assert "instruct" in fake_session.calls_made
@@ -483,12 +483,12 @@ class TestRequirementsAndStrategyIntegration:
             ):
                 if return_sampling_results:
                     sample_obj = type(
-                        "obj", (), {"content": "Fallback sample", "value": "Fallback sample"}
+                        "obj",
+                        (),
+                        {"content": "Fallback sample", "value": "Fallback sample"},
                     )()
                     return FakeSamplingResult(
-                        success=False,
-                        result_content=None,
-                        samples=[sample_obj],
+                        success=False, result_content=None, samples=[sample_obj]
                     )
                 return FakeMelleaResponse("Regular response")
 
@@ -517,8 +517,7 @@ class TestRequirementsAndStrategyIntegration:
         requirements = ["Must be valid"]
 
         result = await chat_model.ainvoke(
-            messages,
-            model_options={"requirements": requirements},
+            messages, model_options={"requirements": requirements}
         )
 
         # Should call ainstruct
@@ -550,10 +549,7 @@ class TestLangChainChainIntegration:
         chat_model = MelleaChatModel(mellea_session=fake_session)
 
         prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", "You are helpful"),
-                ("human", "{input}"),
-            ]
+            [("system", "You are helpful"), ("human", "{input}")]
         )
 
         chain = prompt | chat_model

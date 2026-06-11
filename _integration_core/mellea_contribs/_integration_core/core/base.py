@@ -65,10 +65,7 @@ class MelleaIntegrationBase(ABC):
         self._kwargs = kwargs
 
     def _prepare_generation(
-        self,
-        messages: Any,
-        tools: list[Any] | None = None,
-        **kwargs: Any,
+        self, messages: Any, tools: list[Any] | None = None, **kwargs: Any
     ) -> tuple[str, dict[str, Any], bool]:
         """Prepare inputs for Mellea generation.
 
@@ -154,9 +151,7 @@ class MelleaIntegrationBase(ABC):
         else:
             # Use standard chat method
             return self.mellea_session.chat(
-                prompt,
-                model_options=model_options,
-                tool_calls=tool_calls_enabled,
+                prompt, model_options=model_options, tool_calls=tool_calls_enabled
             )
 
     async def _agenerate_with_mellea(
@@ -202,9 +197,7 @@ class MelleaIntegrationBase(ABC):
         else:
             # Use standard async chat method
             return await self.mellea_session.achat(
-                prompt,
-                model_options=model_options,
-                tool_calls=tool_calls_enabled,
+                prompt, model_options=model_options, tool_calls=tool_calls_enabled
             )
 
     def _handle_sampling_results(self, response: Any) -> Any:
@@ -229,7 +222,10 @@ class MelleaIntegrationBase(ABC):
                 return response.result
             else:
                 # Use the first sample if validation failed
-                if hasattr(response, "sample_generations") and response.sample_generations:
+                if (
+                    hasattr(response, "sample_generations")
+                    and response.sample_generations
+                ):
                     # Get content from sample generation
                     sample = response.sample_generations[0]
                     # Handle both .content and .value attributes
