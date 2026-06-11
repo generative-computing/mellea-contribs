@@ -111,7 +111,9 @@ class MelleaOutputParser(BaseOutputParser[str]):
                 # It's a callable (simple_validate result)
                 req_list.append(req)
                 # Try to get description from the callable
-                desc = getattr(req, "__doc__", None) or getattr(req, "description", "Requirement")
+                desc = getattr(req, "__doc__", None) or getattr(
+                    req, "description", "Requirement"
+                )
                 desc_list.append(desc)
             else:
                 raise ValueError(
@@ -143,7 +145,9 @@ class MelleaOutputParser(BaseOutputParser[str]):
         failed_requirements = []
 
         # Validate each requirement
-        for req_fn, description in zip(self.requirements, self.requirement_descriptions):
+        for req_fn, description in zip(
+            self.requirements, self.requirement_descriptions
+        ):
             try:
                 if not req_fn(text):
                     failed_requirements.append(description)
@@ -232,11 +236,7 @@ class MelleaGuardrail:
         ```
     """
 
-    def __init__(
-        self,
-        requirements: list[Any],
-        name: str | None = None,
-    ):
+    def __init__(self, requirements: list[Any], name: str | None = None):
         """Initialize the guardrail.
 
         Args:
@@ -253,7 +253,9 @@ class MelleaGuardrail:
         for req in requirements:
             if hasattr(req, "__call__"):
                 self.requirements.append(req)
-                desc = getattr(req, "__doc__", None) or getattr(req, "description", "Requirement")
+                desc = getattr(req, "__doc__", None) or getattr(
+                    req, "description", "Requirement"
+                )
                 self.requirement_descriptions.append(desc)
             else:
                 raise ValueError(
@@ -273,7 +275,9 @@ class MelleaGuardrail:
         passed_requirements = []
 
         # Validate each requirement
-        for req_fn, description in zip(self.requirements, self.requirement_descriptions):
+        for req_fn, description in zip(
+            self.requirements, self.requirement_descriptions
+        ):
             try:
                 if req_fn(text):
                     passed_requirements.append(description)
@@ -294,10 +298,7 @@ class MelleaGuardrail:
         }
 
         return ValidationResult(
-            passed=passed,
-            text=text,
-            errors=failed_requirements,
-            metadata=metadata,
+            passed=passed, text=text, errors=failed_requirements, metadata=metadata
         )
 
     def compose(self, other: "MelleaGuardrail") -> "MelleaGuardrail":
@@ -318,12 +319,13 @@ class MelleaGuardrail:
 
         # Combine requirements and descriptions
         combined_requirements = self.requirements + other.requirements
-        combined_descriptions = self.requirement_descriptions + other.requirement_descriptions
+        combined_descriptions = (
+            self.requirement_descriptions + other.requirement_descriptions
+        )
 
         # Create new guardrail
         new_guardrail = MelleaGuardrail(
-            requirements=combined_requirements,
-            name=f"{self.name}+{other.name}",
+            requirements=combined_requirements, name=f"{self.name}+{other.name}"
         )
 
         # Manually set descriptions since we already extracted them
@@ -344,8 +346,4 @@ class MelleaGuardrail:
         return f"MelleaGuardrail(name='{self.name}', requirements={len(self.requirements)})"
 
 
-__all__ = [
-    "MelleaOutputParser",
-    "MelleaGuardrail",
-    "ValidationResult",
-]
+__all__ = ["MelleaOutputParser", "MelleaGuardrail", "ValidationResult"]

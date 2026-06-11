@@ -26,7 +26,11 @@ def example_basic_requirements():
 
     # Use requirements in model_options
     response = chat_model.invoke(
-        [HumanMessage(content="Write a short email to Olivia thanking her for organizing events.")],
+        [
+            HumanMessage(
+                content="Write a short email to Olivia thanking her for organizing events."
+            )
+        ],
         model_options={
             "requirements": [
                 "The email should have a salutation",
@@ -51,7 +55,11 @@ def example_requirements_with_strategy():
 
     # Use requirements with a sampling strategy
     response = chat_model.invoke(
-        [HumanMessage(content="Write a short email to Olivia thanking her for organizing events.")],
+        [
+            HumanMessage(
+                content="Write a short email to Olivia thanking her for organizing events."
+            )
+        ],
         model_options={
             "requirements": [
                 "The email should have a salutation",
@@ -87,7 +95,11 @@ def example_custom_validation():
     ]
 
     response = chat_model.invoke(
-        [HumanMessage(content="Write a short email to Olivia thanking her for organizing events.")],
+        [
+            HumanMessage(
+                content="Write a short email to Olivia thanking her for organizing events."
+            )
+        ],
         model_options={
             "requirements": requirements,
             "strategy": RejectionSamplingStrategy(loop_budget=5),
@@ -133,7 +145,9 @@ def example_with_langchain_chain():
 
     chain = prompt | model_with_requirements | StrOutputParser()
 
-    result = chain.invoke({"name": "Dr. Smith", "topic": "upcoming conference presentation"})
+    result = chain.invoke(
+        {"name": "Dr. Smith", "topic": "upcoming conference presentation"}
+    )
 
     print(result)
     print()

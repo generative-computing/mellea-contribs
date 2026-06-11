@@ -57,7 +57,9 @@ class TestMelleaChatModel:
     def test_initialization_with_custom_name(self):
         """Test initialization with custom model name."""
         mock_session = MockMelleaSession()
-        chat_model = MelleaChatModel(mellea_session=mock_session, model_name="custom-mellea")
+        chat_model = MelleaChatModel(
+            mellea_session=mock_session, model_name="custom-mellea"
+        )
 
         assert chat_model.model_name == "custom-mellea"
 
@@ -244,7 +246,9 @@ class TestMelleaChatModelToolBinding:
     def test_bind_tools_preserves_model_config(self):
         """Test that bind_tools preserves model configuration."""
         mock_session = MockMelleaSession()
-        chat_model = MelleaChatModel(mellea_session=mock_session, model_name="custom-model")
+        chat_model = MelleaChatModel(
+            mellea_session=mock_session, model_name="custom-model"
+        )
 
         class MockTool:
             name = "tool"
@@ -633,7 +637,9 @@ class TestMelleaChatModelRequirementsAndStrategy:
         messages = [HumanMessage(content="Test")]
         requirements = ["Requirement 1", "Requirement 2"]
 
-        result = await chat_model._agenerate(messages, model_options={"requirements": requirements})
+        result = await chat_model._agenerate(
+            messages, model_options={"requirements": requirements}
+        )
 
         assert session.last_requirements == requirements
         assert result.generations[0].message.content == "Response with requirements"
@@ -681,7 +687,9 @@ class TestMelleaChatModelRequirementsAndStrategy:
         messages = [HumanMessage(content="Test")]
         strategy = MockStrategy()
 
-        result = await chat_model._agenerate(messages, model_options={"strategy": strategy})
+        result = await chat_model._agenerate(
+            messages, model_options={"strategy": strategy}
+        )
 
         assert session.last_strategy == strategy
         assert result.generations[0].message.content == "Response with strategy"

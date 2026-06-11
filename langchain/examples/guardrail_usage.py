@@ -33,7 +33,9 @@ def example_basic_guardrail():
         requirements=[
             simple_validate(lambda x: len(x) > 50, "Must be at least 50 characters"),
             simple_validate(lambda x: len(x) < 500, "Must be under 500 characters"),
-            simple_validate(lambda x: x.strip() == x, "Must not have leading/trailing whitespace"),
+            simple_validate(
+                lambda x: x.strip() == x, "Must not have leading/trailing whitespace"
+            ),
         ],
         name="length_and_format_check",
     )
@@ -66,7 +68,7 @@ def example_composing_guardrails():
     # Create specialized guardrails
     length_guardrail = MelleaGuardrail(
         requirements=[
-            simple_validate(lambda x: 50 < len(x) < 500, "50-500 characters"),
+            simple_validate(lambda x: 50 < len(x) < 500, "50-500 characters")
         ],
         name="length_check",
     )
@@ -82,8 +84,9 @@ def example_composing_guardrails():
     content_guardrail = MelleaGuardrail(
         requirements=[
             simple_validate(
-                lambda x: "AI" in x or "artificial intelligence" in x.lower(), "Mentions AI"
-            ),
+                lambda x: "AI" in x or "artificial intelligence" in x.lower(),
+                "Mentions AI",
+            )
         ],
         name="content_check",
     )
@@ -101,7 +104,9 @@ def example_composing_guardrails():
 
     # Test combined guardrail
     print("\n3. Testing combined guardrail...")
-    test_text = "Artificial intelligence is transforming how we interact with technology. " * 2
+    test_text = (
+        "Artificial intelligence is transforming how we interact with technology. " * 2
+    )
     result = combined.validate(test_text)
 
     print(f"   Passed: {result.passed}")
@@ -121,13 +126,17 @@ def example_validation_metadata():
         requirements=[
             simple_validate(lambda x: len(x.split()) > 10, "At least 10 words"),
             simple_validate(lambda x: len(x.split()) < 100, "Under 100 words"),
-            simple_validate(lambda x: any(c.isupper() for c in x), "Contains uppercase"),
+            simple_validate(
+                lambda x: any(c.isupper() for c in x), "Contains uppercase"
+            ),
             simple_validate(lambda x: "." in x, "Contains period"),
         ],
         name="comprehensive_check",
     )
 
-    test_text = "This is a test message with proper formatting. It has multiple sentences."
+    test_text = (
+        "This is a test message with proper formatting. It has multiple sentences."
+    )
     result = guardrail.validate(test_text)
 
     print("\n1. Validation result:")
@@ -274,7 +283,9 @@ def example_progressive_validation():
         requirements=[
             simple_validate(lambda x: any(c.isupper() for c in x), "Has uppercase"),
             simple_validate(lambda x: any(c.islower() for c in x), "Has lowercase"),
-            simple_validate(lambda x: "." in x or "!" in x or "?" in x, "Has punctuation"),
+            simple_validate(
+                lambda x: "." in x or "!" in x or "?" in x, "Has punctuation"
+            ),
         ],
         name="stage3_content",
     )

@@ -62,11 +62,7 @@ def main():
 
     # Create crew and execute
     print("\n5. Creating crew and executing task...")
-    crew = Crew(
-        agents=[researcher],
-        tasks=[research_task],
-        verbose=True,
-    )
+    crew = Crew(agents=[researcher], tasks=[research_task], verbose=True)
 
     print("\n" + "=" * 60)
     print("Executing Crew...")

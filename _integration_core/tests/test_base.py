@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from mellea_contribs._integration_core import BaseMessageConverter, MelleaIntegrationBase
+from mellea_contribs._integration_core import (
+    BaseMessageConverter,
+    MelleaIntegrationBase,
+)
 
 
 # Mock SamplingResult class for testing
@@ -45,7 +48,9 @@ class MockIntegration(MelleaIntegrationBase):
         prompt, model_options, tool_calls_enabled = self._prepare_generation(
             messages, kwargs.get("tools"), **kwargs
         )
-        response = await self._agenerate_with_mellea(prompt, model_options, tool_calls_enabled)
+        response = await self._agenerate_with_mellea(
+            prompt, model_options, tool_calls_enabled
+        )
         return self.message_converter.from_mellea(response)
 
 
@@ -56,21 +61,27 @@ def mock_session():
     session.chat = Mock(return_value=Mock(content="Test response"))
     session.achat = AsyncMock(return_value=Mock(content="Test async response"))
     session.instruct = Mock(return_value=Mock(content="Test instruct response"))
-    session.ainstruct = AsyncMock(return_value=Mock(content="Test async instruct response"))
+    session.ainstruct = AsyncMock(
+        return_value=Mock(content="Test async instruct response")
+    )
     return session
 
 
 @pytest.fixture
 def integration(mock_session):
     """Create a mock integration instance."""
-    return MockIntegration(mellea_session=mock_session, message_converter=MockMessageConverter())
+    return MockIntegration(
+        mellea_session=mock_session, message_converter=MockMessageConverter()
+    )
 
 
 def test_prepare_generation_basic(integration):
     """Test basic message preparation."""
     messages = [{"role": "user", "content": "Hello"}]
 
-    prompt, model_options, tool_calls_enabled = integration._prepare_generation(messages)
+    prompt, model_options, tool_calls_enabled = integration._prepare_generation(
+        messages
+    )
 
     assert prompt == "Test message"
     assert isinstance(model_options, dict)
@@ -118,7 +129,9 @@ async def test_agenerate_with_mellea_chat(integration, mock_session):
 @pytest.mark.asyncio
 async def test_agenerate_with_mellea_instruct(integration, mock_session):
     """Test async generation using ainstruct method with strategy."""
-    response = await integration._agenerate_with_mellea("Test prompt", {}, False, strategy=Mock())
+    response = await integration._agenerate_with_mellea(
+        "Test prompt", {}, False, strategy=Mock()
+    )
 
     assert response.content == "Test async instruct response"
     mock_session.ainstruct.assert_called_once()
@@ -140,7 +153,9 @@ def test_handle_sampling_results_success(integration):
 def test_handle_sampling_results_failure_with_samples(integration):
     """Test handling failed sampling with available samples."""
     mock_sample = Mock(content="Sample")
-    mock_response = MockSamplingResult(success=False, result=None, sample_generations=[mock_sample])
+    mock_response = MockSamplingResult(
+        success=False, result=None, sample_generations=[mock_sample]
+    )
 
     result = integration._handle_sampling_results(mock_response)
 
@@ -152,7 +167,9 @@ def test_handle_sampling_results_failure_with_samples(integration):
 @patch("mellea_contribs._integration_core.core.base.SamplingResult", MockSamplingResult)
 def test_handle_sampling_results_failure_no_samples(integration):
     """Test handling failed sampling without samples raises error."""
-    mock_response = MockSamplingResult(success=False, result=None, sample_generations=[])
+    mock_response = MockSamplingResult(
+        success=False, result=None, sample_generations=[]
+    )
 
     with pytest.raises(ValueError, match="No samples generated"):
         integration._handle_sampling_results(mock_response)

@@ -65,7 +65,9 @@ class FakeAgentMelleaSession:
     async def achat(self, message, model_options=None, tool_calls=False):
         """Mock async chat for agent interactions."""
         self.call_count += 1
-        self.call_history.append({"message": message, "tool_calls": tool_calls, "async": True})
+        self.call_history.append(
+            {"message": message, "tool_calls": tool_calls, "async": True}
+        )
 
         class MockResponse:
             def __init__(self, content):
@@ -97,11 +99,7 @@ class FakeAgentMelleaSession:
         """Mock sync instruct for requirements/strategy."""
         self.call_count += 1
         self.call_history.append(
-            {
-                "message": message,
-                "requirements": requirements,
-                "strategy": strategy,
-            }
+            {"message": message, "requirements": requirements, "strategy": strategy}
         )
 
         class MockResponse:

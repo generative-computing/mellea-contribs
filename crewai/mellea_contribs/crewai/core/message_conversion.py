@@ -26,13 +26,17 @@ def parse_tool_calls_from_text(text: str) -> list[Any] | None:
         List of parsed tool call objects, or None if parsing fails
     """
     # Check if text looks like a list of ToolCall objects
-    if not (text.strip().startswith("[") and "ToolCall" in text and "function=" in text):
+    if not (
+        text.strip().startswith("[") and "ToolCall" in text and "function=" in text
+    ):
         return None
 
     try:
         # Try to extract tool call information using regex
         # Pattern: ToolCall(function=Function(name='tool_name', arguments={...}))
-        pattern = r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{[^}]+\})\)\)"
+        pattern = (
+            r"ToolCall\(function=Function\(name='([^']+)',\s*arguments=(\{[^}]+\})\)\)"
+        )
         matches = re.findall(pattern, text)
 
         if not matches:

@@ -155,7 +155,9 @@ class BaseToolConverter:
                 continue
 
             # Use brace counting to extract the complete dictionary
-            args_str = BaseToolConverter._extract_balanced_braces(content_str, args_brace_pos)
+            args_str = BaseToolConverter._extract_balanced_braces(
+                content_str, args_brace_pos
+            )
             if not args_str:
                 continue
 

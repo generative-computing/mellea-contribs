@@ -88,11 +88,7 @@ def main():
 
     # Create crew and execute
     print("\n6. Creating crew and executing task...")
-    crew = Crew(
-        agents=[writer],
-        tasks=[email_task],
-        verbose=True,
-    )
+    crew = Crew(agents=[writer], tasks=[email_task], verbose=True)
 
     print("\n" + "=" * 60)
     print("Executing Crew with Validation...")

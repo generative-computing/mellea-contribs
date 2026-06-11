@@ -22,8 +22,7 @@ else:
 
 
 def create_guardrail(
-    requirement: Any,
-    error_prefix: str = "Validation failed",
+    requirement: Any, error_prefix: str = "Validation failed"
 ) -> Callable[[TaskOutput], tuple[bool, Any]]:
     """Create a CrewAI guardrail function from a Mellea requirement.
 
@@ -112,8 +111,7 @@ def create_guardrail(
 
 
 def create_guardrails(
-    requirements: list[Any],
-    error_prefix: str = "Validation failed",
+    requirements: list[Any], error_prefix: str = "Validation failed"
 ) -> list[Callable[[TaskOutput], tuple[bool, Any]]]:
     """Create multiple CrewAI guardrail functions from Mellea requirements.
 

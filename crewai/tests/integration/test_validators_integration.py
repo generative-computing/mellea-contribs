@@ -9,10 +9,7 @@ import pytest
 # Add parent test directory to path to import conftest fixtures
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mellea_contribs.crewai.core.validators import (
-    create_guardrail,
-    create_guardrails,
-)
+from mellea_contribs.crewai.core.validators import create_guardrail, create_guardrails
 
 pytestmark = [pytest.mark.integration]
 
@@ -47,7 +44,9 @@ class TestGuardrailIntegration:
 
         # Setup mock to return valid output
         mock_response = Mock()
-        mock_response.content = "This is a test message with enough words to pass validation"
+        mock_response.content = (
+            "This is a test message with enough words to pass validation"
+        )
         mock_response._tool_calls = []
         mock_response.tool_calls = []
         mock_usage = Mock()
@@ -113,7 +112,9 @@ class TestGuardrailIntegration:
         mock_mellea_session.chat.return_value = mock_response
 
         # Create guardrail requiring more words
-        requirement = simple_validate(lambda x: len(x.split()) > 10, "At least 10 words")
+        requirement = simple_validate(
+            lambda x: len(x.split()) > 10, "At least 10 words"
+        )
         guardrail = create_guardrail(requirement)
 
         # Test guardrail
@@ -131,7 +132,9 @@ class TestGuardrailIntegration:
 
         # Setup mock
         mock_response = Mock()
-        mock_response.content = "This is a comprehensive test message with sufficient content"
+        mock_response.content = (
+            "This is a comprehensive test message with sufficient content"
+        )
         mock_response._tool_calls = []
         mock_response.tool_calls = []
         mock_usage = Mock()
@@ -208,7 +211,9 @@ class TestGuardrailIntegration:
         mock_mellea_session.chat.return_value = mock_response
 
         # Create guardrail with specific requirement
-        requirement = simple_validate(lambda x: len(x.split()) >= 20, "Must have at least 20 words")
+        requirement = simple_validate(
+            lambda x: len(x.split()) >= 20, "Must have at least 20 words"
+        )
         guardrail = create_guardrail(requirement)
 
         # Test guardrail

@@ -32,7 +32,9 @@ def main():
     # Chat with system message
     print("\n4. Chat with system message...")
     messages = [
-        SystemMessage(content="You are a helpful assistant that explains concepts concisely."),
+        SystemMessage(
+            content="You are a helpful assistant that explains concepts concisely."
+        ),
         HumanMessage(content="Explain what Mellea is in one sentence."),
     ]
     response = chat_model.invoke(messages)

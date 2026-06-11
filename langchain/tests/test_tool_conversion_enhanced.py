@@ -26,7 +26,9 @@ except ImportError:
 
 
 # Skip all tests if LangChain is not available
-pytestmark = pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="LangChain not installed")
+pytestmark = pytest.mark.skipif(
+    not LANGCHAIN_AVAILABLE, reason="LangChain not installed"
+)
 
 
 class TestRealLangChainToolConversion:
@@ -55,7 +57,9 @@ class TestRealLangChainToolConversion:
             """Input schema for search tool."""
 
             query: str = Field(description="The search query")
-            max_results: int = Field(default=10, description="Maximum number of results")
+            max_results: int = Field(
+                default=10, description="Maximum number of results"
+            )
 
         def search_function(query: str, max_results: int = 10) -> str:
             """Search for information."""
@@ -100,7 +104,9 @@ class TestRealLangChainToolConversion:
         assert len(result) == 3
         # All tools should be converted
         for converted_tool in result:
-            assert hasattr(converted_tool, "name") or hasattr(converted_tool, "__name__")
+            assert hasattr(converted_tool, "name") or hasattr(
+                converted_tool, "__name__"
+            )
 
     def test_tool_with_complex_schema(self):
         """Test conversion of tool with complex nested schema."""
@@ -120,7 +126,9 @@ class TestRealLangChainToolConversion:
             address: Address = Field(description="Person's address")
             hobbies: list[str] = Field(default=[], description="List of hobbies")
 
-        def create_person(name: str, age: int, address: Address, hobbies: list[str]) -> str:
+        def create_person(
+            name: str, age: int, address: Address, hobbies: list[str]
+        ) -> str:
             """Create a person record."""
             return f"Created person: {name}, {age} years old"
 
@@ -145,11 +153,17 @@ class TestRealLangChainToolConversion:
             """Input with optional fields."""
 
             required_field: str = Field(description="Required field")
-            optional_field: str | None = Field(default=None, description="Optional field")
-            optional_int: int | None = Field(default=None, description="Optional integer")
+            optional_field: str | None = Field(
+                default=None, description="Optional field"
+            )
+            optional_int: int | None = Field(
+                default=None, description="Optional integer"
+            )
 
         def optional_tool(
-            required_field: str, optional_field: str | None = None, optional_int: int | None = None
+            required_field: str,
+            optional_field: str | None = None,
+            optional_int: int | None = None,
         ) -> str:
             """Tool with optional parameters."""
             return f"Required: {required_field}, Optional: {optional_field}, Int: {optional_int}"
@@ -191,11 +205,7 @@ class TestToolConversionErrorHandling:
         converter = LangChainToolConverter()
 
         # Pass invalid objects
-        invalid_tools = [
-            "not a tool",
-            123,
-            {"name": "fake_tool"},
-        ]
+        invalid_tools = ["not a tool", 123, {"name": "fake_tool"}]
 
         # Should handle gracefully (pass through or raise appropriate error)
         result = converter.to_mellea(invalid_tools)
