@@ -21,7 +21,7 @@ When should an agent use it?
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional  # noqa: F401  # TODO(agent-utilities OWNER): Optional unused
 
 from mellea.backends import ModelOption
 from mellea.stdlib.requirements import req, simple_validate
