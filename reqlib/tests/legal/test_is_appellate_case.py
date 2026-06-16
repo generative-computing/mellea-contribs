@@ -8,11 +8,11 @@ from mellea.stdlib.sampling import RejectionSamplingStrategy
 
 from mellea_contribs.reqlib.stdlib.reqlib.is_appellate_case import (
     court_abbv_from_citation,
-    get_court_from_case,
+    get_court_from_case,  # noqa: F401  # TODO(reqlib OWNER): unused; remove or wire up
     is_appellate_case,
     is_appellate_court_abbv,
     is_appellate_court_fullname,
-    load_jsons_from_folder,
+    load_jsons_from_folder,  # noqa: F401  # TODO(reqlib OWNER): unused; remove or wire up
 )
 
 

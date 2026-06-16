@@ -581,7 +581,7 @@ alabama = {
         ],
         "14": [(1, 10), (20, 30)],
         "14A": [(1, 24)],
-        "14A": [(1, 23)],
+        "14A": [(1, 23)],  # noqa: F601  # TODO(reqlib OWNER): duplicate key; second wins, confirm intended range
         "14C": [(1, 14)],
         "14D": [(1, 6)],
         "14E": [(1, 11)],

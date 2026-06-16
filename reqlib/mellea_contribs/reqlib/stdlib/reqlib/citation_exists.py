@@ -1,7 +1,7 @@
 """Citation existence validation for Mellea agents."""
 
-import json
-from typing import Any, Optional
+import json  # noqa: F401  # TODO(reqlib OWNER): unused; remove or wire up
+from typing import Any, Optional  # noqa: F401  # TODO(reqlib OWNER): Any/Optional unused
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
