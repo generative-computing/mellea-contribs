@@ -12,6 +12,23 @@ Each package in the `mellea_contribs` directory can be released independently by
 4. Upload wheel and source distribution files as release assets
 5. Generate release notes with installation instructions
 
+## Repository Prerequisites
+
+The following must be set on `generative-computing/mellea-contribs` before
+the receiver workflow (`.github/workflows/receive-mellea-release.yml`) can
+open bump PRs after a mellea release:
+
+**Settings → Actions → General → Workflow permissions → enable "Allow GitHub
+Actions to create and approve pull requests".**
+
+By default, GitHub Actions cannot create pull requests even with
+`pull-requests: write` in a workflow's `permissions:` block. Without this
+setting, `gh pr create` fails with "GitHub Actions is not permitted to
+create or approve pull requests" and the receiver leaves orphaned
+`sync-mellea-*` branches behind every release.
+
+Once enabled, this is set forever; the workflow does not toggle it.
+
 ## Package List
 
 Packages are automatically discovered from the `mellea_contribs/` directory by reading their `pyproject.toml` files. The package name is taken from the `[project] name` field in each `pyproject.toml`.
