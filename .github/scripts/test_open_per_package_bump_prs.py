@@ -1,9 +1,9 @@
-"""Tests for open_per_package_bump_prs._detect_tier.
+"""Tests for open_per_package_bump_prs._select_pass and _discover_subpackages.
 
 Side-effecting helpers (`_open_pr`, `main`) are not tested here — they
 shell out to git/gh and are exercised end-to-end by the workflow. This
-test suite covers the tier-detection logic, which is the only piece
-with non-trivial branching.
+suite covers the pass-selection logic, which is the only piece with
+non-trivial branching.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from open_per_package_bump_prs import _detect_tier
+from open_per_package_bump_prs import _discover_subpackages, _select_pass
 
 
 def write(p: Path, content: str) -> None:
@@ -31,76 +31,87 @@ def _make_subpackage(repo: Path, name: str, version: str) -> None:
     )
 
 
-def test_detects_tier1_when_only_integration_core_lags(tmp_path: Path) -> None:
-    """Tier 1 fires first if `_integration_core` is behind, even if other tiers also lag."""
+def test_pass1_selected_when_integration_core_lags(tmp_path: Path) -> None:
+    """Pass 1 fires alone when ``_integration_core`` is behind, even if other subpackages also lag."""
     _make_subpackage(tmp_path, "_integration_core", "0.5.0")
     _make_subpackage(tmp_path, "dspy", "0.5.0")
-    _make_subpackage(tmp_path, "legal-reqs", "0.5.0")
+    _make_subpackage(tmp_path, "reqlib", "0.5.0")
 
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is not None
-    tier_name, pyprojects = detected
-    assert tier_name == "integration-core"
+    selected = _select_pass(tmp_path, "0.6.0")
+    assert selected is not None
+    pass_name, pyprojects = selected
+    assert pass_name == "integration-core"
     assert [p.parent.name for p in pyprojects] == ["_integration_core"]
 
 
-def test_detects_tier2_when_tier1_already_on_target(tmp_path: Path) -> None:
-    """Once tier 1 is on target, tier 2 (frameworks) becomes the active tier."""
+def test_pass2_selected_when_integration_core_already_on_target(tmp_path: Path) -> None:
+    """Once pass 1 is on target, every other subpackage opens together."""
     _make_subpackage(tmp_path, "_integration_core", "0.6.0")
     _make_subpackage(tmp_path, "dspy", "0.5.0")
     _make_subpackage(tmp_path, "langchain", "0.5.0")
-    _make_subpackage(tmp_path, "legal-reqs", "0.5.0")
+    _make_subpackage(tmp_path, "crewai", "0.5.0")
+    _make_subpackage(tmp_path, "agent-utilities", "0.5.0")
+    _make_subpackage(tmp_path, "reqlib", "0.5.0")
 
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is not None
-    tier_name, pyprojects = detected
-    assert tier_name == "frameworks"
-    assert sorted(p.parent.name for p in pyprojects) == ["dspy", "langchain"]
-
-
-def test_detects_tier3_when_tier1_and_tier2_on_target(tmp_path: Path) -> None:
-    """Leaves are last."""
-    _make_subpackage(tmp_path, "_integration_core", "0.6.0")
-    _make_subpackage(tmp_path, "dspy", "0.6.0")
-    _make_subpackage(tmp_path, "legal-reqs", "0.5.0")
-    _make_subpackage(tmp_path, "python-imports", "0.5.0")
-
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is not None
-    tier_name, pyprojects = detected
-    assert tier_name == "leaves"
-    assert sorted(p.parent.name for p in pyprojects) == ["legal-reqs", "python-imports"]
+    selected = _select_pass(tmp_path, "0.6.0")
+    assert selected is not None
+    pass_name, pyprojects = selected
+    assert pass_name == "subpackages"
+    assert sorted(p.parent.name for p in pyprojects) == [
+        "agent-utilities",
+        "crewai",
+        "dspy",
+        "langchain",
+        "reqlib",
+    ]
 
 
 def test_returns_none_when_all_subpackages_on_target(tmp_path: Path) -> None:
     """Steady state: every subpackage is on target, no PRs to open."""
     _make_subpackage(tmp_path, "_integration_core", "0.6.0")
     _make_subpackage(tmp_path, "dspy", "0.6.0")
-    _make_subpackage(tmp_path, "legal-reqs", "0.6.0")
+    _make_subpackage(tmp_path, "reqlib", "0.6.0")
 
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is None
+    selected = _select_pass(tmp_path, "0.6.0")
+    assert selected is None
 
 
-def test_skips_subpackages_that_dont_exist(tmp_path: Path) -> None:
-    """Tier candidates that aren't present on disk are silently skipped."""
-    # Only `dspy` exists; other tier-2 candidates are absent.
+def test_pass2_when_integration_core_absent(tmp_path: Path) -> None:
+    """If ``_integration_core`` is not present, pass 2 fires for the rest."""
     _make_subpackage(tmp_path, "dspy", "0.5.0")
 
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is not None
-    tier_name, pyprojects = detected
-    assert tier_name == "frameworks"
+    selected = _select_pass(tmp_path, "0.6.0")
+    assert selected is not None
+    pass_name, pyprojects = selected
+    assert pass_name == "subpackages"
     assert [p.parent.name for p in pyprojects] == ["dspy"]
 
 
-def test_legacy_mellea_integration_core_name_recognized(tmp_path: Path) -> None:
-    """During the migration window the directory is `mellea-integration-core`,
-    not `_integration_core`. Tier 1 must accept either."""
-    _make_subpackage(tmp_path, "mellea-integration-core", "0.5.0")
+def test_discover_subpackages_skips_root_and_dotdirs(tmp_path: Path) -> None:
+    """Discovery skips the repo-root pyproject.toml, dotdirs, and ``cookiecutter/``."""
+    # Repo-root pyproject (signpost, not a subpackage).
+    write(tmp_path / "pyproject.toml", "[tool.mellea-contribs]\n")
+    # Dotdir with a pyproject inside (e.g. .venv) — must be skipped.
+    write(tmp_path / ".venv" / "pyproject.toml", "[project]\n")
+    # cookiecutter/ has its own pyproject template but is not a subpackage.
+    write(tmp_path / "cookiecutter" / "pyproject.toml", "[project]\n")
+    _make_subpackage(tmp_path, "_integration_core", "0.6.0")
+    _make_subpackage(tmp_path, "dspy", "0.6.0")
 
-    detected = _detect_tier(tmp_path, "0.6.0")
-    assert detected is not None
-    tier_name, pyprojects = detected
-    assert tier_name == "integration-core"
-    assert [p.parent.name for p in pyprojects] == ["mellea-integration-core"]
+    discovered = [p.name for p in _discover_subpackages(tmp_path)]
+    assert sorted(discovered) == ["_integration_core", "dspy"]
+
+
+def test_every_discovered_subpackage_has_a_pyproject(tmp_path: Path) -> None:
+    """Sanity: every result of discovery resolves to an on-disk pyproject.toml.
+
+    Defends against the silent-skip class of bug Paul caught on the
+    original hand-coded TIERS list, where renames left some subpackages
+    in no tier.
+    """
+    _make_subpackage(tmp_path, "_integration_core", "0.6.0")
+    _make_subpackage(tmp_path, "dspy", "0.6.0")
+    _make_subpackage(tmp_path, "reqlib", "0.6.0")
+
+    for sub in _discover_subpackages(tmp_path):
+        assert (sub / "pyproject.toml").is_file(), sub

@@ -1,74 +1,99 @@
-"""Open one bump PR per subpackage in dependency-tier order.
+"""Open one bump PR per subpackage in dependency order.
 
 Used by ``.github/workflows/receive-mellea-release.yml`` after every
 mellea release. Replaces the "one big PR" model with one PR per
 subpackage so owners can merge their bump independently — slow movers
 don't block fast movers, and per-package CI signals compatibility.
 
-Tiers (subpackages within a tier are opened concurrently; tiers serialize):
+Two passes (a pass's PRs open concurrently; passes serialize):
 
-- Tier 1: ``_integration_core`` (consumed by frameworks).
-- Tier 2: framework subpackages — ``dspy``, ``langchain``, ``crewai``,
-  ``tools``. Opened once Tier 1's PR has merged.
-- Tier 3: leaf subpackages with no contribs-internal dependencies —
-  ``legal-reqs``, ``python-imports``, ``grounding-context``. Opened once
-  Tier 2 has merged.
+- Pass 1: ``_integration_core``. Frameworks depend on it, so it must
+  land before they bump.
+- Pass 2: every other repo-root subpackage with a ``pyproject.toml``.
+  No subpackage outside ``_integration_core`` is depended on by
+  another subpackage today, so they all open concurrently.
 
-The script runs once per workflow invocation and opens only the PRs for
-the *current* tier — i.e., the lowest tier with subpackages that still
-need a bump and whose dependencies are already on the target version.
-The workflow re-runs (via the bot itself observing tier-N PRs being
-merged) to advance to the next tier.
+The script runs once per workflow invocation and opens only the PRs
+for the *current* pass — i.e., pass 1 if ``_integration_core`` still
+needs a bump, otherwise pass 2. The workflow re-runs (via the bot
+itself observing pass-1's PR being merged) to advance to pass 2.
 
-Subpackages whose ``pyproject.toml`` doesn't exist or doesn't need a
-bump (already at target version) are skipped silently.
+Subpackages are discovered by walking the repo root for any directory
+that contains a ``pyproject.toml``. The repo-root ``pyproject.toml``
+itself is not a subpackage and is skipped.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
 
-from update_contribs_versions import UnacceptableMelleaLine, update_pyproject
+from update_contribs_versions import (
+    UnacceptableMelleaLine,
+    _set_project_version,
+    _validate_mellea_lines,
+    update_pyproject,
+)
 
-# Tier definitions — see module docstring. The tier name is used as a
-# stable label only; the receiver looks up subpackages by directory name.
-TIERS: list[tuple[str, list[str]]] = [
-    ("integration-core", ["_integration_core", "mellea-integration-core"]),
-    ("frameworks", ["dspy", "langchain", "crewai", "tools"]),
-    ("leaves", ["legal-reqs", "python-imports", "grounding-context"]),
-]
+INTEGRATION_CORE = "_integration_core"
+
+# Repo-root entries that have a pyproject.toml but are not subpackages.
+_NOT_A_SUBPACKAGE = {"cookiecutter"}
 
 
-def _subpackage_needs_bump(pyproject: Path, target: str) -> bool:
-    """True iff editing pyproject would actually change [project] version."""
-    if not pyproject.exists():
-        return False
+def _discover_subpackages(repo: Path) -> list[Path]:
+    """Return repo-root subpackages (directories with a pyproject.toml)."""
+    out: list[Path] = []
+    for child in sorted(repo.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        if child.name in _NOT_A_SUBPACKAGE:
+            continue
+        if (child / "pyproject.toml").exists():
+            out.append(child)
+    return out
+
+
+def _needs_bump(pyproject: Path, target: str) -> bool:
+    """True iff ``update_pyproject`` would rewrite the [project] version line."""
     text = pyproject.read_text()
-    # Cheap signal: target version string already present in a [project]
-    # block? Not perfect but avoids reparsing.
-    needle = f'version = "{target}"'
-    return needle not in text
+    return _set_project_version(text, target) != text
 
 
-def _detect_tier(repo: Path, target: str) -> tuple[str, list[Path]] | None:
-    """Return (tier_name, list_of_subpackage_pyprojects_that_need_bump).
+def _select_pass(repo: Path, target: str) -> tuple[str, list[Path]] | None:
+    """Return (pass_name, list_of_subpackage_pyprojects_that_need_bump).
 
-    Returns the lowest tier that has at least one subpackage needing a bump.
-    If every tier is already on target, returns None.
+    Pass 1 fires alone whenever ``_integration_core`` lags. Pass 2 fires
+    once pass 1 is on target. Returns None when every subpackage is on
+    target.
     """
-    for tier_name, candidates in TIERS:
-        needs_bump: list[Path] = []
-        for sub in candidates:
-            pyproject = repo / sub / "pyproject.toml"
-            if _subpackage_needs_bump(pyproject, target):
-                needs_bump.append(pyproject)
-        if needs_bump:
-            return tier_name, needs_bump
+    subs = _discover_subpackages(repo)
+
+    core = next((s for s in subs if s.name == INTEGRATION_CORE), None)
+    others = [s for s in subs if s.name != INTEGRATION_CORE]
+
+    if core is not None and _needs_bump(core / "pyproject.toml", target):
+        return "integration-core", [core / "pyproject.toml"]
+
+    pass2 = [
+        s / "pyproject.toml" for s in others if _needs_bump(s / "pyproject.toml", target)
+    ]
+    if pass2:
+        return "subpackages", pass2
+
     return None
+
+
+def _validate_all(pyprojects: list[Path]) -> None:
+    """Raise UnacceptableMelleaLine if any pyproject has a mellea dep we can't bump.
+
+    Validates every candidate up front so a malformed dep aborts the run
+    *before* any branches are pushed or PRs opened — no partial passes.
+    """
+    for pp in pyprojects:
+        _validate_mellea_lines(pp.read_text(), pp)
 
 
 def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
@@ -91,12 +116,10 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         print(f"  [{name}] branch {branch} already exists upstream — skipping.")
         return
 
-    # Bump pyproject.toml.
-    try:
-        update_pyproject(subpackage, target)
-    except UnacceptableMelleaLine as exc:
-        print(f"  [{name}] error: {exc}", file=sys.stderr)
-        sys.exit(2)
+    # Bump pyproject.toml. Pre-flight validation in main() guarantees
+    # this won't raise UnacceptableMelleaLine; let any other error
+    # propagate with its native traceback.
+    update_pyproject(subpackage, target)
 
     # Refresh uv.lock.
     subprocess.run(
@@ -115,13 +138,16 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
     )
     subprocess.run(["git", "push", "origin", branch], cwd=repo, check=True)
 
-    # Open PR.
+    # Open PR with a label that carries the target version. The receiver
+    # workflow's pull_request: closed re-trigger reads the version from
+    # this label rather than reparsing the branch name, which would
+    # truncate pre-release suffixes (e.g. ``0.6.0rc1`` → ``0.6.0``).
     body = (
         f"Automated bump of `{name}`'s `[project] version` to `{target}` "
         f"after the matching mellea release.\n\n"
         f"`mellea>=` constraint untouched — owners control that floor.\n\n"
-        f"Merging this PR is independent of any other tier-{name} subpackage's "
-        f"bump PR; please verify CI passes."
+        f"Merging this PR is independent of any other bump PR in the same "
+        f"pass; please verify CI passes."
     )
     subprocess.run(
         [
@@ -130,6 +156,7 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
             "--body", body,
             "--head", branch,
             "--base", "main",
+            "--label", f"sync-mellea-version:{target}",
         ],
         cwd=repo,
         check=True,
@@ -144,31 +171,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo_root", type=Path, help="contribs repo root")
     parser.add_argument("version", help="target version (matches mellea release)")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="report which tier and subpackages would be bumped, but don't edit",
-    )
     args = parser.parse_args()
 
     if not args.repo_root.is_dir():
         print(f"error: {args.repo_root} is not a directory", file=sys.stderr)
         return 1
 
-    detected = _detect_tier(args.repo_root, args.version)
-    if detected is None:
+    selected = _select_pass(args.repo_root, args.version)
+    if selected is None:
         print(f"All subpackages already at v{args.version}; nothing to bump.")
         return 0
 
-    tier_name, pyprojects = detected
-    print(f"Active tier: {tier_name} ({len(pyprojects)} subpackage(s) need bumping)")
+    pass_name, pyprojects = selected
+    print(f"Active pass: {pass_name} ({len(pyprojects)} subpackage(s) need bumping)")
     for pp in pyprojects:
         print(f"  - {pp.parent.name}")
 
-    if args.dry_run:
-        # Emit JSON for the workflow to consume.
-        print(json.dumps({"tier": tier_name, "subpackages": [pp.parent.name for pp in pyprojects]}))
-        return 0
+    # Validate every candidate before opening any PRs so a malformed
+    # mellea dep aborts cleanly without leaving a partial pass behind.
+    try:
+        _validate_all(pyprojects)
+    except UnacceptableMelleaLine as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     for pp in pyprojects:
         _open_pr(args.repo_root, pp, args.version)

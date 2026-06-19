@@ -1,13 +1,13 @@
 name: "Receive mellea release"
 
 # Listens for repository_dispatch from mellea (event_type=mellea-released)
-# and opens one bump PR per subpackage in dependency-tier order. The same
-# workflow re-runs when a tier-N bump PR merges, advancing to tier-(N+1).
+# and opens one bump PR per subpackage in dependency order. The same
+# workflow re-runs when a bump PR merges, advancing pass-1 to pass-2.
 #
 # Triggered by:
 #   - mellea/.github/workflows/dispatch-to-contribs.yml (initial event)
-#   - pull_request closed-merged where head starts with sync-mellea-
-#     (advances tiers as PRs land)
+#   - pull_request closed-merged where the merged PR carries a
+#     `sync-mellea-version:<version>` label (advances passes as PRs land)
 #   - workflow_dispatch (manual recovery)
 
 on:
@@ -27,34 +27,44 @@ permissions:
 
 jobs:
   sync:
-    # Only act on tier-advancement PRs that actually merged. Other PR
-    # close events are ignored.
+    # Only act on bump PRs that actually merged. The version-carrying
+    # label is required so the version resolution step can recover it
+    # without reparsing the branch name (branch parsing truncated
+    # pre-release suffixes like `0.6.0rc1` -> `0.6.0`).
     if: |
       github.event_name == 'repository_dispatch' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        github.event.action == 'closed' &&
        github.event.pull_request.merged == true &&
-       startsWith(github.event.pull_request.head.ref, 'sync-mellea-'))
+       contains(toJSON(github.event.pull_request.labels.*.name), 'sync-mellea-version:'))
     runs-on: ubuntu-latest
     steps:
       - name: Resolve version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            VERSION="${{ github.event.client_payload.version }}"
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"
           else
-            # pull_request: extract version from branch name (sync-mellea-<ver>-<pkg>)
-            BRANCH="${{ github.event.pull_request.head.ref }}"
-            VERSION=$(echo "$BRANCH" | sed -E 's/^sync-mellea-([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+            # pull_request: pull the version off the `sync-mellea-version:<v>`
+            # label on the merged PR. Carrying the version on a label rather
+            # than reparsing the branch name keeps PEP 440 pre-release suffixes
+            # intact (e.g. `0.6.0rc1`, `0.6.0a1`).
+            VERSION=$(echo "$PR_LABELS_JSON" | jq -r '.[] | select(startswith("sync-mellea-version:")) | sub("^sync-mellea-version:"; "")' | head -n1)
           fi
           if [ -z "$VERSION" ]; then
             echo "ERROR: could not resolve mellea version from event payload."
             exit 1
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Syncing mellea-contribs to mellea v${VERSION}"
 
       - name: Checkout mellea-contribs
@@ -71,7 +81,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Open per-package bump PRs for the active tier
+      - name: Open per-package bump PRs for the active pass
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
