@@ -7,6 +7,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   read-config:
     # Hoisted into its own job so its output can drive `timeout-minutes` on
@@ -45,16 +48,22 @@ jobs:
     needs: read-config
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJson(needs.read-config.outputs.timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJson(needs.read-config.outputs.python_versions) }}
     env:
       SKIP_OLLAMA: ${{ needs.read-config.outputs.skip_ollama }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v5
 
-      # NOTE: Ollama installation lives outside the matrix (single-version test for v1).
-      # Pinned to a known good release commit instead of fetching a fresh install
-      # script on every run — the upstream script is mutable and arbitrary code
-      # piped to sh is exactly the supply-chain shape we don't want in CI.
+      # Ollama install is pinned to a known good release tarball rather than
+      # piping the upstream installer to sh — arbitrary code piped to sh is
+      # exactly the supply-chain shape we don't want in CI.
       - name: Install Ollama
         if: env.SKIP_OLLAMA != 'true'
         env:
@@ -76,7 +85,7 @@ jobs:
 
       - name: Sync dependencies
         working-directory: ${{ inputs.package }}
-        run: uv sync --all-extras
+        run: uv sync --all-extras --python ${{ matrix.python-version }}
 
       - name: Lint
         working-directory: ${{ inputs.package }}
