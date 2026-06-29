@@ -1,0 +1,11 @@
+{
+    "name": "my_algo",
+    "dir_name": "{{ cookiecutter.name | replace('_', '-') }}",
+    "version": "0.6.0",
+    "mellea_version": "0.6.0",
+    "short_description": "A bleeding-edge mellea contribution",
+    "owner_name": "Mellea Contributor",
+    "owner_email": "contributor@example.com",
+    "core_path": "stdlib.sampling_algos",
+    "_extensions": ["jinja2.ext.do"]
+}
