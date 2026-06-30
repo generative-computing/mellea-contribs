@@ -1,0 +1,4 @@
+{
+  "_comment": "Legacy old-flat subpackages under mellea_contribs/ that pre-date the restructure. Each entry is removed by the corresponding migration PR. After migration is complete, this list is empty and the file is deleted.",
+  "legacy_paths": []
+}

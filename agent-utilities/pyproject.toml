@@ -1,0 +1,79 @@
+[project]
+name = "mellea-contribs-agent-utilities"
+version = "0.0.1"
+description = "Agent-side utilities: selectors, evaluators, robustness tools."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Mellea Contributors" }]
+keywords = ["mellea", "contribs", "agent", "utilities", "selector", "robustness"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "mellea[litellm]>=0.3.2",
+    "rapidfuzz>=3.14.3",
+    "eyecite",
+    "citeurl",
+    "playwright",
+    "markdown",
+]
+
+[project.urls]
+Homepage = "https://github.com/generative-computing/mellea"
+Repository = "https://github.com/generative-computing/mellea-contribs"
+
+[project.optional-dependencies]
+robustness = ["benchdrift"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mellea_contribs"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+benchdrift = { git = "https://github.com/IBM/BenchDrift.git", rev = "95db1c95b6abbc3b9f9bc177f6a7933c555c7175" }
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[tool.mypy]
+# Subpackages live under the mellea_contribs namespace; explicit_package_bases lets
+# mypy resolve modules via the namespace root. ignore_errors keeps the gate non-blocking
+# while subpackage owners triage their own type debt; flip it off per package once
+# cleaned up.
+explicit_package_bases = true
+ignore_errors = true
+ignore_missing_imports = true
+
+[tool.mellea-contribs.ci]
+skip_ollama = false
+timeout_minutes = 30
+python_versions = ["3.12"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: fast, hermetic",
+    "integration: requires local services",
+    "e2e: end-to-end against an LLM",
+    "qualitative: checks LLM output quality",
+]

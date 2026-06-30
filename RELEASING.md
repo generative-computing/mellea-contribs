@@ -1,387 +1,155 @@
-# Release Process for Mellea Contribs Packages
+# Releasing mellea-contribs
 
-This document describes how to release individual packages from the `mellea_contribs` directory to GitHub releases.
+This document describes the coordinated-release model used by `mellea-contribs`. A single root tag `v<X.Y.Z>` builds and publishes every subpackage plus the meta-package as assets of one GitHub Release. There is no PyPI publishing and no per-subpackage tag pipeline.
 
-## Overview
-
-Each package in the `mellea_contribs` directory can be released independently by creating a Git tag with a specific format. The CI system will automatically:
-
-1. Build the package
-2. Run tests
-3. Create a GitHub release
-4. Upload wheel and source distribution files as release assets
-5. Generate release notes with installation instructions
+> **Note:** the `release.yml` workflow that drives this lands in Phase 3 of the restructure. This document is the contract that pipeline implements; some references below are forward-looking until P3 merges.
 
 ## Repository Prerequisites
 
-The following must be set on `generative-computing/mellea-contribs` before
-the receiver workflow (`.github/workflows/receive-mellea-release.yml`) can
-open bump PRs after a mellea release:
+The following must be set on `generative-computing/mellea-contribs` before the receiver workflow (`.github/workflows/receive-mellea-release.yml`) can open bump PRs after a mellea release:
 
-**Settings → Actions → General → Workflow permissions → enable "Allow GitHub
-Actions to create and approve pull requests".**
+**Settings → Actions → General → Workflow permissions → enable "Allow GitHub Actions to create and approve pull requests".**
 
-By default, GitHub Actions cannot create pull requests even with
-`pull-requests: write` in a workflow's `permissions:` block. Without this
-setting, `gh pr create` fails with "GitHub Actions is not permitted to
-create or approve pull requests" and the receiver leaves orphaned
-`sync-mellea-*` branches behind every release.
+By default, GitHub Actions cannot create pull requests even with `pull-requests: write` in a workflow's `permissions:` block. Without this setting, `gh pr create` fails with "GitHub Actions is not permitted to create or approve pull requests" and the receiver leaves orphaned `sync-mellea-*` branches behind every release.
 
 Once enabled, this is set forever; the workflow does not toggle it.
+
+## Overview
+
+`mellea-contribs` releases track upstream `mellea` exactly. Every published `mellea` `vX.Y.Z` triggers a contribs release at the same `vX.Y.Z`. Off-cycle subpackage patches are not released independently — they ride the next coordinated `vX.Y.(Z+1)`.
+
+The release ships:
+
+- One wheel + sdist per subpackage (`_integration_core`, `dspy`, `crewai`, `langchain`, `agent-utilities`, `reqlib`).
+- One meta-package wheel + sdist whose `[project.optional-dependencies]` extras pin each subpackage by direct-URL to assets of the same release.
+- A version-free copy of the meta-package wheel named `mellea_contribs-py3-none-any.whl` so the GitHub `releases/latest/download/` redirector resolves it without callers naming a version.
+
+## Versioning
+
+Versions are not chosen by contribs maintainers. Each contribs release adopts the upstream `mellea` version that triggered it; pre-releases on the `mellea` side propagate the same suffix here. The `mellea>=` floor inside each subpackage's own `dependencies` is owned by that subpackage and changes only when the owner bumps it deliberately.
+
+## Trigger paths
+
+**Automatic (the normal path).** A release event on the upstream `mellea` repo is dispatched into this repo. The receiver (`receive-mellea-release.yml`) opens bump PRs in two passes:
+
+1. A single PR for `_integration_core` (every framework subpackage depends on it, so it must land first).
+2. Once that PR is merged, one PR per remaining subpackage opens together: `dspy`, `crewai`, `langchain`, `agent-utilities`, `reqlib`, plus the meta-package.
+
+Each bump PR carries a `sync-mellea-version:<X.Y.Z>` label so the receiver can recover the target version on the second pass without re-parsing the branch name. Merging the final PRs runs `release.yml`, which builds and publishes the coordinated release.
+
+**Manual escape hatch.** A maintainer pushes a `v<X.Y.Z>` tag from `main`. Use this only when the dispatch path is unavailable (e.g. recovering from a broken release).
 
 ## Operational Notes
 
 ### Merge the `_integration_core` bump PR by hand
 
-When a new `mellea` version is released, the release workflow opens
-one bump PR per subpackage in two rounds:
+The pass-2 PRs are triggered by the merge event of the pass-1 PR. GitHub has a safety rule that prevents events caused by the default `GITHUB_TOKEN` from triggering further workflow runs — and the merge button, when clicked by a bot or by auto-merge, counts as one of those events. So if `_integration_core`'s PR is merged by GitHub auto-merge (or any bot), the second pass never opens. No error is raised; the release just silently stops.
 
-1. First, a PR for `_integration_core` (because every framework
-   subpackage depends on it).
-2. After that PR is merged, PRs for every other subpackage open
-   automatically.
+**The rule: a human must click the merge button on the `_integration_core` PR.** Don't turn on auto-merge for that one PR. All other bump PRs in the second pass can be merged any way you like — they don't trigger anything further.
 
-The second round is triggered by the merge event of the first PR.
-GitHub has a safety rule that prevents automation events from
-triggering more automation — and the merge button, when clicked by
-a bot, counts as an automation event. So if `_integration_core`'s
-PR is merged by GitHub auto-merge (or any bot), the second round
-never opens. No error is raised; the release just silently stops.
+If we ever want fully hands-off releases, the fix is to use a personal access token (or a GitHub App token) instead of the default workflow token, which is exempt from the safety rule. That change would live in `.github/workflows/receive-mellea-release.yml`.
 
-**The rule: a human must click the merge button on the
-`_integration_core` PR.** Don't turn on auto-merge for that one PR.
-All other bump PRs in the second round can be merged any way you
-like — they don't trigger anything further.
+## What the pipeline does
 
-If we ever want fully hands-off releases, the fix is to use a
-personal access token (or a GitHub App token) instead of the
-default workflow token, which is exempt from the safety rule. That
-change would live in `.github/workflows/receive-mellea-release.yml`.
+1. **Validate structure.** Runs the same gate as PR CI; fails fast if any subpackage's `pyproject.toml` is malformed.
+2. **Build `_integration_core` first.** Framework subpackages depend on it, so it must be built and assembled before its dependents.
+3. **Lint, mypy, pytest per subpackage.** Each subpackage runs its full CI suite at the tagged version. A failing subpackage is recorded as a straggler (see below) and excluded from the release.
+4. **Build wheels with rewritten dependencies.** Source `pyproject.toml` files declare `[tool.uv.sources] mellea-contribs-integration-core = { path = "../_integration_core" }` for local-dev convenience. The pipeline rewrites this dependency to the GitHub Release URL of `mellea-contribs-integration-core` at the same `vX.Y.Z` before invoking `uv build`. The `[tool.uv.sources]` table does not appear in the published wheel's metadata — that is a property of how hatch builds wheels (uv sources are uv-only). Contributors do not need to think about this.
+5. **Build the meta-package wheel.** Each `[project.optional-dependencies]` extra is rewritten at build time to point at the just-built subpackage's release-asset URL, pinned to `vX.Y.Z`.
+6. **Upload assets.** Wheels and sdists are attached to the GitHub Release; the meta-package wheel is also uploaded under the version-free name `mellea_contribs-py3-none-any.whl`.
+7. **Generate release notes.** Notes call out any stragglers explicitly (see below).
 
-## Package List
+## Verifying a release
 
-Packages are automatically discovered from the `mellea_contribs/` directory by reading their `pyproject.toml` files. The package name is taken from the `[project] name` field in each `pyproject.toml`.
+On the [Releases page](https://github.com/generative-computing/mellea-contribs/releases), confirm the `vX.Y.Z` release contains:
 
-**Current packages:**
+- A wheel + sdist per non-straggler subpackage (`mellea_contribs_<name>-X.Y.Z-py3-none-any.whl`, `.tar.gz`).
+- The versioned meta-package wheel + sdist.
+- The version-free `mellea_contribs-py3-none-any.whl` copy.
+- Release notes listing the included subpackages and any stragglers excluded from this release.
 
-| Package Name | Directory | Description |
-|--------------|-----------|-------------|
-| `mellea-crewai` | `mellea_contribs/crewai_backend` | CrewAI integration for Mellea |
-| `mellea-dspy` | `mellea_contribs/dspy_backend` | DSPy integration for Mellea |
-| `mellea-integration-core` | `mellea_contribs/mellea-integration-core` | Core abstractions for Mellea framework integrations |
-| `mellea-langchain` | `mellea_contribs/langchain_backend` | LangChain integration for Mellea |
-| `mellea-reqlib` | `mellea_contribs/reqlib_package` | Requirements library utilities |
-| `mellea-tools` | `mellea_contribs/tools_package` | Additional tools and utilities |
+## Installing from a release
 
-**Adding a new package:**
-To add a new package that can be released, simply:
-1. Create a directory under `mellea_contribs/`
-2. Add a `pyproject.toml` file with a `[project]` section containing a `name` field
-3. The package will be automatically discovered by the release workflow
-
-## Release Steps
-
-### 1. Prepare the Release
-
-Before creating a release, ensure:
-
-- [ ] All changes are committed and pushed to the main branch
-- [ ] Tests pass locally
-- [ ] Version number is updated in `pyproject.toml`
-- [ ] CHANGELOG or release notes are prepared (optional)
-
-### 2. Update Version
-
-Edit the `pyproject.toml` file in the package directory and update the version:
-
-```toml
-[project]
-name = "mellea-dspy"
-version = "0.2.0"  # Update this version
-```
-
-Commit the version change:
+The recommended install uses the `latest` redirector:
 
 ```bash
-git add mellea_contribs/dspy_backend/pyproject.toml
-git commit -m "chore: bump mellea-dspy to v0.2.0"
-git push origin main
+pip install "mellea-contribs[<extra>] @ https://github.com/generative-computing/mellea-contribs/releases/latest/download/mellea_contribs-py3-none-any.whl"
 ```
 
-### 3. Create and Push the Release Tag
+The meta-package wheel is downloaded "latest", but its extras pin concrete subpackage versions internally — the install is reproducible.
 
-The tag format is: `<package-name>/v<version>`
-
-**Examples:**
-```bash
-# Release mellea-dspy version 0.2.0
-git tag mellea-dspy/v0.2.0
-git push origin mellea-dspy/v0.2.0
-
-# Release mellea-crewai version 0.1.1
-git tag mellea-crewai/v0.1.1
-git push origin mellea-crewai/v0.1.1
-
-# Release mellea-langchain version 1.0.0
-git tag mellea-langchain/v1.0.0
-git push origin mellea-langchain/v1.0.0
-```
-
-### 4. Monitor the Release
-
-After pushing the tag:
-
-1. Go to the [Actions tab](https://github.com/generative-computing/mellea-contribs/actions)
-2. Find the "Release Package" workflow run
-3. Monitor the progress through these stages:
-   - **Parse Tag**: Validates tag format and extracts package info
-   - **Build**: Builds the package and runs tests
-   - **Create Release**: Creates GitHub release with artifacts
-
-### 5. Verify the Release
-
-Once the workflow completes:
-
-1. Go to the [Releases page](https://github.com/generative-computing/mellea-contribs/releases)
-2. Find your release (e.g., `mellea-dspy v0.2.0`)
-3. Verify the release includes:
-   - Release notes with installation instructions
-   - Wheel file (`.whl`)
-   - Source distribution (`.tar.gz`)
-   - SHA256 checksums (`SHA256SUMS`)
-
-## Installation from GitHub Release
-
-Users can install packages directly from GitHub releases:
-
-### Option 1: Download and Install Wheel
+For a fully explicit pin, use the versioned URL:
 
 ```bash
-# Download the wheel file from the release page, then:
-pip install mellea-dspy-0.2.0-py3-none-any.whl
+pip install "mellea-contribs[<extra>] @ https://github.com/generative-computing/mellea-contribs/releases/download/vX.Y.Z/mellea_contribs-X.Y.Z-py3-none-any.whl"
 ```
 
-### Option 2: Install Directly from URL
+Available extras: `dspy`, `crewai`, `langchain`, `agent-utilities`, `reqlib`, plus `all`. `_integration_core` is always installed transitively.
+
+## Stragglers and skips
+
+If a subpackage fails to build, lint, or test in the release pipeline, it is **excluded from `[all]` extras and from the GitHub Release asset set** for that version. The CHANGELOG entry for the release names the affected subpackages explicitly.
+
+The straggler ships in the next coordinated release once its owner lands the fix. Distro-style: the train leaves on schedule; missed packages catch the next one. Users who need the missing subpackage can either pin to the prior release or install the subpackage from source until the next cut.
+
+## CHANGELOG conventions
+
+Each release entry in `CHANGELOG.md` records:
+
+- The `mellea` version this release tracks.
+- A short summary of changes per subpackage that shipped.
+- An explicit "Skipped" subsection naming any straggler subpackages excluded from this release and linking to their tracking issue.
+- Any breaking changes called out under a `### Breaking` heading per subpackage.
+
+The CHANGELOG is updated in the sync PR before merge — not after the tag is pushed — so the diff is reviewable.
+
+## Smoke + auto-issue bot
+
+A daily smoke job (`.github/workflows/smoke-against-mellea-main.yml`) runs each opted-in subpackage's tests against `mellea @ main` at 07:17 UTC. The matrix is read from `.github/smoke-matrix.json`; while that list is empty the smoke job is skipped. Each subpackage opts in by appending its path to the `subpackages` array as part of its migration PR.
+
+When a subpackage's smoke job goes red, the auto-issue bot (`.github/scripts/auto_issue_bot.py`) tracks consecutive failures and opens a tracking issue once the second consecutive red lands. Issues are labelled `contribs-broken` and assigned to the package's OWNERS.
+
+A second daily workflow (`.github/workflows/auto-issue-archival.yml`) runs at 08:00 UTC and applies the archival timeline based on how long the `contribs-broken` label has continuously been present on each tracking issue:
+
+- **Day 7** — a reminder comment is posted to escalate the failure.
+- **Day 14** — the bot posts a notice that the subpackage will be called out as broken in the next contribs release notes. When you cut a release while a tracking issue is at or past day 14, mention the affected subpackages explicitly in the release notes.
+- **Day 21** — the bot applies the `archived` label and posts a final comment. Contribs maintainers move the subpackage to the archived layout in a follow-up PR.
+
+Recovery (a green smoke run) clears the `contribs-broken` label, posts a "smoke green again on `<date>`, fixed in `<sha>`" comment, resets the archival clock, and leaves the issue open for a human to close. Removing the `contribs-broken` label by hand has the same effect — the timeline is driven by the label, not the issue's open state.
+
+The bot's persistent state lives at `.github/bot-state/<package>.json` (one JSON file per subpackage) on a bot-managed branch and is updated by each invocation. Per-file state eliminates the write race that a single shared file would create when smoke legs run concurrently.
+
+To run the bot locally against the in-memory fake (no GitHub API calls):
 
 ```bash
-pip install https://github.com/generative-computing/mellea-contribs/releases/download/mellea-dspy/v0.2.0/mellea-dspy-0.2.0-py3-none-any.whl
+uv run python .github/scripts/auto_issue_bot.py \
+    --action record-failure \
+    --package dspy \
+    --run-url https://example/run/1 \
+    --fake
 ```
 
-### Option 3: Install from Git Tag
+## Local dry-run
+
+Maintainers can build the full asset set locally without publishing:
 
 ```bash
-git clone https://github.com/generative-computing/mellea-contribs.git
-cd mellea-contribs
-git checkout mellea-dspy/v0.2.0
-cd mellea_contribs/dspy_backend
-pip install .
-```
+# Build _integration_core first
+cd _integration_core && uv build && cd ..
 
-## Tag Format Specification
+# Then each framework subpackage
+for pkg in dspy crewai langchain agent-utilities reqlib; do
+    (cd "$pkg" && uv build)
+done
 
-Tags must follow this exact format:
-
-```
-<package-name>/v<major>.<minor>.<patch>
-```
-
-**Valid Examples:**
-- `mellea-dspy/v0.1.0`
-- `mellea-crewai/v1.2.3`
-- `mellea-langchain/v2.0.0-beta.1`
-
-**Invalid Examples:**
-- `dspy/v0.1.0` (wrong package name)
-- `mellea-dspy-v0.1.0` (missing slash)
-- `mellea-dspy/0.1.0` (missing 'v' prefix)
-- `v0.1.0` (missing package name)
-
-## Version Validation
-
-The CI system validates that:
-
-1. The tag version matches the version in `pyproject.toml`
-2. The package directory exists
-3. The `pyproject.toml` file is valid
-
-If validation fails, the workflow will stop and provide an error message.
-
-## Troubleshooting
-
-### Tag Already Exists
-
-If you need to re-release with the same version:
-
-```bash
-# Delete the tag locally and remotely
-git tag -d mellea-dspy/v0.2.0
-git push origin :refs/tags/mellea-dspy/v0.2.0
-
-# Create and push the tag again
-git tag mellea-dspy/v0.2.0
-git push origin mellea-dspy/v0.2.0
-```
-
-### Version Mismatch Error
-
-If you see "Version mismatch" error:
-
-1. Check the version in `pyproject.toml`
-2. Ensure it matches the tag version (without the 'v' prefix)
-3. Update the version and create a new tag
-
-### Build Failures
-
-If the build fails:
-
-1. Check the workflow logs in the Actions tab
-2. Run tests locally: `cd mellea_contribs/<package_dir> && pytest`
-3. Fix any issues and create a new tag with a patch version bump
-
-### Release Not Created
-
-If the workflow succeeds but no release appears:
-
-1. Check that you have the correct permissions
-2. Verify the tag was pushed to the remote repository
-3. Check the workflow logs for any errors in the "Create Release" step
-
-## Advanced: Manual Release
-
-If you need to create a release manually:
-
-```bash
-# Navigate to package directory
-cd mellea_contribs/dspy_backend
-
-# Build the package
+# Build the meta-package last
 uv build
-
-# The built files will be in the dist/ directory:
-# - mellea-dspy-0.2.0-py3-none-any.whl
-# - mellea-dspy-0.2.0.tar.gz
 ```
 
-Then create a GitHub release manually and upload these files.
-
-## CI Workflow Details
-
-The release process uses two GitHub Actions workflows:
-
-1. **`release-package.yml`**: Main workflow triggered by tags
-   - Parses the tag to extract package name and version
-   - **Dynamically discovers packages** by scanning `mellea_contribs/*/pyproject.toml` files
-   - Maps package name to directory automatically (no hardcoded list!)
-   - Calls the build workflow
-   - Creates GitHub release with artifacts
-
-2. **`build-package.yml`**: Reusable workflow for building packages
-   - Validates version matches `pyproject.toml`
-   - Detects build system (hatchling or pdm-backend)
-   - Installs dependencies with UV
-   - Runs tests
-   - Builds wheel and source distribution
-   - Uploads artifacts
-
-### Dynamic Package Discovery
-
-The release workflow automatically discovers packages by:
-1. Scanning all directories in `mellea_contribs/`
-2. Reading each `pyproject.toml` file
-3. Extracting the package name from `[project] name`
-4. Building a mapping of package names to directories
-
-This means **no workflow changes are needed when adding new packages** - just ensure your package has a valid `pyproject.toml` with a `[project] name` field.
-
-## Best Practices
-
-1. **Semantic Versioning**: Follow [semver](https://semver.org/) for version numbers
-   - MAJOR: Breaking changes
-   - MINOR: New features (backward compatible)
-   - PATCH: Bug fixes
-
-2. **Test Before Release**: Always run tests locally before creating a tag
-
-3. **Update Documentation**: Update README and documentation when releasing new features
-
-4. **Changelog**: Consider maintaining a CHANGELOG.md in each package directory
-
-5. **Release Notes**: The CI generates basic release notes, but you can edit them after release
-
-6. **Coordinate Releases**: If multiple packages depend on each other, release them in dependency order
-
-## Support
-
-For issues with the release process:
-
-1. Check the [GitHub Actions logs](https://github.com/generative-computing/mellea-contribs/actions)
-2. Review this documentation
-3. Open an issue in the repository
-4. Contact the maintainers
-
-## Examples
-
-### Example 1: Patch Release
+The wheels land in each subpackage's `dist/`. To verify that the published wheel's metadata does not leak `[tool.uv.sources]`, inspect a built wheel:
 
 ```bash
-# Fix a bug in mellea-dspy
-cd mellea_contribs/dspy_backend
-# Make changes...
-# Update version from 0.1.0 to 0.1.1 in pyproject.toml
-
-git add .
-git commit -m "fix: resolve issue with async operations"
-git push origin main
-
-git tag mellea-dspy/v0.1.1
-git push origin mellea-dspy/v0.1.1
+unzip -p dspy/dist/mellea_contribs_dspy-*.whl '*.dist-info/METADATA' | grep -i 'uv\.sources\|integration-core'
 ```
 
-### Example 2: Minor Release with New Features
-
-```bash
-# Add new features to mellea-langchain
-cd mellea_contribs/langchain_backend
-# Implement new features...
-# Update version from 0.1.0 to 0.2.0 in pyproject.toml
-
-git add .
-git commit -m "feat: add support for streaming responses"
-git push origin main
-
-git tag mellea-langchain/v0.2.0
-git push origin mellea-langchain/v0.2.0
-```
-
-### Example 3: Major Release with Breaking Changes
-
-```bash
-# Make breaking changes to mellea-crewai
-cd mellea_contribs/crewai_backend
-# Implement breaking changes...
-# Update version from 0.9.0 to 1.0.0 in pyproject.toml
-
-git add .
-git commit -m "feat!: redesign API for better usability"
-git push origin main
-
-git tag mellea-crewai/v1.0.0
-git push origin mellea-crewai/v1.0.0
-```
-
-## Release Checklist
-
-Use this checklist when releasing a package:
-
-- [ ] All changes committed and pushed to main
-- [ ] Tests pass locally
-- [ ] Version updated in `pyproject.toml`
-- [ ] Documentation updated (if needed)
-- [ ] CHANGELOG updated (if maintained)
-- [ ] Tag created with correct format
-- [ ] Tag pushed to remote
-- [ ] CI workflow completed successfully
-- [ ] GitHub release created with artifacts
-- [ ] Release notes reviewed and edited (if needed)
-- [ ] Installation tested from release artifacts
-- [ ] Team notified of new release
+Only the rewritten direct-URL dependency on `mellea-contribs-integration-core` should appear.

@@ -1,0 +1,57 @@
+---
+title: Top-K Selection Engine
+description: Lightweight ranking and selection utility for Mellea agents.
+---
+
+# Top-K Selection
+
+The **Top-K engine** provides a simple, LLM-driven way to select the *best* K items from a list.
+The model receives all items, a selection criterion, and returns a JSON array of the top-ranked results.
+
+---
+
+## What Top-K Does
+
+- Takes **N items** (strings or dict-like objects).
+- Asks the model to pick the **top K** according to a comparison prompt.
+- Validates output strictly (must be a JSON array).
+- Returns the selected items in order.
+- Automatically caches repeated queries.
+
+<Callout>
+Use Top-K when your agent needs ranking, filtering, or choosing the “best few” options from many.
+</Callout>
+
+---
+
+## When to Use Top-K
+
+### Recommended for:
+- Tool ranking / tool selection
+- Candidate choice among multiple alternatives
+- Recommender logic
+- Tournament-style top-K filtering
+
+### Avoid for:
+- Deterministic single-item selection
+- Items without comparable attributes
+- Situations where pairwise comparison (DRR) is more reliable
+
+---
+
+## Core API
+
+### `top_k(items, comparison_prompt, m, k=1, context=None)`
+
+Returns:
+
+```python
+[List[Any]]  # exactly K model-selected items
+
+Parameters
+
+items: list of inputs (strings or dicts)
+comparison_prompt: instructions describing how to evaluate items
+m: Mellea model or session
+k: number of items to select
+context: grounding context
