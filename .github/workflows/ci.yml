@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  discover:
+  discover-subpackages:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
@@ -47,8 +47,8 @@ jobs:
             --repo-root "${{ github.workspace }}"
 
   template-smoke:
-    needs: discover
-    if: needs.discover.outputs.run_template_smoke == 'true'
+    needs: discover-subpackages
+    if: needs.discover-subpackages.outputs.run_template_smoke == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,12 +69,12 @@ jobs:
           uv run pytest -v -m "not qualitative and not e2e"
 
   test:
-    needs: discover
-    if: fromJson(needs.discover.outputs.matrix)[0] != null
+    needs: discover-subpackages
+    if: fromJson(needs.discover-subpackages.outputs.matrix)[0] != null
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJson(needs.discover.outputs.matrix) }}
+        package: ${{ fromJson(needs.discover-subpackages.outputs.matrix) }}
     uses: ./.github/workflows/package-ci.yml
     with:
       package: ${{ matrix.package }}
