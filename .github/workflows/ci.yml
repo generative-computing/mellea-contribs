@@ -1,84 +1,80 @@
-name: CI - All Subpackages
+name: CI (new-flat subpackages)
 
 on:
   pull_request:
-    # No paths filter — must always run so the required check always reports.
   merge_group:
   push:
-    branches:
-      - main
-    paths:
-      - 'mellea_contribs/**'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/quality-generic.yml'
-      - '.github/workflows/build-package.yml'
-      - '.github/workflows/release-package.yml'
+    branches: [main]
 
 jobs:
   discover-subpackages:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix: ${{ steps.discover.outputs.matrix }}
+      run_template_smoke: ${{ steps.discover.outputs.run_template_smoke }}
+      reason: ${{ steps.discover.outputs.reason }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
       - name: Discover changed subpackages
-        id: set-matrix
+        id: discover
         run: |
-          # Determine the base for comparison
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_REF="${{ github.event.pull_request.base.sha }}"
-          elif [ "${{ github.event_name }}" == "merge_group" ]; then
-            BASE_REF="${{ github.event.merge_group.base_sha }}"
+          # Resolve a base SHA we can diff against. Each event type carries
+          # the right base under a different payload key.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            BASE_REF="${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            BASE_SHA="${{ github.event.merge_group.base_sha }}"
+            BASE_REF="main"
           else
-            # Use github.event.before for push events (more reliable than HEAD~1)
-            BASE_REF="${{ github.event.before }}"
+            BASE_SHA="${{ github.event.before }}"
+            BASE_REF="main"
           fi
-
-          # Fallback to HEAD~1 if the event base is not available or is all zeros (initial commit)
-          if [ -z "$BASE_REF" ] || [ "$BASE_REF" == "0000000000000000000000000000000000000000" ]; then
-            BASE_REF="HEAD~1"
+          # Fallback to HEAD~1 if the event base is not available or zeroed.
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="HEAD~1"
           fi
+          # Fail loud rather than fall through to `git ls-files` — the latter
+          # silently runs the full matrix on every PR if the base ref is bad,
+          # which masks the real problem (missing fetch depth, wrong base sha).
+          CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD)
+          uv run python .github/scripts/discover_subpackages.py \
+            --changed-files "${CHANGED}" \
+            --base-ref "${BASE_REF}" \
+            --repo-root "${{ github.workspace }}"
 
-          # Validate that BASE_REF exists before proceeding
-          if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
-            echo "Warning: BASE_REF '$BASE_REF' does not exist or is invalid"
-            echo "Falling back to testing all subpackages for safety"
-            CHANGED_SUBPACKAGES=$(find mellea_contribs -maxdepth 1 -mindepth 1 -type d ! -name '__pycache__' ! -name '.pytest_cache' | sort)
-          else
-            # Get list of changed files (excluding deleted files) using status instead
-            CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRTU $BASE_REF HEAD | grep "^mellea_contribs/" || true)
-
-            # Extract unique subpackage directories that changed
-            CHANGED_SUBPACKAGES=$(echo "$CHANGED_FILES" | sed 's|^\(mellea_contribs/[^/]*\).*|\1|' | sort -u || true)
-
-            if [ -z "$CHANGED_SUBPACKAGES" ]; then
-              # If no subpackages changed, check if workflow files changed
-              WORKFLOW_CHANGED=$(git diff --name-only $BASE_REF HEAD | grep -E "\.github/workflows/(ci\.yml|quality-generic\.yml)" || true)
-              if [ -n "$WORKFLOW_CHANGED" ]; then
-                # Test all subpackages if workflow changed
-                CHANGED_SUBPACKAGES=$(find mellea_contribs -maxdepth 1 -mindepth 1 -type d ! -name '__pycache__' ! -name '.pytest_cache' | sort)
-              fi
-            fi
-          fi
-
-          # Map subpackages to their configurations
-          MATRIX=$(echo "$CHANGED_SUBPACKAGES" | jq -R -s -c 'split("\n")[:-1] | unique | map(select(length > 0)) | map({
-            subpackage: .,
-            skip_ollama: (if test("mellea-integration-core") or test("reqlib_package") then true else false end),
-            timeout_minutes: (if test("crewai_backend") then 90 else 30 end)
-          })')
-
-          echo "matrix={\"include\":$(echo "$MATRIX" | jq -c '.[]' | jq -s -c '.')}" >> $GITHUB_OUTPUT
+  template-smoke:
+    needs: discover-subpackages
+    if: needs.discover-subpackages.outputs.run_template_smoke == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Generate demo subpackage
+        run: |
+          mkdir -p /tmp/template-smoke
+          cd /tmp/template-smoke
+          uv run --with cookiecutter cookiecutter \
+            "${{ github.workspace }}/cookiecutter" \
+            --no-input \
+            name=tplsmoke \
+            core_path=stdlib.sampling_algos
+      - name: Test demo subpackage
+        run: |
+          cd /tmp/template-smoke/tplsmoke
+          uv sync --all-extras
+          uv run pytest -v -m "not qualitative and not e2e"
 
   test:
     needs: discover-subpackages
+    if: fromJson(needs.discover-subpackages.outputs.matrix)[0] != null
     strategy:
-      matrix: ${{ fromJson(needs.discover-subpackages.outputs.matrix) }}
-      max-parallel: 6
-    uses: ./.github/workflows/quality-generic.yml
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.discover-subpackages.outputs.matrix) }}
+    uses: ./.github/workflows/package-ci.yml
     with:
-      subpackage: ${{ matrix.subpackage }}
-      skip_ollama: ${{ matrix.skip_ollama }}
-      timeout_minutes: ${{ matrix.timeout_minutes }}
+      package: ${{ matrix.package }}

@@ -1,0 +1,81 @@
+name: smoke-against-mellea-main
+
+# Daily smoke against mellea@main per subpackage. The matrix is read from
+# .github/smoke-matrix.json so that subpackages opt in explicitly. While the
+# list is empty the smoke job is skipped (load-matrix still runs and reports).
+
+"on":
+  schedule:
+    - cron: "17 7 * * *"  # 07:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write  # auto_issue_bot.py writes per-package state under .github/bot-state/
+  issues: write
+
+jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+      empty: ${{ steps.load.outputs.empty }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: load
+        run: |
+          set -euo pipefail
+          MATRIX=$(jq -c '.subpackages' .github/smoke-matrix.json)
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+          if [ "${MATRIX}" = "[]" ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            echo "Smoke matrix is empty (no subpackages opted in yet); the smoke job will be skipped."
+          else
+            echo "empty=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  smoke:
+    needs: load-matrix
+    if: needs.load-matrix.outputs.empty == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.load-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install package against mellea@main
+        working-directory: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          uv sync --all-extras
+          uv pip install "mellea @ git+https://github.com/generative-computing/mellea.git@main"
+      - name: Run subpackage tests
+        id: pytest
+        working-directory: ${{ matrix.package }}
+        run: uv run pytest -m "not qualitative and not e2e"
+      - name: Record failure with auto-issue bot
+        # Catch install/sync failures too, not just pytest failures —
+        # `steps.pytest.outcome` is unset when an earlier step (e.g. uv sync)
+        # broke before pytest ran, and we want those reported.
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          uv run python .github/scripts/auto_issue_bot.py \
+            --action record-failure \
+            --package "${{ matrix.package }}" \
+            --run-url "$RUN_URL"
+      - name: Record recovery with auto-issue bot
+        if: success() && steps.pytest.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          uv run python .github/scripts/auto_issue_bot.py \
+            --action record-recovery \
+            --package "${{ matrix.package }}" \
+            --commit-sha "$COMMIT_SHA"

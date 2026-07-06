@@ -1,0 +1,48 @@
+[project]
+name = "mellea-contribs"
+version = "0.6.0"
+description = "Bleeding-edge contributions to Mellea — framework bridges, sampling algorithms, domain-specific requirements"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Mellea Contributors" }]
+keywords = ["mellea", "contribs", "llm", "generative-programming"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []   # meta-package ships no code
+
+[project.urls]
+Homepage = "https://github.com/generative-computing/mellea"
+Repository = "https://github.com/generative-computing/mellea-contribs"
+
+[project.optional-dependencies]
+# Extras populated incrementally as subpackages migrate into the new layout.
+# At release time, `release.yml` rewrites these entries to versioned GitHub
+# Release URLs at build time.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = []   # meta-package, no code
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "actionlint-py",
+    "cookiecutter>=2.6",
+    "pyyaml",
+    "pre-commit>=3",
+    "pytest>=7",
+    "PyGithub>=2.1",
+]
