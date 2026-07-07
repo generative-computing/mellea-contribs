@@ -43,10 +43,17 @@ class DiscoverResult:
     reason: str = ""
 
 
+def _is_top_level_doc(f: str) -> bool:
+    # A repo-root markdown file (e.g. README.md), not one nested in a subpackage.
+    return "/" not in f and f.endswith(DOCS_FILE_SUFFIX)
+
+
 def _is_docs_only(files: list[str]) -> bool:
-    return (
-        all(f.startswith(DOCS_PREFIXES) or f.endswith(DOCS_FILE_SUFFIX) for f in files)
-        and len(files) > 0
+    # Docs prefixes and repo-root `.md` are docs-only. A `.md` *inside* a
+    # subpackage (e.g. dspy/README.md) is not — it must run that package's CI,
+    # so it deliberately fails both checks here.
+    return len(files) > 0 and all(
+        f.startswith(DOCS_PREFIXES) or _is_top_level_doc(f) for f in files
     )
 
 
@@ -153,9 +160,7 @@ def main() -> int:
     """CLI entrypoint."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--changed-files",
-        required=True,
-        help="Newline-separated list of changed files",
+        "--changed-files", required=True, help="Newline-separated list of changed files"
     )
     parser.add_argument("--base-ref", required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
@@ -163,9 +168,7 @@ def main() -> int:
 
     files = [f.strip() for f in args.changed_files.splitlines() if f.strip()]
     inputs = DiscoverInputs(
-        changed_files=files,
-        base_ref=args.base_ref,
-        repo_root=args.repo_root,
+        changed_files=files, base_ref=args.base_ref, repo_root=args.repo_root
     )
     all_subs = _load_subpackages_from_repo(args.repo_root)
     result = discover(inputs, all_subpackages=all_subs)

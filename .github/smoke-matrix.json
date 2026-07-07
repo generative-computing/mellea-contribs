@@ -1,4 +1,4 @@
 {
   "_comment": "Daily smoke matrix gating list. Each migration PR appends its subpackage path (relative to repo root). The smoke job is skipped while this list is empty.",
-  "subpackages": []
+  "subpackages": ["_integration_core", "crewai", "dspy", "agent-utilities", "langchain", "reqlib"]
 }

@@ -58,9 +58,7 @@ def test_third_failure_comments_on_existing_issue() -> None:
     gh = FakeGitHub()
     state = BotState()
     for i in range(3):
-        record_failure(
-            gh, state, package="dspy", run_url=f"https://example/run/{i}"
-        )
+        record_failure(gh, state, package="dspy", run_url=f"https://example/run/{i}")
     assert len(gh.issues_opened) == 1
     assert len(gh.comments_added) == 1
     assert "Still red" in gh.comments_added[0]
@@ -97,6 +95,21 @@ def test_recovery_clears_label_but_leaves_issue_open() -> None:
     assert issue["state"] == "open"
     assert any("smoke green again" in c for c in gh.comments_added)
     assert any("abc1234" in c for c in gh.comments_added)
+
+
+def test_rebreak_after_recovery_opens_a_new_issue() -> None:
+    """A fresh breakage after recovery opens a new issue, not a comment on the old."""
+    gh = FakeGitHub()
+    state = BotState()
+    record_failure(gh, state, package="dspy", run_url="r1")
+    record_failure(gh, state, package="dspy", run_url="r2")  # opens issue #1
+    record_recovery(gh, state, package="dspy", commit_sha="abc")
+    assert "dspy" not in state.open_issue_numbers  # stopped tracking
+
+    record_failure(gh, state, package="dspy", run_url="r3")
+    record_failure(gh, state, package="dspy", run_url="r4")  # should open issue #2
+    assert len(gh.issues_opened) == 2
+    assert state.open_issue_numbers["dspy"] == gh.issues_opened[1]["number"]
 
 
 def test_recovery_with_no_open_issue_is_a_noop() -> None:

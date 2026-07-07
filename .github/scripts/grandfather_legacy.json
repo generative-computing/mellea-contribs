@@ -1,12 +1,4 @@
 {
   "_comment": "Legacy old-flat subpackages under mellea_contribs/ that pre-date the restructure. Each entry is removed by the corresponding migration PR. After migration is complete, this list is empty and the file is deleted.",
-  "legacy_paths": [
-    "mellea_contribs/__init__.py",
-    "mellea_contribs/dspy_backend",
-    "mellea_contribs/crewai_backend",
-    "mellea_contribs/langchain_backend",
-    "mellea_contribs/mellea-integration-core",
-    "mellea_contribs/reqlib_package",
-    "mellea_contribs/tools_package"
-  ]
+  "legacy_paths": []
 }
