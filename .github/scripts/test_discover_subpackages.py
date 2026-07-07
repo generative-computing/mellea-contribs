@@ -19,6 +19,16 @@ def test_docs_only_pr_runs_nothing() -> None:
     assert result.reason == "docs-only"
 
 
+def test_in_package_markdown_still_runs_that_package() -> None:
+    """A `.md` inside a subpackage is not docs-only — it must run that package's CI."""
+    inputs = DiscoverInputs(
+        changed_files=["dspy/README.md"], base_ref="main", repo_root=Path("/dummy")
+    )
+    result = discover(inputs, all_subpackages=["dspy", "tools"])
+    assert result.matrix == ["dspy"]
+    assert result.reason != "docs-only"
+
+
 def test_cookiecutter_only_runs_template_smoke() -> None:
     inputs = DiscoverInputs(
         changed_files=["cookiecutter/cookiecutter.json"],
@@ -32,9 +42,7 @@ def test_cookiecutter_only_runs_template_smoke() -> None:
 
 def test_root_pyproject_runs_all_packages() -> None:
     inputs = DiscoverInputs(
-        changed_files=["pyproject.toml"],
-        base_ref="main",
-        repo_root=Path("/dummy"),
+        changed_files=["pyproject.toml"], base_ref="main", repo_root=Path("/dummy")
     )
     result = discover(inputs, all_subpackages=["dspy", "tools"])
     assert sorted(result.matrix) == ["dspy", "tools"]

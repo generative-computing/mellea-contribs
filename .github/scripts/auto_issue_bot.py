@@ -345,8 +345,9 @@ def record_recovery(
 
     Resets the consecutive-failure counter and, if a tracking issue is
     open, posts a recovery comment, removes the ``contribs-broken``
-    label, and resets the archival clock. The issue itself is left
-    open for a human to close.
+    label, resets the archival clock, and stops tracking the issue (so a
+    later re-break opens a new one). The issue itself is left open for a
+    human to close.
     """
     had_failures = state.consecutive_failures.get(package, 0) > 0
     state.consecutive_failures[package] = 0
@@ -362,6 +363,10 @@ def record_recovery(
     gh.remove_label(issue_n, CONTRIBS_BROKEN_LABEL)
     state.label_applied_days[package] = 0
     state.milestones_posted[package] = []
+    # Forget the issue so a later re-break opens a fresh one. Otherwise
+    # record_failure sees the package still tracked and comments on this
+    # (now recovered, possibly human-closed) issue instead.
+    state.open_issue_numbers.pop(package, None)
 
 
 def apply_archival_timeline(

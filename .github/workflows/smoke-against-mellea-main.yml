@@ -53,7 +53,10 @@ jobs:
       - name: Run subpackage tests
         id: pytest
         working-directory: ${{ matrix.package }}
-        run: uv run pytest -m "not qualitative and not e2e"
+        # --no-sync: `uv run` otherwise re-syncs to the lockfile first, which
+        # reverts the `uv pip install mellea@main` above and silently tests
+        # against the pinned mellea instead of main.
+        run: uv run --no-sync pytest -m "not qualitative and not e2e"
       - name: Record failure with auto-issue bot
         # Catch install/sync failures too, not just pytest failures —
         # `steps.pytest.outcome` is unset when an earlier step (e.g. uv sync)
