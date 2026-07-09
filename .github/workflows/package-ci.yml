@@ -56,6 +56,11 @@ jobs:
       SKIP_OLLAMA: ${{ needs.read-config.outputs.skip_ollama }}
     steps:
       - uses: actions/checkout@v4
+      # Ubuntu runners fill up: Ollama tarball + granite4:micro model + uv
+      # envs exhaust the disk (seen as "No space left on device"). Reclaim
+      # space first, same as quality-generic.yml / build-package.yml.
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}

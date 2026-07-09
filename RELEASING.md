@@ -6,13 +6,14 @@ This document describes the coordinated-release model used by `mellea-contribs`.
 
 ## Repository Prerequisites
 
-The following must be set on `generative-computing/mellea-contribs` before the receiver workflow (`.github/workflows/receive-mellea-release.yml`) can open bump PRs after a mellea release:
+The receiver (`.github/workflows/receive-mellea-release.yml`) opens bump PRs using a token minted from the **"mellea auto release"** GitHub App, not the default `GITHUB_TOKEN`. This is because the `generative-computing` org locks `GITHUB_TOKEN` to read-only and forbids Actions from creating pull requests org-wide (and the per-repo override isn't available), so `gh pr create` under the default token fails and leaves orphaned `sync-mellea-*` branches.
 
-**Settings → Actions → General → Workflow permissions → enable "Allow GitHub Actions to create and approve pull requests".**
+For the receiver to work, all of the following must hold (they already do today):
 
-By default, GitHub Actions cannot create pull requests even with `pull-requests: write` in a workflow's `permissions:` block. Without this setting, `gh pr create` fails with "GitHub Actions is not permitted to create or approve pull requests" and the receiver leaves orphaned `sync-mellea-*` branches behind every release.
+- The **"mellea auto release"** App is installed on `generative-computing/mellea-contribs` with **Contents: write** and **Pull requests: write**.
+- Its credentials are available to the repo's Actions as `CI_APP_ID` (variable) and `CI_PRIVATE_KEY` (secret) — the same pair `cd.yml` uses.
 
-Once enabled, this is set forever; the workflow does not toggle it.
+No repo or org Actions *setting* needs changing; the App token supplies the write access directly.
 
 ## Overview
 
@@ -41,13 +42,13 @@ Each bump PR carries a `sync-mellea-version:<X.Y.Z>` label so the receiver can r
 
 ## Operational Notes
 
-### Merge the `_integration_core` bump PR by hand
+### Pass-2 is triggered automatically (via the App token)
 
-The pass-2 PRs are triggered by the merge event of the pass-1 PR. GitHub has a safety rule that prevents events caused by the default `GITHUB_TOKEN` from triggering further workflow runs — and the merge button, when clicked by a bot or by auto-merge, counts as one of those events. So if `_integration_core`'s PR is merged by GitHub auto-merge (or any bot), the second pass never opens. No error is raised; the release just silently stops.
+The pass-2 PRs are triggered by the merge event of the pass-1 PR. GitHub has a safety rule that prevents events caused by the default `GITHUB_TOKEN` from triggering further workflow runs — so if the receiver ran under `GITHUB_TOKEN`, merging the pass-1 PR (by anyone) would not open pass 2, and the release would silently stop.
 
-**The rule: a human must click the merge button on the `_integration_core` PR.** Don't turn on auto-merge for that one PR. All other bump PRs in the second pass can be merged any way you like — they don't trigger anything further.
+The receiver avoids this by minting a token from the **"mellea auto release"** GitHub App (`.github/workflows/receive-mellea-release.yml`, via `CI_APP_ID` / `CI_PRIVATE_KEY`). An App token is exempt from the safety rule, so merging the pass-1 `_integration_core` PR — by a human, a bot, or auto-merge — correctly re-triggers the receiver and opens pass 2. No special merge handling is required.
 
-If we ever want fully hands-off releases, the fix is to use a personal access token (or a GitHub App token) instead of the default workflow token, which is exempt from the safety rule. That change would live in `.github/workflows/receive-mellea-release.yml`.
+> **If you ever revert the receiver to the default `GITHUB_TOKEN`**, this breaks: pass 2 stops firing on merge and a human would have to click merge on the `_integration_core` PR to advance it. Keep the App token.
 
 ## What the pipeline does
 

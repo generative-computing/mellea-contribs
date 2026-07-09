@@ -21,9 +21,10 @@ on:
         description: "Mellea version to sync (manual / recovery)"
         required: true
 
+# The default GITHUB_TOKEN only needs read here — all writes (branches, PRs)
+# go through the "mellea auto release" App token minted below.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   sync:
@@ -67,11 +68,27 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Syncing mellea-contribs to mellea v${VERSION}"
 
+      # Mint a token from the "mellea auto release" GitHub App instead of the
+      # default GITHUB_TOKEN. Two reasons:
+      #   1. The org locks GITHUB_TOKEN to read-only and forbids Actions from
+      #      creating PRs, so `gh pr create` in the bump script would fail.
+      #   2. Branches/PRs pushed with an App token are NOT the default token,
+      #      so merging the pass-1 PR *does* retrigger this workflow (pass 2).
+      #      With GITHUB_TOKEN the pass-1 merge would be suppressed and pass 2
+      #      would never open. See RELEASING.md § Operational Notes.
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_PRIVATE_KEY }}
+
       - name: Checkout mellea-contribs
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -83,7 +100,7 @@ jobs:
 
       - name: Open per-package bump PRs for the active pass
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           uv run python .github/scripts/open_per_package_bump_prs.py . "$VERSION"
