@@ -25,11 +25,49 @@ from pathlib import Path
 
 EXCLUDED = {".venv", "dist", "build", ".git", "__pycache__", "node_modules"}
 
-# Matches a "mellea" or "mellea[extras]" dep line — the bare `mellea` package
-# only, not sibling distributions like `mellea-contribs-X` or `mellea-tools`.
-# The negative lookahead `(?![a-zA-Z0-9_-])` ensures we don't accidentally
-# match the prefix of a longer package name.
-_MELLEA_LINE_RE = re.compile(r'"mellea(?![a-zA-Z0-9_-])(\[[^\]]+\])?(?P<spec>[^"]*)"')
+# Matches a `mellea` / `mellea[extras]` requirement string. The negative
+# lookahead `(?![a-zA-Z0-9_-])` avoids matching the prefix of a longer package
+# name (`mellea-contribs-X`, `mellea-tools`). This is only ever applied to the
+# *body of a dependency array* (see `_dependency_array_bodies`), never to the
+# whole file — otherwise it would false-positive on `keywords = ["mellea"]`,
+# classifiers, or a description string, none of which are dependencies.
+_MELLEA_REQ_RE = re.compile(r'"mellea(?![a-zA-Z0-9_-])(\[[^\]]+\])?(?P<spec>[^"]*)"')
+
+# Start of a `<key> = [` array assignment (the value may span multiple lines).
+_ARRAY_ASSIGN_RE = re.compile(r"^\s*(?P<key>[\w.\-]+)\s*=\s*\[")
+
+
+def _dependency_array_bodies(text: str) -> list[str]:
+    """Return the raw text of every dependency array in a pyproject.toml.
+
+    A dependency array is `dependencies = [...]`, any `*-dependencies = [...]`,
+    or any `<extra> = [...]` under a `[*optional-dependencies]` table. Scoping
+    the mellea check to these bodies is what keeps `keywords = ["mellea", ...]`,
+    classifiers, and descriptions — which legitimately contain the word
+    `mellea` — from being mistaken for dependency declarations.
+    """
+    lines = text.splitlines(keepends=True)
+    bodies: list[str] = []
+    in_optional_deps_table = False
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].split("#", 1)[0].strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_optional_deps_table = stripped.endswith("optional-dependencies]")
+            i += 1
+            continue
+        match = _ARRAY_ASSIGN_RE.match(lines[i])
+        if match:
+            key = match.group("key")
+            is_dep_array = key == "dependencies" or key.endswith("dependencies")
+            buf = lines[i]
+            while "]" not in lines[i] and i + 1 < len(lines):
+                i += 1
+                buf += lines[i]
+            if is_dep_array or in_optional_deps_table:
+                bodies.append(buf)
+        i += 1
+    return bodies
 
 
 class UnacceptableMelleaLine(ValueError):
@@ -39,12 +77,21 @@ class UnacceptableMelleaLine(ValueError):
 def _validate_mellea_lines(text: str, path: Path) -> None:
     """Raise UnacceptableMelleaLine if any `mellea` dep is bare or git-ref'd.
 
+    Only dependency arrays are inspected (not keywords/classifiers/description),
+    so a package that lists `mellea` as a keyword is not mistaken for one that
+    declares a bare `mellea` dependency.
+
     Acceptable forms: `mellea>=X.Y.Z`, `mellea==X.Y.Z`,
     `mellea[extras]>=X.Y.Z`, `mellea[extras]==X.Y.Z`.
 
     Rejected: bare `mellea`, `mellea[extras]` without operator, `mellea @ git+...`.
     """
-    for match in _MELLEA_LINE_RE.finditer(text):
+    matches = [
+        m
+        for body in _dependency_array_bodies(text)
+        for m in _MELLEA_REQ_RE.finditer(body)
+    ]
+    for match in matches:
         spec = match.group("spec").strip()
         if not spec:
             raise UnacceptableMelleaLine(
@@ -56,7 +103,7 @@ def _validate_mellea_lines(text: str, path: Path) -> None:
                 f"{path}: mellea declared as a git/url ref ({spec!r}). "
                 "Replace with `mellea>=X.Y.Z` or `mellea==X.Y.Z` before merging."
             )
-        if not (spec.startswith(">=") or spec.startswith("==")):
+        if not spec.startswith((">=", "==")):
             raise UnacceptableMelleaLine(
                 f"{path}: mellea constraint uses an operator we won't auto-bump ({spec!r}). "
                 "Use `mellea>=X.Y.Z` or `mellea==X.Y.Z`."
