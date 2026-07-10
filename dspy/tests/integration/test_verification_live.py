@@ -5,6 +5,8 @@ import pytest
 from mellea import start_session
 from mellea_contribs.dspy import MelleaBestOfN, MelleaLM, MelleaRefine
 
+pytestmark = pytest.mark.e2e  # live LLM calls — excluded from the default CI lane
+
 
 @pytest.fixture
 def mellea_session():

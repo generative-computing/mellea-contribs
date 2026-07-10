@@ -3,7 +3,7 @@
 import dspy
 import pytest
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e  # live LLM calls — excluded from the default CI lane
 
 
 class SimpleQA(dspy.Module):
