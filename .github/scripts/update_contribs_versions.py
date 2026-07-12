@@ -60,10 +60,16 @@ def _dependency_array_bodies(text: str) -> list[str]:
         if match:
             key = match.group("key")
             is_dep_array = key == "dependencies" or key.endswith("dependencies")
+            # Consume lines until the array's brackets balance. Track bracket
+            # depth rather than "first line containing ]" — a dependency with
+            # extras (e.g. "mellea[litellm]>=0.3.2") contains a `]` that would
+            # otherwise close the buffer early and drop every dep below it.
             buf = lines[i]
-            while "]" not in lines[i] and i + 1 < len(lines):
+            depth = buf.count("[") - buf.count("]")
+            while depth > 0 and i + 1 < len(lines):
                 i += 1
                 buf += lines[i]
+                depth += lines[i].count("[") - lines[i].count("]")
             if is_dep_array or in_optional_deps_table:
                 bodies.append(buf)
         i += 1
