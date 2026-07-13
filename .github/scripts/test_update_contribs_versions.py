@@ -23,7 +23,6 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from update_contribs_versions import UnacceptableMelleaLine, update_repo
 
 

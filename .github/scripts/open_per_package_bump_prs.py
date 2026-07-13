@@ -78,7 +78,9 @@ def _select_pass(repo: Path, target: str) -> tuple[str, list[Path]] | None:
         return "integration-core", [core / "pyproject.toml"]
 
     pass2 = [
-        s / "pyproject.toml" for s in others if _needs_bump(s / "pyproject.toml", target)
+        s / "pyproject.toml"
+        for s in others
+        if _needs_bump(s / "pyproject.toml", target)
     ]
     if pass2:
         return "subpackages", pass2
@@ -116,23 +118,22 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         print(f"  [{name}] branch {branch} already exists upstream — skipping.")
         return
 
-    # Bump pyproject.toml. Pre-flight validation in main() guarantees
-    # this won't raise UnacceptableMelleaLine; let any other error
-    # propagate with its native traceback.
-    update_pyproject(subpackage, target)
-
-    # Refresh uv.lock.
-    subprocess.run(
-        ["uv", "lock", "--upgrade-package", "mellea"],
-        cwd=sub_dir,
-        check=True,
-    )
-
-    # Everything from here creates a branch and edits the tree. If any step
-    # raises (push rejected, `gh pr create` fails, ...), the `finally` still
-    # returns the checkout to a clean `main` so the next subpackage in the pass
-    # starts from a known-good state instead of a stranded feature branch.
+    # Everything from here edits the tree (pyproject bump, uv.lock, branch).
+    # Wrap it all so that if any step raises — `uv lock` resolution/network
+    # failure, push rejected, `gh pr create` failure — the `finally` still
+    # resets the checkout to a clean `main`. A raised exception ends the whole
+    # run (main()'s loop has no handler), so the reset's job is to leave a
+    # clean checkout behind rather than a stranded, half-bumped tree.
     try:
+        # Bump pyproject.toml. Pre-flight validation in main() guarantees this
+        # won't raise UnacceptableMelleaLine; let any other error propagate.
+        update_pyproject(subpackage, target)
+
+        # Refresh uv.lock.
+        subprocess.run(
+            ["uv", "lock", "--upgrade-package", "mellea"], cwd=sub_dir, check=True
+        )
+
         # Branch, commit, push.
         subprocess.run(["git", "checkout", "-b", branch], cwd=repo, check=True)
         subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
@@ -156,18 +157,25 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         )
         subprocess.run(
             [
-                "gh", "pr", "create",
-                "--title", f"chore({name}): bump version to v{target}",
-                "--body", body,
-                "--head", branch,
-                "--base", "main",
-                "--label", f"sync-mellea-version:{target}",
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                f"chore({name}): bump version to v{target}",
+                "--body",
+                body,
+                "--head",
+                branch,
+                "--base",
+                "main",
+                "--label",
+                f"sync-mellea-version:{target}",
             ],
             cwd=repo,
             check=True,
         )
     finally:
-        # Reset to main for the next iteration, even on failure.
+        # Always leave a clean checkout on main, even if a step above raised.
         subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
         subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo, check=True)
 
