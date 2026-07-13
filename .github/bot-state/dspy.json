@@ -1,5 +1,5 @@
 {
-  "consecutive_failures": 1,
+  "consecutive_failures": 0,
   "label_applied_days": 0,
   "last_failure_run_url": "https://github.com/generative-computing/mellea-contribs/actions/runs/29011971934",
   "milestones_posted": []
