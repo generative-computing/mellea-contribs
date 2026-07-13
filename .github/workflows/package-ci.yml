@@ -6,6 +6,14 @@ on:
       package:
         required: true
         type: string
+      mellea_ref:
+        # When non-empty, install `mellea @ git+...@<ref>` after `uv sync` and
+        # run pytest with `--no-sync` so uv does not re-sync the override away.
+        # This is the "smoke against mellea@<ref>" mode; empty (the default)
+        # is the normal PR-CI path that tests against the pinned mellea.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -48,12 +56,22 @@ jobs:
     needs: read-config
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJson(needs.read-config.outputs.timeout_minutes) }}
+    # auto_issue_bot.py (smoke mode only) writes per-package state under
+    # .github/bot-state/ and opens/updates issues, so the job requests write.
+    # Reusable-workflow permissions are CAPPED by the caller: the smoke caller
+    # grants contents/issues:write, while the PR-CI caller (ci.yml) grants only
+    # its default read-only token — so the PR path is unchanged and the bot
+    # steps (gated on MELLEA_REF) never run there anyway.
+    permissions:
+      contents: write
+      issues: write
     strategy:
       fail-fast: false
       matrix:
         python-version: ${{ fromJson(needs.read-config.outputs.python_versions) }}
     env:
       SKIP_OLLAMA: ${{ needs.read-config.outputs.skip_ollama }}
+      MELLEA_REF: ${{ inputs.mellea_ref }}
     steps:
       - uses: actions/checkout@v4
       # Ubuntu runners fill up: Ollama tarball + granite4:micro model + uv
@@ -92,6 +110,15 @@ jobs:
         working-directory: ${{ inputs.package }}
         run: uv sync --all-extras --python ${{ matrix.python-version }}
 
+      # Smoke mode only: override the pinned mellea with the requested ref.
+      # Bound through env per AGENTS.md (never interpolate ${{ }} into a shell).
+      - name: Override mellea with requested ref
+        if: env.MELLEA_REF != ''
+        working-directory: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          uv pip install "mellea @ git+https://github.com/generative-computing/mellea.git@${MELLEA_REF}"
+
       - name: Lint
         working-directory: ${{ inputs.package }}
         run: |
@@ -102,6 +129,51 @@ jobs:
         working-directory: ${{ inputs.package }}
         run: uv run mypy .
 
+      # In smoke mode (MELLEA_REF set) run with --no-sync so `uv run` does not
+      # re-sync to the lockfile and revert the mellea override installed above.
       - name: Test
+        id: pytest
         working-directory: ${{ inputs.package }}
-        run: uv run pytest -m "not qualitative and not e2e"
+        run: |
+          set -euo pipefail
+          if [ -n "$MELLEA_REF" ]; then
+            uv run --no-sync pytest -m "not qualitative and not e2e"
+          else
+            uv run pytest -m "not qualitative and not e2e"
+          fi
+
+      # --- Smoke-only auto-issue bot reporting ------------------------------
+      # These steps run only when this workflow was invoked as a mellea@<ref>
+      # smoke (MELLEA_REF set). Keeping them inside the reusable workflow is
+      # deliberate: a caller job that uses `uses:` cannot have its own steps,
+      # and a matrix `uses:` job exposes only ONE aggregate `result` for the
+      # whole matrix — so a separate reporting job cannot tell which package
+      # passed and which failed. Here each package (and python version) has its
+      # own step outcome, giving correct per-package granularity.
+      - name: Record failure with auto-issue bot
+        # Catch install/sync failures too, not just pytest failures —
+        # steps.pytest.outcome is unset when an earlier step (e.g. uv sync)
+        # broke before pytest ran, and we want those reported.
+        if: failure() && env.MELLEA_REF != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          uv run python .github/scripts/auto_issue_bot.py \
+            --action record-failure \
+            --package "$PACKAGE" \
+            --run-url "$RUN_URL"
+      - name: Record recovery with auto-issue bot
+        if: success() && env.MELLEA_REF != '' && steps.pytest.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          uv run python .github/scripts/auto_issue_bot.py \
+            --action record-recovery \
+            --package "$PACKAGE" \
+            --commit-sha "$COMMIT_SHA"
