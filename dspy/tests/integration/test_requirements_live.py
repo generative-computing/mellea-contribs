@@ -4,7 +4,7 @@ import dspy
 import pytest
 from mellea_contribs.dspy import MelleaLM
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e  # live LLM calls — excluded from the default CI lane
 
 
 class TestRequirementsBasic:

@@ -23,7 +23,6 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from update_contribs_versions import UnacceptableMelleaLine, update_repo
 
 
@@ -59,6 +58,78 @@ def test_bumps_version_only_not_mellea_constraint(tmp_path: Path) -> None:
     # Cross-deps must NOT be touched.
     assert '"mellea-contribs-integration-core"' in out
     assert '"dspy>=3.1"' in out
+
+
+def test_mellea_keyword_is_not_mistaken_for_a_dependency(tmp_path: Path) -> None:
+    """`keywords = ["mellea", ...]` must not trip the bare-mellea validator.
+
+    Regression: the receiver aborted on _integration_core because the mellea
+    check scanned the whole file and matched the keyword, not just deps.
+    """
+    write(
+        tmp_path / "_integration_core" / "pyproject.toml",
+        """
+        [project]
+        name = "mellea-contribs-integration-core"
+        version = "0.1.0"
+        keywords = ["mellea", "contribs", "integration-core"]
+        dependencies = [
+            "mellea>=0.3.2",
+        ]
+        """,
+    )
+
+    changed = update_repo(tmp_path, "0.6.0")
+
+    out = (tmp_path / "_integration_core" / "pyproject.toml").read_text()
+    assert (tmp_path / "_integration_core" / "pyproject.toml") in changed
+    assert 'version = "0.6.0"' in out
+    assert '"mellea>=0.3.2"' in out  # dep floor untouched
+    assert '"mellea"' in out  # keyword untouched
+
+
+def test_mellea_keyword_on_its_own_line_is_not_a_dependency(tmp_path: Path) -> None:
+    """A multi-line `keywords` array with `"mellea"` alone on a line is fine too."""
+    write(
+        tmp_path / "x" / "pyproject.toml",
+        """
+        [project]
+        name = "mellea-contribs-x"
+        version = "0.1.0"
+        keywords = [
+            "mellea",
+            "contribs",
+        ]
+        dependencies = ["mellea>=0.3.2"]
+        """,
+    )
+
+    changed = update_repo(tmp_path, "0.6.0")
+    assert (tmp_path / "x" / "pyproject.toml") in changed
+
+
+def test_bare_mellea_after_an_extras_dep_is_still_caught(tmp_path: Path) -> None:
+    """An extras `]` earlier in the array must not truncate the scanned body.
+
+    Regression: the array walker stopped at the first `]`, so a dep with
+    extras (whose `[extra]` contains `]`) dropped every dep below it — a bare
+    `mellea` after it escaped the safety check.
+    """
+    write(
+        tmp_path / "x" / "pyproject.toml",
+        """
+        [project]
+        name = "mellea-contribs-x"
+        version = "0.1.0"
+        dependencies = [
+            "some-pkg[extra]>=1.0",
+            "mellea",
+        ]
+        """,
+    )
+
+    with pytest.raises(UnacceptableMelleaLine, match="bare `mellea`"):
+        update_repo(tmp_path, "0.6.0")
 
 
 def test_preserves_mellea_extras_constraint(tmp_path: Path) -> None:

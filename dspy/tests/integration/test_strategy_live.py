@@ -5,7 +5,7 @@ import pytest
 from mellea.stdlib.sampling import MultiTurnStrategy, RejectionSamplingStrategy
 from mellea_contribs.dspy import MelleaLM
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e  # live LLM calls — excluded from the default CI lane
 
 
 class TestStrategyBasic:

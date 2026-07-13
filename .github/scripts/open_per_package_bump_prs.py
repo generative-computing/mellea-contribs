@@ -78,7 +78,9 @@ def _select_pass(repo: Path, target: str) -> tuple[str, list[Path]] | None:
         return "integration-core", [core / "pyproject.toml"]
 
     pass2 = [
-        s / "pyproject.toml" for s in others if _needs_bump(s / "pyproject.toml", target)
+        s / "pyproject.toml"
+        for s in others
+        if _needs_bump(s / "pyproject.toml", target)
     ]
     if pass2:
         return "subpackages", pass2
@@ -116,55 +118,66 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         print(f"  [{name}] branch {branch} already exists upstream — skipping.")
         return
 
-    # Bump pyproject.toml. Pre-flight validation in main() guarantees
-    # this won't raise UnacceptableMelleaLine; let any other error
-    # propagate with its native traceback.
-    update_pyproject(subpackage, target)
+    # Everything from here edits the tree (pyproject bump, uv.lock, branch).
+    # Wrap it all so that if any step raises — `uv lock` resolution/network
+    # failure, push rejected, `gh pr create` failure — the `finally` still
+    # resets the checkout to a clean `main`. A raised exception ends the whole
+    # run (main()'s loop has no handler), so the reset's job is to leave a
+    # clean checkout behind rather than a stranded, half-bumped tree.
+    try:
+        # Bump pyproject.toml. Pre-flight validation in main() guarantees this
+        # won't raise UnacceptableMelleaLine; let any other error propagate.
+        update_pyproject(subpackage, target)
 
-    # Refresh uv.lock.
-    subprocess.run(
-        ["uv", "lock", "--upgrade-package", "mellea"],
-        cwd=sub_dir,
-        check=True,
-    )
+        # Refresh uv.lock.
+        subprocess.run(
+            ["uv", "lock", "--upgrade-package", "mellea"], cwd=sub_dir, check=True
+        )
 
-    # Branch, commit, push.
-    subprocess.run(["git", "checkout", "-b", branch], cwd=repo, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", f"chore({name}): bump version to v{target}"],
-        cwd=repo,
-        check=True,
-    )
-    subprocess.run(["git", "push", "origin", branch], cwd=repo, check=True)
+        # Branch, commit, push.
+        subprocess.run(["git", "checkout", "-b", branch], cwd=repo, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"chore({name}): bump version to v{target}"],
+            cwd=repo,
+            check=True,
+        )
+        subprocess.run(["git", "push", "origin", branch], cwd=repo, check=True)
 
-    # Open PR with a label that carries the target version. The receiver
-    # workflow's pull_request: closed re-trigger reads the version from
-    # this label rather than reparsing the branch name, which would
-    # truncate pre-release suffixes (e.g. ``0.6.0rc1`` → ``0.6.0``).
-    body = (
-        f"Automated bump of `{name}`'s `[project] version` to `{target}` "
-        f"after the matching mellea release.\n\n"
-        f"`mellea>=` constraint untouched — owners control that floor.\n\n"
-        f"Merging this PR is independent of any other bump PR in the same "
-        f"pass; please verify CI passes."
-    )
-    subprocess.run(
-        [
-            "gh", "pr", "create",
-            "--title", f"chore({name}): bump version to v{target}",
-            "--body", body,
-            "--head", branch,
-            "--base", "main",
-            "--label", f"sync-mellea-version:{target}",
-        ],
-        cwd=repo,
-        check=True,
-    )
-
-    # Reset to main for the next iteration.
-    subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
-    subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo, check=True)
+        # Open PR with a label that carries the target version. The receiver
+        # workflow's pull_request: closed re-trigger reads the version from
+        # this label rather than reparsing the branch name, which would
+        # truncate pre-release suffixes (e.g. ``0.6.0rc1`` → ``0.6.0``).
+        body = (
+            f"Automated bump of `{name}`'s `[project] version` to `{target}` "
+            f"after the matching mellea release.\n\n"
+            f"`mellea>=` constraint untouched — owners control that floor.\n\n"
+            f"Merging this PR is independent of any other bump PR in the same "
+            f"pass; please verify CI passes."
+        )
+        subprocess.run(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                f"chore({name}): bump version to v{target}",
+                "--body",
+                body,
+                "--head",
+                branch,
+                "--base",
+                "main",
+                "--label",
+                f"sync-mellea-version:{target}",
+            ],
+            cwd=repo,
+            check=True,
+        )
+    finally:
+        # Always leave a clean checkout on main, even if a step above raised.
+        subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
+        subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=repo, check=True)
 
 
 def main() -> int:
