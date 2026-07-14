@@ -2,7 +2,7 @@
 
 This walks through landing a working idea (code in your fork or a local
 script) as a real contribs subpackage. The friction is intentional but small:
-cookiecutter scaffolds the layout, CI enforces the contract, and the daily smoke
+cookiecutter scaffolds the layout, CI enforces the contract, and the twice-weekly smoke
 keeps you honest against `mellea@main`.
 
 ## 1. Should this be a contribs subpackage?
@@ -164,7 +164,7 @@ pip install "mellea-contribs[my-thing] @ https://github.com/generative-computing
 
 In the same PR that adds your subpackage, append its directory name to the
 `subpackages` array in [`.github/smoke-matrix.json`](../../.github/smoke-matrix.json)
-so the daily smoke job picks it up.
+so the twice-weekly smoke job picks it up.
 
 ## 10. Eviction signals
 
@@ -172,8 +172,8 @@ Two labels can land on your subpackage's tracking issue. Both share the same
 day-7 / day-14 / day-21 archival timeline; only the trigger and remediation
 differ.
 
-- **`[contribs-broken]`** — the daily smoke against `mellea@main` has been red
-  for two-plus consecutive days. Mellea changed something and your code
+- **`[contribs-broken]`** — the twice-weekly smoke against `mellea@main` has been red
+  for two-plus consecutive runs. Mellea changed something and your code
   doesn't run on `main` anymore. Fix: patch the subpackage. The bot tracks
   recovery automatically and posts a "smoke green again" comment when smoke
   passes; the issue stays open until OWNERS close it manually.
