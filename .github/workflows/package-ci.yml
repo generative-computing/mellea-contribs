@@ -7,10 +7,10 @@ on:
         required: true
         type: string
       mellea_ref:
-        # When non-empty, install `mellea @ git+...@<ref>` after `uv sync` and
-        # run pytest with `--no-sync` so uv does not re-sync the override away.
-        # This is the "smoke against mellea@<ref>" mode; empty (the default)
-        # is the normal PR-CI path that tests against the pinned mellea.
+        # When non-empty, repin mellea to this git branch (via `uv add`) so
+        # tests run against `mellea @ <ref>`. This is the "smoke against
+        # mellea@<ref>" mode; empty (the default) is the normal PR-CI path
+        # that tests against the pinned mellea.
         required: false
         type: string
         default: ""
@@ -110,14 +110,16 @@ jobs:
         working-directory: ${{ inputs.package }}
         run: uv sync --all-extras --python ${{ matrix.python-version }}
 
-      # Smoke mode only: override the pinned mellea with the requested ref.
+      # Smoke mode only: repin mellea to the requested git branch. `uv add`
+      # writes the pin into pyproject.toml + uv.lock, so later `uv run` syncs
+      # *to* the branch instead of reverting it — no --no-sync dance needed.
       # Bound through env per AGENTS.md (never interpolate ${{ }} into a shell).
       - name: Override mellea with requested ref
         if: env.MELLEA_REF != ''
         working-directory: ${{ inputs.package }}
         run: |
           set -euo pipefail
-          uv pip install "mellea @ git+https://github.com/generative-computing/mellea.git@${MELLEA_REF}"
+          uv add "mellea @ git+https://github.com/generative-computing/mellea.git" --branch "${MELLEA_REF}"
 
       - name: Lint
         working-directory: ${{ inputs.package }}
@@ -129,18 +131,10 @@ jobs:
         working-directory: ${{ inputs.package }}
         run: uv run mypy .
 
-      # In smoke mode (MELLEA_REF set) run with --no-sync so `uv run` does not
-      # re-sync to the lockfile and revert the mellea override installed above.
       - name: Test
         id: pytest
         working-directory: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          if [ -n "$MELLEA_REF" ]; then
-            uv run --no-sync pytest -m "not qualitative and not e2e"
-          else
-            uv run pytest -m "not qualitative and not e2e"
-          fi
+        run: uv run pytest -m "not qualitative and not e2e"
 
       # --- Smoke-only auto-issue bot reporting ------------------------------
       # These steps run only when this workflow was invoked as a mellea@<ref>
