@@ -144,6 +144,22 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         )
         subprocess.run(["git", "push", "origin", branch], cwd=repo, check=True)
 
+        # Ensure the version-carrying label exists before `gh pr create --label`
+        # uses it — `gh pr create` fails (leaving an orphaned branch) if the
+        # label is absent, and it will not auto-create it. `--force` is
+        # idempotent: creates the label or no-ops if it already exists.
+        subprocess.run(
+            [
+                "gh", "label", "create",
+                f"sync-mellea-version:{target}",
+                "--color", "BFD4F2",
+                "--description", "Target mellea version for the receiver's pass-2 re-trigger",
+                "--force",
+            ],
+            cwd=repo,
+            check=True,
+        )
+
         # Open PR with a label that carries the target version. The receiver
         # workflow's pull_request: closed re-trigger reads the version from
         # this label rather than reparsing the branch name, which would
