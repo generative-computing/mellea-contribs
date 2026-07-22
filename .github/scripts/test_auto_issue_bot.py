@@ -54,6 +54,30 @@ def test_second_consecutive_failure_opens_issue() -> None:
     assert state.label_applied_days["dspy"] == 0
 
 
+def test_team_owner_is_not_used_as_issue_assignee(tmp_path, monkeypatch) -> None:
+    """A team OWNERS entry (@org/team) can't be an issue assignee — skip it.
+
+    GitHub 422s if you try to assign an issue to a team; only individual
+    users are dropped-in as assignees, though the team stays mentioned in
+    the body via `owners`.
+    """
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "OWNERS").write_text("@generative-computing/mellea-maintainers\n@akihikokuroda\n")
+    monkeypatch.chdir(tmp_path)
+
+    gh = FakeGitHub()
+    state = BotState()
+    record_failure(gh, state, package="pkg", run_url="r1")
+    record_failure(gh, state, package="pkg", run_url="r2")
+
+    issue = gh.issues_opened[0]
+    # Only the individual is assignable; the team is filtered out.
+    assert issue["assignees"] == ["akihikokuroda"]
+    # But the team is still surfaced in the body for visibility.
+    assert "mellea-maintainers" in issue["body"]
+
+
 def test_third_failure_comments_on_existing_issue() -> None:
     gh = FakeGitHub()
     state = BotState()
