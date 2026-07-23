@@ -11,12 +11,31 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from open_per_package_bump_prs import _discover_subpackages, _select_pass
+from open_per_package_bump_prs import (
+    _discover_subpackages,
+    _load_owner_handles,
+    _select_pass,
+)
 
 
 def write(p: Path, content: str) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(textwrap.dedent(content).lstrip())
+
+
+def test_load_owner_handles_strips_at_and_ignores_non_handle_lines(
+    tmp_path: Path,
+) -> None:
+    """OWNERS handles are returned without the leading @; blanks/comments skipped."""
+    (tmp_path / "OWNERS").write_text("@akihikokuroda\n\n# a note\n@mmcelaney\n")
+    assert _load_owner_handles(tmp_path) == ["akihikokuroda", "mmcelaney"]
+
+
+def test_load_owner_handles_empty_or_missing_returns_empty(tmp_path: Path) -> None:
+    """An empty or absent OWNERS file yields no reviewers (PR opens unassigned)."""
+    assert _load_owner_handles(tmp_path) == []  # missing
+    (tmp_path / "OWNERS").write_text("")
+    assert _load_owner_handles(tmp_path) == []  # empty
 
 
 def _make_subpackage(repo: Path, name: str, version: str) -> None:

@@ -98,6 +98,22 @@ def _validate_all(pyprojects: list[Path]) -> None:
         _validate_mellea_lines(pp.read_text(), pp)
 
 
+def _load_owner_handles(sub_dir: Path) -> list[str]:
+    """Return the subpackage's OWNERS as bare handles (no leading ``@``).
+
+    OWNERS lists one ``@handle`` per line; a missing or empty file yields an
+    empty list. Used to request the subpackage's owners as PR reviewers.
+    """
+    owners_file = sub_dir / "OWNERS"
+    if not owners_file.exists():
+        return []
+    return [
+        line.strip().lstrip("@")
+        for line in owners_file.read_text().splitlines()
+        if line.strip().startswith("@")
+    ]
+
+
 def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
     """Branch, edit, lock, commit, push, and gh-pr-create for one subpackage.
 
@@ -144,6 +160,22 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
         )
         subprocess.run(["git", "push", "origin", branch], cwd=repo, check=True)
 
+        # Ensure the version-carrying label exists before `gh pr create --label`
+        # uses it — `gh pr create` fails (leaving an orphaned branch) if the
+        # label is absent, and it will not auto-create it. `--force` is
+        # idempotent: creates the label or no-ops if it already exists.
+        subprocess.run(
+            [
+                "gh", "label", "create",
+                f"sync-mellea-version:{target}",
+                "--color", "BFD4F2",
+                "--description", "Target mellea version for the receiver's pass-2 re-trigger",
+                "--force",
+            ],
+            cwd=repo,
+            check=True,
+        )
+
         # Open PR with a label that carries the target version. The receiver
         # workflow's pull_request: closed re-trigger reads the version from
         # this label rather than reparsing the branch name, which would
@@ -174,6 +206,26 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
             cwd=repo,
             check=True,
         )
+
+        # Request the subpackage's OWNERS as reviewers, as a separate,
+        # non-fatal step. `gh pr create --reviewer` aborts the whole create
+        # if any handle is invalid/not a collaborator (which would strand the
+        # branch), so we add reviewers after the PR exists and don't fail the
+        # run if the request is rejected — a bad OWNERS entry just means no
+        # reviewer got tagged, not a broken release.
+        reviewers = _load_owner_handles(sub_dir)
+        if reviewers:
+            r = subprocess.run(
+                ["gh", "pr", "edit", branch, "--add-reviewer", ",".join(reviewers)],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+            )
+            if r.returncode != 0:
+                print(
+                    f"  [{name}] could not request reviewers {reviewers}: "
+                    f"{r.stderr.strip()}"
+                )
     finally:
         # Always leave a clean checkout on main, even if a step above raised.
         subprocess.run(["git", "checkout", "main"], cwd=repo, check=True)
