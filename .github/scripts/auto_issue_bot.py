@@ -315,11 +315,17 @@ def record_failure(
 
     if n == FAILURE_THRESHOLD and package not in state.open_issue_numbers:
         owners = _load_owners(Path(package))
+        # GitHub can't assign an issue to a team (only individual users), so a
+        # team OWNERS entry (`@org/team`) would 422 the create. Drop teams from
+        # the assignee list — the issue still opens (unassigned if only a team
+        # owns the package) and every owner, teams included, is @-mentioned in
+        # the body via `owners`.
+        assignees = [o.lstrip("@") for o in owners if "/" not in o]
         issue_n = gh.open_issue(
             title=_issue_title(package),
             body=_issue_body(package, run_url, owners),
             labels=[CONTRIBS_BROKEN_LABEL],
-            assignees=[o.lstrip("@") for o in owners],
+            assignees=assignees,
         )
         state.open_issue_numbers[package] = issue_n
         state.label_applied_days[package] = 0
