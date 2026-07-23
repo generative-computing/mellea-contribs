@@ -1,6 +1,6 @@
 [project]
 name = "mellea-contribs-crewai"
-version = "0.1.0"
+version = "0.7.0"
 description = "CrewAI integration for Mellea — enables CrewAI agents to use Mellea's generative programming capabilities."
 readme = "README.md"
 # Capped at <3.14 because crewai's transitive dep chromadb pulls in a

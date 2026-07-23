@@ -1397,7 +1397,7 @@ wheels = [
 
 [[package]]
 name = "mellea"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
@@ -1413,14 +1413,14 @@ dependencies = [
     { name = "requests" },
     { name = "rouge-score" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/d5/90cad0dfc7b47bdfbe40eaad56d03845355592afd02b70e28409fd2de062/mellea-0.6.0.tar.gz", hash = "sha256:d1ef5873f28a66ee44448737ce270ac98dc50e57d0a3582fe102d598f5490ebc", size = 4316534, upload-time = "2026-05-19T20:52:13.505Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/ca/8eeac1807f9e91ccdc7c43b8961c9ec64a55bc569bc1320fdade60e769dc/mellea-0.7.0.tar.gz", hash = "sha256:cb9412a9c39009bd9e52169916c116a7f30e9f2d821453bb27c9bc8bb301535a", size = 4712622, upload-time = "2026-07-13T19:37:35.758Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/dd/2307b937f22a79ee569a8cc648560476064b13f14d23601ef715a961b912/mellea-0.6.0-py3-none-any.whl", hash = "sha256:8e9fcefc1aa571df88aa726174e8e94f13a24fc97280aafc9954d227edad8b7d", size = 4806315, upload-time = "2026-05-19T20:52:11.378Z" },
+    { url = "https://files.pythonhosted.org/packages/66/03/b3c1e34402d088fb418cc0cb3cb91a319101ea170e16af663f1e0c14d6a3/mellea-0.7.0-py3-none-any.whl", hash = "sha256:b018f22c3d56b4b8596fb05133a8b2da88350e6a3d96f8148aeec0d42f3239b9", size = 5205043, upload-time = "2026-07-13T19:37:33.708Z" },
 ]
 
 [[package]]
 name = "mellea-contribs-crewai"
-version = "0.1.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "crewai" },
@@ -1464,7 +1464,7 @@ dev = [
 
 [[package]]
 name = "mellea-contribs-integration-core"
-version = "0.1.0"
+version = "0.7.0"
 source = { directory = "../_integration_core" }
 dependencies = [
     { name = "mellea" },
