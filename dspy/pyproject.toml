@@ -1,6 +1,6 @@
 [project]
 name = "mellea-contribs-dspy"
-version = "0.1.0"
+version = "0.7.0"
 description = "DSPy integration for Mellea - enabling structured prompting with generative programming."
 readme = "README.md"
 requires-python = ">=3.11"
