@@ -1,6 +1,6 @@
 [project]
 name = "mellea-contribs-reqlib"
-version = "0.0.1"
+version = "0.7.0"
 description = "Domain-specific Requirement recipes for Mellea's Instruct-Validate-Repair patterns."
 readme = "README.md"
 requires-python = ">=3.11"
