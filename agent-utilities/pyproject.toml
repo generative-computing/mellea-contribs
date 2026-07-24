@@ -1,6 +1,6 @@
 [project]
 name = "mellea-contribs-agent-utilities"
-version = "0.0.1"
+version = "0.7.0"
 description = "Agent-side utilities: selectors, evaluators, robustness tools."
 readme = "README.md"
 requires-python = ">=3.11"
