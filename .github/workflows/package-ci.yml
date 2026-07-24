@@ -56,15 +56,13 @@ jobs:
     needs: read-config
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJson(needs.read-config.outputs.timeout_minutes) }}
-    # auto_issue_bot.py (smoke mode only) writes per-package state under
-    # .github/bot-state/ and opens/updates issues, so the job requests write.
-    # Reusable-workflow permissions are CAPPED by the caller: the smoke caller
-    # grants contents/issues:write, while the PR-CI caller (ci.yml) grants only
-    # its default read-only token — so the PR path is unchanged and the bot
-    # steps (gated on MELLEA_REF) never run there anyway.
-    permissions:
-      contents: write
-      issues: write
+    # No job-level `permissions:` here. A reusable workflow's declared job
+    # permissions must not EXCEED the caller's token, or the caller fails at
+    # startup — and ci.yml (the PR/merge-queue caller) runs with the default
+    # read-only token, so declaring issues/contents:write here broke it. Each
+    # caller sets the ceiling instead: ci.yml grants read (the bot steps are
+    # gated off via MELLEA_REF and never run), and smoke-against-mellea-main.yml
+    # grants contents/issues:write so the auto-issue bot can run in smoke mode.
     strategy:
       fail-fast: false
       matrix:
