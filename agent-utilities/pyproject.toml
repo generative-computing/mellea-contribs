@@ -32,6 +32,10 @@ Repository = "https://github.com/generative-computing/mellea-contribs"
 
 [project.optional-dependencies]
 robustness = ["benchdrift"]
+# SIMBA-UQ confidence-aware sample selector. scikit-learn + sentence-transformers
+# are needed by the strategy (classifier and sbert paths); tqdm + datasets are
+# used only by the example's Hugging Face training-data generation.
+simbauq = ["scikit-learn", "sentence-transformers", "tqdm", "datasets"]
 
 [build-system]
 requires = ["hatchling"]
@@ -76,4 +80,5 @@ markers = [
     "integration: requires local services",
     "e2e: end-to-end against an LLM",
     "qualitative: checks LLM output quality",
+    "ollama: requires a local Ollama server",
 ]
