@@ -3,6 +3,10 @@
 import numpy as np
 import pytest
 
+from mellea.core import Component
+from mellea.core.base import ModelOutputThunk
+from mellea.stdlib.context import SimpleContext
+
 from mellea_contribs.agent_utilities.core.simbauq import SIMBAUQSamplingStrategy
 
 # --- Unit tests (no LLM required) ---
@@ -379,6 +383,129 @@ class TestInit:
     def test_zero_n_per_temp_raises(self):
         with pytest.raises(ValueError):
             SIMBAUQSamplingStrategy(n_per_temp=0)
+
+
+# --- sample() tests (mocked backend, no LLM required) ---
+
+
+class _FakeAction(Component):
+    """Minimal Component that echoes the model output, rejecting ``BAD*`` text.
+
+    Used to exercise the parse-error branch of ``sample()`` without an LLM.
+    """
+
+    def _parse(self, computed: ModelOutputThunk) -> str:
+        text = str(computed)
+        if text.startswith("BAD"):
+            raise ValueError("unparsable output")
+        return text
+
+    def format_for_llm(self) -> str:
+        return "prompt"
+
+    def parts(self) -> list:
+        return []
+
+
+class _ScriptedBackend:
+    """Backend stub returning a queued sequence of outcomes, one per generate call.
+
+    Each outcome is either a string (yields a ``ModelOutputThunk`` with that
+    value) or an ``Exception`` (raised so ``asyncio.gather`` records it as a
+    failed generation).
+    """
+
+    def __init__(self, outcomes: list):
+        self._outcomes = list(outcomes)
+        self._i = 0
+
+    async def generate_from_context(
+        self,
+        action,
+        ctx,
+        *,
+        format=None,
+        model_options=None,
+        tool_calls=False,
+    ):
+        outcome = self._outcomes[self._i]
+        self._i += 1
+        if isinstance(outcome, Exception):
+            raise outcome
+        return ModelOutputThunk(value=outcome), ctx
+
+
+class TestSampleMockedBackend:
+    """Exercise the async ``sample()`` path with a scripted backend."""
+
+    async def test_selects_most_confident_and_counts_failures(self):
+        # 6 requested samples: 4 usable, 1 generation failure, 1 parse error.
+        outcomes = [
+            "the capital of france is paris",
+            "paris is the capital of france",
+            RuntimeError("rate limited"),
+            "france capital is paris",
+            "BAD unparsable output",
+            "bananas are yellow fruit",  # outlier
+        ]
+        strategy = SIMBAUQSamplingStrategy(
+            temperatures=[0.3, 0.7, 1.0],
+            n_per_temp=2,
+            similarity_metric="jaccard",
+        )
+        result = await strategy.sample(
+            _FakeAction(),
+            SimpleContext(),
+            _ScriptedBackend(outcomes),
+            requirements=None,
+        )
+
+        # Only the 4 usable samples survive; the failure and parse error are dropped.
+        assert len(result.sample_generations) == 4
+        assert result.success is True
+
+        meta = result.result._meta["simba_uq"]
+        assert meta["failed_count"] == 2
+        assert meta["degraded"] is False
+        assert len(meta["all_confidences"]) == 4
+        # The outlier should not be the selected (most confident) sample.
+        assert str(result.result) != "bananas are yellow fruit"
+
+    async def test_single_successful_sample_is_degraded(self):
+        outcomes = [
+            "the only good answer",
+            RuntimeError("boom"),
+            RuntimeError("boom"),
+            RuntimeError("boom"),
+        ]
+        strategy = SIMBAUQSamplingStrategy(
+            temperatures=[0.5], n_per_temp=4, similarity_metric="jaccard"
+        )
+        result = await strategy.sample(
+            _FakeAction(),
+            SimpleContext(),
+            _ScriptedBackend(outcomes),
+            requirements=None,
+        )
+
+        meta = result.result._meta["simba_uq"]
+        assert meta["degraded"] is True
+        assert meta["confidence"] is None
+        assert meta["failed_count"] == 3
+        assert len(result.sample_generations) == 1
+
+    async def test_all_samples_failing_raises(self):
+        outcomes = [RuntimeError("x"), RuntimeError("y")]
+        strategy = SIMBAUQSamplingStrategy(
+            temperatures=[0.5], n_per_temp=2, similarity_metric="jaccard"
+        )
+        with pytest.raises(RuntimeError, match="No successful samples"):
+            await strategy.sample(
+                _FakeAction(),
+                SimpleContext(),
+                _ScriptedBackend(outcomes),
+                requirements=None,
+            )
 
 
 # --- Integration test (requires Ollama) ---

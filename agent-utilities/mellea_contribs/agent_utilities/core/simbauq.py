@@ -282,24 +282,27 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
         all_contexts = []
         all_actions: list[Component[S]] = []
         temp_assignments: list[float] = []
+        failed_count = 0
+        flog = MelleaLogger.get_logger()
         for gen_result, task_action, task_temp in zip(
             generation_results, task_actions, task_temps
         ):
             if isinstance(gen_result, BaseException):
+                failed_count += 1
+                flog.warning(f"Sample generation failed: {gen_result}")
                 continue  # Skip failed generations.
             result_mot, result_ctx = gen_result
             await result_mot.avalue()
             try:
                 result_mot.parsed_repr = task_action.parse(result_mot)
             except ComponentParseError as e:
-                print(f"Error parsing result: {e}")
+                failed_count += 1
+                flog.warning(f"Error parsing result: {e}")
                 continue  # Skip unparsable results.
             all_mots.append(result_mot)
             all_contexts.append(result_ctx)
             all_actions.append(task_action)
             temp_assignments.append(task_temp)
-
-        flog = MelleaLogger.get_logger()
 
         # --- Phase 2: Compute SIMBA-UQ confidence scores ---
         sample_strings = [str(mot) for mot in all_mots]
@@ -341,6 +344,7 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
             "confidence_method": self.confidence_method,
             "similarity_metric": self.similarity_metric,
             "aggregation": self.aggregation,
+            "failed_count": failed_count,
         }
 
         # Mark as final result.

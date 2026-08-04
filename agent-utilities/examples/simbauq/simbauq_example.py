@@ -1,4 +1,4 @@
-# pytest: ollama, llm, qualitative
+# pytest: ollama, e2e, qualitative
 
 """SIMBA-UQ Sampling Strategy Example.
 
