@@ -1,2 +1,8 @@
 # Default: request review from maintainers
 * @generative-computing/mellea-maintainers
+
+# SIMBA-UQ sampling strategy: pulls in scikit-learn / sentence-transformers and
+# has confidence-estimation footguns worth a specialist's eye on changes.
+/agent-utilities/mellea_contribs/agent_utilities/core/simbauq.py @radum2275
+/agent-utilities/tests/test_simbauq.py @radum2275
+/agent-utilities/examples/simbauq/ @radum2275

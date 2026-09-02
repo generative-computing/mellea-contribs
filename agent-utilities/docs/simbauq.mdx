@@ -1,0 +1,100 @@
+---
+title: SIMBA-UQ Sampling Strategy
+description: Confidence-aware sample selection for Mellea via similarity-based uncertainty quantification.
+---
+
+# SIMBA-UQ Sampling
+
+`SIMBAUQSamplingStrategy` is a confidence-aware sample selector. It generates
+multiple samples across a range of temperatures, computes a pairwise similarity
+matrix between them, and selects the sample with the highest estimated
+confidence.
+
+Based on the SIMBA-UQ framework (Bhattacharjya et al., 2025),
+[SIMBA UQ: Similarity-Based Aggregation for Uncertainty Quantification in Large Language Models](https://arxiv.org/abs/2510.13836).
+
+---
+
+## What SIMBA-UQ Does
+
+- Generates `len(temperatures) * n_per_temp` samples for a single instruction.
+- Builds an `N x N` pairwise similarity matrix (rouge, jaccard, sbert, difflib, or levenshtein).
+- Estimates per-sample confidence with one of two methods:
+  - **aggregation** (data-free): aggregates each sample's similarity to the others.
+  - **classifier**: a trained probabilistic classifier predicts `P(correct)` from similarity features.
+- Returns the most confident sample, with metadata stored on the selected
+  `ModelOutputThunk` under `mot._meta["simba_uq"]`.
+
+<Callout>
+Use SIMBA-UQ when you can afford multiple generations and want the answer the
+model is most self-consistent about, rather than a single greedy sample.
+</Callout>
+
+---
+
+## Install
+
+The strategy's `sbert` and `classifier` paths need extra dependencies:
+
+```bash
+pip install "mellea-contribs-agent-utilities[simbauq]"
+```
+
+`rouge`, `jaccard`, `difflib`, and `levenshtein` metrics with the
+`aggregation` method work without the extra.
+
+---
+
+## When to Use SIMBA-UQ
+
+### Recommended for:
+- Factual / short-answer questions where self-consistency signals correctness.
+- Selecting among several candidate generations without a reference answer.
+- Confidence-gated pipelines (abstain when confidence is low).
+
+### Avoid for:
+- Single-sample deterministic generation (`temperatures` of length 1, `n_per_temp=1`).
+- Long, open-ended outputs where surface similarity is a poor proxy for agreement.
+
+---
+
+## Core API
+
+### Aggregation (data-free)
+
+```python
+from mellea import start_session
+from mellea_contribs.agent_utilities.core.simbauq import SIMBAUQSamplingStrategy
+
+m = start_session()
+result = m.instruct(
+    "What is the capital of France?",
+    strategy=SIMBAUQSamplingStrategy(
+        temperatures=[0.3, 0.5, 0.7, 1.0],
+        n_per_temp=3,
+        similarity_metric="rouge",
+        confidence_method="aggregation",
+        aggregation="mean",
+    ),
+    return_sampling_results=True,
+)
+
+best = result.result
+meta = best._meta["simba_uq"]
+print(meta["confidence"], str(best))
+```
+
+### Classifier (trained)
+
+Provide either `training_samples` + `training_labels` (each group sized
+`len(temperatures) * n_per_temp`) or a pre-fitted `classifier` with
+`predict_proba`. See `examples/simbauq/` for the full four-variant walkthrough,
+including Hugging Face training-data generation.
+
+---
+
+## Attribution
+
+Original author: Radu Marinescu ([@radum2275](https://github.com/radum2275)),
+IBM Research. Ported into mellea-contribs from upstream mellea
+[PR #785](https://github.com/generative-computing/mellea/pull/785).
