@@ -62,7 +62,10 @@ ignore_errors = true
 ignore_missing_imports = true
 
 [tool.mellea-contribs.ci]
-skip_ollama = false
+# No Ollama: these tests never call `start_session()` — every one of them uses
+# a hand-written double (MockMelleaSession / FakeMelleaSession /
+# ThreadSafeMelleaSession), so no model is ever reached under any selector.
+skip_ollama = true
 timeout_minutes = 30
 python_versions = ["3.12"]
 
