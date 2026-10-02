@@ -72,9 +72,9 @@ jobs:
       MELLEA_REF: ${{ inputs.mellea_ref }}
     steps:
       - uses: actions/checkout@v4
-      # Ubuntu runners fill up: Ollama tarball + granite4:micro model + uv
-      # envs exhaust the disk (seen as "No space left on device"). Reclaim
-      # space first, same as quality-generic.yml / build-package.yml.
+      # Ubuntu runners fill up: Ollama tarball + the pulled model + uv envs
+      # exhaust the disk (seen as "No space left on device"). Reclaim space
+      # first, same as quality-generic.yml / build-package.yml.
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
       - uses: actions/setup-python@v5
@@ -100,9 +100,16 @@ jobs:
         if: env.SKIP_OLLAMA != 'true'
         run: nohup ollama serve &
 
-      - name: Pull granite4:micro
+      # Must match the model the tests actually request. They call bare
+      # `start_session()`, so that is whatever mellea defaults to — NOT a tag we
+      # get to choose here. mellea v0.8.0 defaults to granite4.2:3b, and pulling the stale
+      # tag meant the real model was downloaded mid-test instead.
+      #
+      # Keep this in step when bumping mellea. Deriving it from the installed
+      # mellea instead of hardcoding is tracked as follow-up work.
+      - name: Pull granite4.2:3b
         if: env.SKIP_OLLAMA != 'true'
-        run: ollama pull granite4:micro
+        run: ollama pull granite4.2:3b
 
       - name: Sync dependencies
         working-directory: ${{ inputs.package }}

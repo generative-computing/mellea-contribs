@@ -56,7 +56,10 @@ ignore_errors = true
 ignore_missing_imports = true
 
 [tool.mellea-contribs.ci]
-skip_ollama = false
+# No Ollama: these tests never construct a session or a backend — they are
+# pure `unittest.mock`. Matches what legacy-ci.yml already did for this
+# package before the new-flat migration moved CI flags in here.
+skip_ollama = true
 timeout_minutes = 30
 python_versions = ["3.12"]
 

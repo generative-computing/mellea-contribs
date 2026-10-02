@@ -1,6 +1,7 @@
 import logging
 
 from mellea import start_session
+from mellea.backends import ModelOption
 
 from mellea_contribs.agent_utilities.core.double_round_robin import double_round_robin
 
@@ -32,7 +33,12 @@ ITEMS = [
 
 
 def test_generic_double_round_robin():
-    m = start_session()
+    # Thinking off: each pairwise comparison only needs a single "A"/"B" token,
+    # and a double round robin over N items issues N*(N-1) of them. Granite 4.2
+    # (mellea's default since v0.8.0) reasons unless told not to, which costs
+    # ~190x the output tokens per comparison and made these calls exceed the
+    # backend's 300s timeout on CPU-only CI runners (httpx.ReadTimeout).
+    m = start_session(model_options={ModelOption.THINKING: False})
 
     comparison_prompt = """
         Select which option is more likely to be the primary root-cause
