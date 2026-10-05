@@ -122,3 +122,14 @@ encoded into the `images` field of the API call. Multiple image parameters
 are collected into a single list. Non-Clef models (tev1) ignore the images
 field.
 
+
+## Examples
+
+All examples run against a local Ollama server (`ollama pull tev1 && ollama serve`).
+
+| Script | Shows |
+|---|---|
+| `examples/quickstart.py` | One `@decisive` stub per return type: intent routing (`Literal`), RAG grounding check (`StrEnum`), PII check (`bool` with `threshold=`), toxicity score (`float`), review sentiment (`rubric=`) |
+| `examples/moderation_pipeline.py` | `Judge.batch` asking three questions about each forum post in one call, then choosing an action based on confidence |
+| `examples/image_checks.py` | `Image()` parameters with Clef-Flash: checking an uploaded expense receipt against the claim |
+| `examples/run_all_real.py` | Smoke test of every `Judge` primitive and `@decisive` against a real provider (`--provider ollama`, `gliner2`, or `jev`) |

@@ -70,7 +70,7 @@ if [ "${SKIP_EXAMPLES:-0}" = "1" ]; then
     EXTRA_ARGS="--skip-examples"
 fi
 
-.venv/bin/python examples/run_all_real.py \
+.venv/bin/python examples/run_all_real.py --provider gliner2 \
     --checkpoint "${CHECKPOINT:-fastino/gliner2.5-small-v1}" \
     $EXTRA_ARGS
 

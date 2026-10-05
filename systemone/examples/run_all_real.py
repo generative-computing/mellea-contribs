@@ -1,15 +1,14 @@
-"""Run every example against a real GLiNER2 checkpoint and report results.
+"""Smoke-test every Judge primitive and @decisive against a real provider.
 
-This is the integration smoke test that validates systemone works end-to-end
-with real model weights — the seam the unit tests deliberately avoid.
+This is the integration check the unit tests deliberately avoid: real model,
+real API, no stubs.
 
 Usage::
 
-    # Inside a bsub GPU job or a machine with torch + GPU:
-    python examples/run_all_real.py
-
-    # Optionally specify a checkpoint:
-    python examples/run_all_real.py --checkpoint fastino/gliner2.5-small-v1
+    python examples/run_all_real.py                                  # Ollama tev1
+    python examples/run_all_real.py --model clef-flash --host http://gpu:11434
+    python examples/run_all_real.py --provider gliner2                # local weights, needs [local]
+    python examples/run_all_real.py --provider jev                    # hosted, needs TYPESAFE_API_KEY
 
 Exit code is 0 if every check passes, 1 if any check fails.
 """
@@ -17,344 +16,275 @@ Exit code is 0 if every check passes, 1 if any check fails.
 from __future__ import annotations
 
 import argparse
+import pathlib
+import subprocess
 import sys
 import time
 import traceback
+from collections.abc import Callable
+from enum import StrEnum
 from typing import Literal
 
 from mellea_contribs.systemone import (
-    Gliner2Judge,
-    decisive,
-)
-from mellea_contribs.systemone.core.judge import (
     ChoiceQ,
     Judge,
     RateQ,
     TruthQ,
+    decisive,
 )
 
-PASS = 0
-FAIL = 1
+EXAMPLES_DIR = pathlib.Path(__file__).parent
+
+#: Example scripts that run on Ollama with no extra input.
+OLLAMA_EXAMPLES = ["quickstart.py", "moderation_pipeline.py"]
 
 
-class Result:
-    def __init__(self, name: str):
-        self.name = name
-        self.passed = False
-        self.detail = ""
-        self.elapsed_ms = 0.0
-
-    def ok(self, detail: str = "", elapsed_ms: float = 0.0):
-        self.passed = True
-        self.detail = detail
-        self.elapsed_ms = elapsed_ms
-        return self
-
-    def fail(self, detail: str, elapsed_ms: float = 0.0):
-        self.passed = False
-        self.detail = detail
-        self.elapsed_ms = elapsed_ms
-        return self
+class CheckFailed(Exception):
+    """Raised by a check when the provider's answer is wrong or malformed."""
 
 
-def section(title: str):
-    print(f"\n{'=' * 68}")
-    print(f"  {title}")
-    print(f"{'=' * 68}")
-
-
-def report(result: Result):
-    tag = "PASS" if result.passed else "FAIL"
-    ms = f"{result.elapsed_ms:.0f}ms" if result.elapsed_ms else ""
-    print(f"  [{tag}] {result.name} {ms}")
-    if result.detail:
-        for line in result.detail.splitlines():
-            print(f"         {line}")
+def expect(condition: bool, message: str) -> None:
+    if not condition:
+        raise CheckFailed(message)
 
 
 # ---------------------------------------------------------------------------
-# 1. Protocol conformance
+# Checks.  Each returns a one-line summary on success or raises CheckFailed.
 # ---------------------------------------------------------------------------
 
-def test_protocol_conformance(judge: Gliner2Judge) -> Result:
-    r = Result("Protocol conformance (Judge)")
-    if not isinstance(judge, Judge):
-        return r.fail("Gliner2Judge does not satisfy Judge protocol")
-    return r.ok("Implements Judge")
+
+def check_protocol(judge: Judge) -> str:
+    expect(isinstance(judge, Judge), f"{type(judge).__name__} does not satisfy Judge")
+    return f"{type(judge).__name__} implements Judge"
 
 
-# ---------------------------------------------------------------------------
-# 2. Judge.choose
-# ---------------------------------------------------------------------------
-
-def test_choose(judge: Gliner2Judge) -> Result:
-    r = Result("Judge.choose — pick from options")
-    t0 = time.perf_counter()
+def check_choose(judge: Judge) -> str:
+    options = {
+        "order_status": "asking where an order is",
+        "refund": "asking for money back",
+        "product_question": "asking about a product's features",
+    }
     v = judge.choose(
-        state="The Eiffel Tower is in Paris, France.",
-        options={
-            "supports": "the text confirms the claim",
-            "contradicts": "the text refutes the claim",
-            "says_nothing": "the text is silent on the claim",
-        },
-        instructions="Claim: the Eiffel Tower is in Paris.",
+        state="The blender arrived cracked. I want my money back.",
+        options=options,
+        instructions="Which intent does this customer message express?",
     )
-    elapsed = (time.perf_counter() - t0) * 1000
-    if v.value not in {"supports", "contradicts", "says_nothing"}:
-        return r.fail(f"value={v.value!r} not in options", elapsed)
-    if v.provider != "gliner2":
-        return r.fail(f"provider={v.provider!r}", elapsed)
-    return r.ok(
-        f"value={v.value!r}  confidence={v.confidence}  latency={v.latency_ms:.0f}ms",
-        elapsed,
+    expect(v.value in options, f"value={v.value!r} not in options")
+    expect(
+        v.provider == judge.name, f"provider={v.provider!r}, expected {judge.name!r}"
     )
+    return f"value={v.value!r} confidence={v.confidence}"
 
 
-# ---------------------------------------------------------------------------
-# 3. Judge.truth — with direction check
-# ---------------------------------------------------------------------------
-
-def test_truth(judge: Gliner2Judge) -> Result:
-    r = Result("Judge.truth — boolean scoring with direction check")
-    state = "The Eiffel Tower is in Paris, France."
-
-    t0 = time.perf_counter()
-    true_v = judge.truth(state=state, instructions="Is the Eiffel Tower in Paris?")
-    false_v = judge.truth(state=state, instructions="Is the Eiffel Tower in Tokyo?")
-    elapsed = (time.perf_counter() - t0) * 1000
-
-    detail_lines = [
-        f"true claim:  value={true_v.value}  confidence={true_v.confidence}",
-        f"false claim: value={false_v.value}  confidence={false_v.confidence}",
-    ]
-
-    if true_v.value is None and false_v.value is None:
-        return r.fail("Both verdicts returned None — model produced no output", elapsed)
-
-    if true_v.value is not None and false_v.value is not None:
-        if true_v.value <= false_v.value:
-            detail_lines.append(
-                "DIRECTION WRONG: true claim should score higher than false claim"
-            )
-            return r.fail("\n".join(detail_lines), elapsed)
-        detail_lines.append("Direction correct: true_score > false_score")
-
-    return r.ok("\n".join(detail_lines), elapsed)
+def check_truth_direction(judge: Judge) -> str:
+    # A true claim must score higher than a false one about the same text.
+    # This catches an inverted yes/no mapping in a provider.
+    context = "The X200 blender is rated for 110-120 V outlets only."
+    yes = judge.truth(
+        state=context, instructions="Is the X200 rated for 110 V outlets?"
+    )
+    no = judge.truth(state=context, instructions="Is the X200 rated for 220 V outlets?")
+    expect(yes.value is not None and no.value is not None, "truth returned None")
+    expect(yes.value > no.value, f"true claim {yes.value} <= false claim {no.value}")
+    return f"true={yes.value:.2f} > false={no.value:.2f}"
 
 
-# ---------------------------------------------------------------------------
-# 4. Judge.rate
-# ---------------------------------------------------------------------------
-
-def test_rate(judge: Gliner2Judge) -> Result:
-    r = Result("Judge.rate — ordinal rating")
-    rubric = ["1", "2", "3", "4", "5"]
-    t0 = time.perf_counter()
+def check_rate(judge: Judge) -> str:
+    rubric = ["negative", "mixed", "positive"]
     v = judge.rate(
-        state="A thorough, well-sourced summary with clear structure.",
+        state="Stopped working after a week. Support never replied.",
         rubric=rubric,
-        instructions="Rate the quality of this summary.",
+        instructions="Overall sentiment of this product review.",
     )
-    elapsed = (time.perf_counter() - t0) * 1000
-    if v.value not in rubric:
-        return r.fail(f"value={v.value!r} not in rubric {rubric}", elapsed)
-    return r.ok(f"value={v.value!r}  confidence={v.confidence}", elapsed)
+    expect(v.value in rubric, f"value={v.value!r} not in rubric")
+    return f"value={v.value!r} confidence={v.confidence}"
 
 
-# ---------------------------------------------------------------------------
-# 5. Judge.batch
-# ---------------------------------------------------------------------------
-
-def test_batch(judge: Gliner2Judge) -> Result:
-    r = Result("Judge.batch — multiple questions, one forward pass")
+def check_batch(judge: Judge) -> str:
     questions = {
-        "team": ChoiceQ(
-            options={"billing": "a payment issue", "bug": "a software defect"},
-            instructions="Which team should handle this?",
+        "category": ChoiceQ(
+            options={"ok": "ordinary discussion", "spam": "advertising or scams"},
+            instructions="Which category does this forum post belong to?",
         ),
-        "urgent": TruthQ(instructions="Is the customer asking for urgent help?"),
+        "has_link": TruthQ(instructions="Does the post ask readers to visit a link?"),
         "severity": RateQ(
-            rubric=["low", "medium", "high"],
-            instructions="Rate severity.",
+            rubric=["none", "low", "high"], instructions="How harmful is this post?"
         ),
     }
-
-    t0 = time.perf_counter()
-    results = judge.batch(
-        state="I was charged twice this month. Please fix this immediately.",
+    out = judge.batch(
+        state="EARN $5000/WEEK FROM HOME!!! click bit.ly/xx-cash now",
         questions=questions,
     )
-    elapsed = (time.perf_counter() - t0) * 1000
-
-    if set(results) != {"team", "urgent", "severity"}:
-        return r.fail(f"Missing keys: got {set(results)}", elapsed)
-
-    lines = []
-    for key, v in results.items():
-        lines.append(f"{key}: value={v.value!r}  confidence={v.confidence}")
-
-    if results["team"].value not in {"billing", "bug", None}:
-        return r.fail(f"team value={results['team'].value!r} unexpected\n" + "\n".join(lines), elapsed)
-
-    return r.ok("\n".join(lines), elapsed)
+    expect(set(out) == set(questions), f"keys={sorted(out)}")
+    expect(
+        out["category"].value in {"ok", "spam"}, f"category={out['category'].value!r}"
+    )
+    return "  ".join(f"{k}={v.value!r}" for k, v in out.items())
 
 
-# ---------------------------------------------------------------------------
-# 6. @decisive
-# ---------------------------------------------------------------------------
-
-@decisive
-def triage(ticket: str) -> Literal["billing", "bug", "feature"]:
-    """Route a support ticket to the team that owns it."""
+class Grounding(StrEnum):
+    SUPPORTED = "supported"
+    CONTRADICTED = "contradicted"
+    NOT_MENTIONED = "not_mentioned"
 
 
 @decisive
-def is_urgent(ticket: str) -> bool:
-    """Whether this ticket describes an active outage needing immediate action."""
+def route_intent(message: str) -> Literal["order_status", "refund", "product_question"]:
+    """Which intent best describes this customer chat message."""
 
 
-@decisive(rubric=["low", "medium", "high"])
-def severity(ticket: str) -> Literal["low", "medium", "high"]:
-    """How severe the described problem is for the customer."""
+@decisive
+def check_grounding(context: str, answer: str) -> Grounding:
+    """Whether the answer is supported by, contradicted by, or absent from the context."""
 
 
-def test_decisive(judge: Gliner2Judge) -> Result:
-    r = Result("@decisive — typed decision functions")
-    ticket = "I was charged twice for the same invoice this month."
-
-    t0 = time.perf_counter()
-    tri = triage.verdict(judge=judge, ticket=ticket)
-    urg = is_urgent.verdict(judge=judge, ticket=ticket)
-    sev = severity.verdict(judge=judge, ticket=ticket)
-    elapsed = (time.perf_counter() - t0) * 1000
-
-    lines = [
-        f"triage:    value={tri.value!r}  confidence={tri.confidence}",
-        f"is_urgent: value={urg.value!r}  confidence={urg.confidence}",
-        f"severity:  value={sev.value!r}  confidence={sev.confidence}",
-    ]
-
-    if tri.value not in {"billing", "bug", "feature", None}:
-        return r.fail(f"triage returned unexpected value: {tri.value!r}\n" + "\n".join(lines), elapsed)
-
-    if not isinstance(urg.value, bool) and urg.value is not None:
-        return r.fail(f"is_urgent returned non-bool: {urg.value!r}\n" + "\n".join(lines), elapsed)
-
-    if sev.value not in {"low", "medium", "high", None}:
-        return r.fail(f"severity returned unexpected value: {sev.value!r}\n" + "\n".join(lines), elapsed)
-
-    return r.ok("\n".join(lines), elapsed)
+@decisive(threshold=0.7)
+def contains_pii(text: str) -> bool:
+    """Whether the text contains personal data such as an email, phone number, or address."""
 
 
-# ---------------------------------------------------------------------------
-# 7. Run the shipped examples with --real
-# ---------------------------------------------------------------------------
-
-def test_example_scripts() -> list[Result]:
-    """Run each shipped example with --real and check exit code."""
-    import subprocess
-
-    venv_python = sys.executable
-    examples_dir = __file__.replace("run_all_real.py", "")
-    scripts = [
-        "decision_functions.py",
-    ]
-    results = []
-    for script in scripts:
-        r = Result(f"Example script: {script} --real")
-        path = f"{examples_dir}{script}"
-        t0 = time.perf_counter()
-        try:
-            proc = subprocess.run(
-                [venv_python, path, "--real"],
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-            elapsed = (time.perf_counter() - t0) * 1000
-            if proc.returncode == 0:
-                r.ok(f"exit code 0\n{proc.stdout[-500:]}" if proc.stdout else "exit code 0", elapsed)
-            else:
-                r.fail(
-                    f"exit code {proc.returncode}\n"
-                    f"stdout: {proc.stdout[-300:]}\n"
-                    f"stderr: {proc.stderr[-300:]}",
-                    elapsed,
-                )
-        except Exception as exc:
-            elapsed = (time.perf_counter() - t0) * 1000
-            r.fail(f"{exc}", elapsed)
-        results.append(r)
-    return results
+@decisive
+def toxicity(comment: str) -> float:
+    """Whether this comment is abusive, harassing, or hateful."""
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+@decisive(rubric=["negative", "mixed", "positive"])
+def review_sentiment(review: str) -> Literal["negative", "mixed", "positive"]:
+    """Overall sentiment of this product review."""
 
-ALL_TESTS = [
-    test_protocol_conformance,
-    test_choose,
-    test_truth,
-    test_rate,
-    test_batch,
-    test_decisive,
+
+def check_decisive(judge: Judge) -> str:
+    intent = route_intent(judge, message="Where is my package?")
+    grounding = check_grounding(
+        judge,
+        context="The X200 has a 900 W motor.",
+        answer="The X200 has a 900 W motor.",
+    )
+    pii = contains_pii(judge, text="Call me on 555-0134.")
+    tox = toxicity(judge, comment="Thanks, this fixed it!")
+    sentiment = review_sentiment(judge, review="Crushes ice in seconds. Worth it.")
+
+    expect(
+        intent in {"order_status", "refund", "product_question"},
+        f"route_intent={intent!r}",
+    )
+    expect(
+        isinstance(grounding, Grounding),
+        f"check_grounding={grounding!r} is not a Grounding",
+    )
+    expect(isinstance(pii, bool), f"contains_pii={pii!r} is not a bool")
+    expect(
+        isinstance(tox, float) and 0.0 <= tox <= 1.0, f"toxicity={tox!r} not in [0, 1]"
+    )
+    expect(
+        sentiment in {"negative", "mixed", "positive"},
+        f"review_sentiment={sentiment!r}",
+    )
+    return (
+        f"intent={intent!r} grounding={grounding.value!r} pii={pii} "
+        f"toxicity={tox:.2f} sentiment={sentiment!r}"
+    )
+
+
+CHECKS: list[Callable[[Judge], str]] = [
+    check_protocol,
+    check_choose,
+    check_truth_direction,
+    check_rate,
+    check_batch,
+    check_decisive,
 ]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Integration smoke test for systemone + real GLiNER2")
-    parser.add_argument("--checkpoint", default="fastino/gliner2.5-small-v1",
-                        help="GLiNER2 checkpoint to load (default: small-v1)")
-    parser.add_argument("--skip-examples", action="store_true",
-                        help="Skip running the example scripts as subprocesses")
-    args = parser.parse_args()
+# ---------------------------------------------------------------------------
+# Runner
+# ---------------------------------------------------------------------------
 
-    print(f"Loading GLiNER2 checkpoint: {args.checkpoint}")
+
+def build_judge(args: argparse.Namespace) -> Judge:
+    if args.provider == "ollama":
+        from mellea_contribs.systemone import OllamaJudge
+
+        return OllamaJudge(host=args.host, model=args.model)
+    if args.provider == "gliner2":
+        from mellea_contribs.systemone import Gliner2Judge
+
+        return Gliner2Judge(checkpoint=args.checkpoint)
+    from mellea_contribs.systemone import JevJudge
+
+    return JevJudge(model=args.model)
+
+
+def run(name: str, fn: Callable[[], str]) -> bool:
     t0 = time.perf_counter()
     try:
-        judge = Gliner2Judge(checkpoint=args.checkpoint)
-    except Exception as exc:
-        print(f"FATAL: could not load checkpoint: {exc}")
-        traceback.print_exc()
-        return FAIL
-    load_ms = (time.perf_counter() - t0) * 1000
-    print(f"Checkpoint loaded in {load_ms:.0f}ms")
+        detail, passed = fn(), True
+    except CheckFailed as exc:
+        detail, passed = str(exc), False
+    except Exception as exc:  # noqa: BLE001 - a smoke test reports every failure
+        detail, passed = (
+            f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-500:]}",
+            False,
+        )
+    ms = (time.perf_counter() - t0) * 1000
+    print(f"  [{'PASS' if passed else 'FAIL'}] {name} ({ms:.0f}ms)")
+    for line in detail.splitlines():
+        print(f"         {line}")
+    return passed
 
-    results: list[Result] = []
 
-    section("Core protocol tests")
-    for test_fn in ALL_TESTS:
-        try:
-            r = test_fn(judge)
-        except Exception as exc:
-            r = Result(test_fn.__name__)
-            r.fail(f"EXCEPTION: {exc}\n{traceback.format_exc()[-500:]}")
-        report(r)
-        results.append(r)
+def run_example(script: str, args: argparse.Namespace) -> str:
+    cmd = [sys.executable, str(EXAMPLES_DIR / script)]
+    if args.host:
+        cmd += ["--host", args.host]
+    if args.model:
+        cmd += ["--model", args.model]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    expect(proc.returncode == 0, f"exit {proc.returncode}\n{proc.stderr[-400:]}")
+    return "exit 0"
 
-    if not args.skip_examples:
-        section("Example scripts (--real)")
-        for r in test_example_scripts():
-            report(r)
-            results.append(r)
 
-    section("Summary")
-    passed = sum(1 for r in results if r.passed)
-    failed = sum(1 for r in results if not r.passed)
-    print(f"  {passed} passed, {failed} failed, {len(results)} total")
-    total_ms = sum(r.elapsed_ms for r in results)
-    print(f"  Total inference time: {total_ms:.0f}ms")
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--provider", choices=["ollama", "gliner2", "jev"], default="ollama"
+    )
+    parser.add_argument("--host", default=None, help="Ollama URL (ollama only)")
+    parser.add_argument(
+        "--model", default=None, help="Model name (ollama/jev; default: provider's own)"
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default="fastino/gliner2.5-small-v1",
+        help="GLiNER2 checkpoint (gliner2 only)",
+    )
+    parser.add_argument(
+        "--skip-examples", action="store_true", help="Do not run the example scripts"
+    )
+    args = parser.parse_args()
 
-    if failed:
-        print("\n  FAILED tests:")
-        for r in results:
-            if not r.passed:
-                print(f"    - {r.name}")
-        return FAIL
+    print(f"Provider: {args.provider}")
+    t0 = time.perf_counter()
+    try:
+        judge = build_judge(args)
+    except Exception as exc:  # noqa: BLE001 - a smoke test reports every failure
+        print(f"FATAL: could not build judge: {exc}")
+        return 1
+    print(f"Judge ready in {(time.perf_counter() - t0) * 1000:.0f}ms\n")
 
-    print("\n  All tests passed!")
-    return PASS
+    results = [run(fn.__name__, lambda fn=fn: fn(judge)) for fn in CHECKS]
+
+    # The example scripts are written for Ollama, so only run them there.
+    if args.provider == "ollama" and not args.skip_examples:
+        print()
+        results += [
+            run(script, lambda s=script: run_example(s, args))
+            for script in OLLAMA_EXAMPLES
+        ]
+
+    failed = results.count(False)
+    print(f"\n{len(results) - failed} passed, {failed} failed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
