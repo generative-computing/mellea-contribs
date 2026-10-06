@@ -12,6 +12,7 @@ generation, evaluation, or testing of m-programs.
 | `top_k` | Generic Top-K LLM-as-judge selector. Pick the best K of N candidate items using a comparison prompt. |
 | `double_round_robin` | Pairwise tournament selector. Runs A-vs-B and B-vs-A across all pairs and ranks by accumulated wins. |
 | `benchdrift_runner` | BenchDrift integration for robustness testing of Mellea m-programs against semantic problem variations. |
+| `simbauq` | SIMBA-UQ confidence-aware sampling strategy. Generates samples across temperatures and selects the most confident one via similarity-based uncertainty quantification. |
 
 ## Install
 
@@ -20,6 +21,9 @@ pip install mellea-contribs-agent-utilities
 
 # With BenchDrift robustness extras
 pip install "mellea-contribs-agent-utilities[robustness]"
+
+# With SIMBA-UQ sampling extras (scikit-learn, sentence-transformers, tqdm, datasets)
+pip install "mellea-contribs-agent-utilities[simbauq]"
 ```
 
 ## Usage
@@ -59,6 +63,34 @@ ranked = double_round_robin(
 for item, score in ranked:
     print(item["name"], score)
 ```
+
+### SIMBA-UQ sampling
+
+Confidence-aware sample selection. Requires the `simbauq` extra for the
+`sbert` metric and the `classifier` confidence method:
+
+```python
+from mellea import start_session
+from mellea_contribs.agent_utilities.core.simbauq import SIMBAUQSamplingStrategy
+
+m = start_session()
+result = m.instruct(
+    "What is the capital of France?",
+    strategy=SIMBAUQSamplingStrategy(
+        temperatures=[0.3, 0.5, 0.7, 1.0],
+        n_per_temp=3,
+        similarity_metric="rouge",
+        confidence_method="aggregation",
+        aggregation="mean",
+    ),
+    return_sampling_results=True,
+)
+
+best = result.result
+print(best._meta["simba_uq"]["confidence"], str(best))
+```
+
+See `docs/simbauq.mdx` and `examples/simbauq/` for the full guide.
 
 ### BenchDrift robustness
 

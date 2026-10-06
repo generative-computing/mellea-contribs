@@ -1,4 +1,5 @@
 from mellea import start_session
+from mellea.backends import ModelOption
 
 from mellea_contribs.agent_utilities.core.top_k import top_k
 
@@ -28,7 +29,11 @@ ITEMS = [
 
 
 def test_top_k_selection():
-    m = start_session()
+    # Thinking off: top_k's contract is a bare JSON array, so a reasoning trace
+    # is pure overhead. Granite 4.2 (mellea's default since v0.8.0) reasons
+    # unless told not to, which costs ~36x the output tokens here and pushes
+    # each generation past the backend's 300s timeout on CPU-only CI runners.
+    m = start_session(model_options={ModelOption.THINKING: False})
 
     comparison_prompt = """
     Select which items are the most severe issues.
