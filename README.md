@@ -28,17 +28,17 @@ This document explains the organization of the `mellea-contribs` directory and t
 
 | Resource | Description |
 | --- | --- |
-| [mellea-integration-core/](#mellea-integration-core)| Core abstractions for framework integrations | 
-| [crewai_backend/](#crewai-backend) | CrewAI integration with Mellea | 
-| [dspy_backend/](#dspy-backend) | DSPy integration with Mellea | 
-| [langchain_backend/](#langchain-backend) | LangChain integration with Mellea | 
-| [tools_package/](#tools-package) | Generative tools and utilities library | 
-| [reqlib_package/](#reqlib-package) | Requirements library for validation | 
+| [_integration_core/](#_integration_core)| Core abstractions for framework integrations | 
+| [crewai/](#CrewAI) | CrewAI integration with Mellea | 
+| [dspy/](#DSPy) | DSPy integration with Mellea | 
+| [langchain/](#Langchain) | Mellea Chat Model for LangChain | 
+| [agent-utilities/](#agent-utilities) | Agent-side utilities for Mellea | 
+| [reqlib/](#reqlib-package) | Requirements library for validation | 
 
 
 ## Subpackage Descriptions
 
-### [Mellea Integration Core](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/mellea-integration-core)
+### [_integration_core](https://github.com/generative-computing/mellea-contribs/tree/main/_integration_core)
 - **Purpose**: Core abstractions and utilities for building clean, maintainable integrations between Mellea and various AI frameworks
 - **Key Features**:
   - Base integration class with common patterns
@@ -46,68 +46,58 @@ This document explains the organization of the `mellea-contribs` directory and t
   - Tool conversion and handling
   - Requirements and strategy support
   - Async/sync generation patterns
-- **Dependencies**: `mellea>=0.3.2`
-- **Python Version**: ≥3.11
-- **CI Requirements**: No Ollama needed (skip_ollama=true)
-- **Timeout**: 30 minutes
+  - Type safety
 
-### [CrewAI Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/crewai_backend)
-- **Purpose**: Enables CrewAI agents to use Mellea's generative programming capabilities
+### [CrewAI](https://github.com/generative-computing/mellea-contribs/tree/main/crewai)
+- **Purpose**: A CrewAI-compatible LLM implementation that wraps Mellea, enabling CrewAI agents to use Mellea's generative programming capabilities including requirements, validation, and sampling strategies.
 - **Key Features**:
-  - CrewAI agent integration with Mellea
-  - Message and tool conversion for CrewAI format
-  - Inherits from `MelleaIntegrationBase`
-- **Dependencies**: `mellea>=0.3.0`, `crewai>=0.1.0`, `mellea-integration-core`
-- **Python Version**: ≥3.11
-- **CI Requirements**: Ollama support enabled
-- **Timeout**: 90 minutes (extended due to complex integration tests)
+  - Standard synchronous and asynchronous LLM calls (call / acall)
+  - Mellea requirements and sampling strategies wired through CrewAI agents
+  - Convert Mellea requirements into CrewAI task guardrails
+  - Tool calling with CrewAI agents
+  - Backend-agnostic (Ollama, OpenAI, WatsonX, HuggingFace, …)
+  - Full CrewAI event-bus integration and token-usage tracking
 
-### [DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)
-- **Purpose**: DSPy integration enabling structured prompting with generative programming
+### [DSPy](https://github.com/generative-computing/mellea-contribs/tree/main/dspy)
+- **Purpose**: A powerful integration that combines Mellea's generative programming capabilities with DSPy's structured prompting framework.
 - **Key Features**:
   - DSPy module integration with Mellea
   - Structured prompting capabilities
   - Inherits from `MelleaIntegrationBase`
-- **Dependencies**: `dspy>=3.1.3`, `mellea>=0.3.2`, `mellea-integration-core`
-- **Python Version**: ≥3.11
-- **CI Requirements**: Ollama support enabled
-- **Timeout**: 30 minutes
 
-### [Langchain Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/langchain_backend)
-- **Purpose**: LangChain integration for using Mellea within LangChain applications
+### [Langchain](https://github.com/generative-computing/mellea-contribs/tree/main/langchain)
+- **Purpose**: A LangChain-compatible chat model that wraps Mellea, enabling LangChain applications to use Mellea's generative programming capabilities as a standard chat model.
 - **Key Features**:
-  - LangChain language model integration with Mellea
-  - Tool calling support
-  - Inherits from `MelleaIntegrationBase`
-- **Dependencies**: `langchain`, `mellea>=0.3.x`, `mellea-integration-core`
-- **Python Version**: ≥3.11
-- **CI Requirements**: Ollama support enabled
-- **Timeout**: 30 minutes
+  - Chat Completion: Standard synchronous and asynchronous generation
+  - Requirements & Validation: Mellea's requirements and sampling strategies
+  - Tool Calling: Function calling with LangChain agents
+  - Chains: Integration with LangChain chains
+  - Agents: Support for LangChain agents
+  - Output Parsers & Guardrails: Validate outputs with Mellea requirements
 
-### [Tools Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/tools_package)
-- **Purpose**: Incubating generative programming tools and utilities
-- **Key Features**:
-  - Various tools for generative programming
-  - Robustness testing capabilities
-  - Requirements validation and sampling strategies
-- **Dependencies**: Multiple (see pyproject.toml for details)
-- **Python Version**: ≥3.11
-- **CI Requirements**: No Ollama needed (skip_ollama=true)
-- **Timeout**: 30 minutes
+### [agent-utilities](https://github.com/generative-computing/mellea-contribs/tree/main/agent-utilities)
+- **Purpose**: Agent-side utilities for Mellea: selectors, evaluators, and robustness tools. This subpackage provides drop-in helpers that an agent can use during generation, evaluation, or testing of m-programs.
+- **Modules**:
+  - `top_k`: Generic Top-K LLM-as-judge selector. Pick the best K of N candidate items using a comparison prompt.
+  - `double_round_robin`: Pairwise tournament selector. Runs A-vs-B and B-vs-A across all pairs and ranks by accumulated wins.
+  - `benchdrift_runner`: BenchDrift integration for robustness testing of Mellea m-programs against semantic problem variations.
+  - `simbauq`:	SIMBA-UQ confidence-aware sampling strategy. Generates samples across temperatures and selects the most confident one via similarity-based uncertainty quantification.
 
-### [Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/reqlib_package)
-- **Purpose**: Requirements library for validation and constraints in generative systems
-- **Key Features**:
-  - Requirement specification and validation
-  - Integration with Mellea's validation framework
-- **Dependencies**: `mellea>=0.3.x`
-- **Python Version**: ≥3.11
-- **CI Requirements**: No Ollama needed (skip_ollama=true)
-- **Timeout**: 30 minutes
+### [Requirements Library Package](https://github.com/generative-computing/mellea-contribs/tree/main/reqlib)
+- **Purpose**: Domain-specific Requirement recipes for Mellea's Instruct-Validate-Repair patterns. Recipes under mellea_contribs.reqlib.stdlib.reqlib are self-contained validators tailored to a particular problem space — legal citations, Python imports, grounded context formatting — and can be mixed and matched with mellea's standard requirements.
+- **Recipes**:
+  - Legal — citation existence checks, appellate-case classification, statute lookup
+    - `citation_exists`, `is_appellate_case`, `statute_data`
+  - Python imports — import repair, import resolution, common-alias detection 
+    - `import_repair`, `import_resolution`, `common_aliases`
+  - Grounding context — grounding-context formatter for retrieval-aware prompts
+    - `grounding_context_formatter`
+
+
 
 ## Tools
 
-- **[Robustness Testing](mellea_contribs/tools_package/docs/ROBUSTNESS_TESTING.md)** — Test m-program consistency against semantic variations using BenchDrift
+- **[Robustness Testing](mellea_contribs/agent-utilities/docs/ROBUSTNESS_TESTING.md)** — Test how consistently your m-program answers semantic variations of a problem. Uses BenchDrift (demo-ui branch) for variation generation.
 
 ## CI/CD Requirements
 
