@@ -1109,7 +1109,7 @@ wheels = [
 
 [[package]]
 name = "mellea"
-version = "0.7.0"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
@@ -1125,14 +1125,14 @@ dependencies = [
     { name = "requests" },
     { name = "rouge-score" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e0/ca/8eeac1807f9e91ccdc7c43b8961c9ec64a55bc569bc1320fdade60e769dc/mellea-0.7.0.tar.gz", hash = "sha256:cb9412a9c39009bd9e52169916c116a7f30e9f2d821453bb27c9bc8bb301535a", size = 4712622, upload-time = "2026-07-13T19:37:35.758Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/95/0af95584600a11b9755fb7bb0983ba7f188e430c81a459b8204c74d5ffd2/mellea-0.8.0.tar.gz", hash = "sha256:ffce4a18adfd7f0985c942d98cfff826f12c2564d7d1f3a643f2245dbaf9149a", size = 676483, upload-time = "2026-09-23T18:22:38.404Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/03/b3c1e34402d088fb418cc0cb3cb91a319101ea170e16af663f1e0c14d6a3/mellea-0.7.0-py3-none-any.whl", hash = "sha256:b018f22c3d56b4b8596fb05133a8b2da88350e6a3d96f8148aeec0d42f3239b9", size = 5205043, upload-time = "2026-07-13T19:37:33.708Z" },
+    { url = "https://files.pythonhosted.org/packages/af/59/7e024174c3408b97cea8d014458811570c9231c47b3ddf9a0185a814ed88/mellea-0.8.0-py3-none-any.whl", hash = "sha256:d8fc50a4563e1bbeb4bf7a2561b52310055e75aa47f2fbb0b250c150d94d0357", size = 862992, upload-time = "2026-09-23T18:22:36.673Z" },
 ]
 
 [[package]]
 name = "mellea-contribs-dspy"
-version = "0.7.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "dspy" },
@@ -1174,7 +1174,7 @@ dev = [
 
 [[package]]
 name = "mellea-contribs-integration-core"
-version = "0.7.0"
+version = "0.8.0"
 source = { directory = "../_integration_core" }
 dependencies = [
     { name = "mellea" },
