@@ -15,8 +15,9 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+# No workflow-level `permissions:` here. In a reusable workflow it would cap
+# every job below it, so the caller's contents/issues:write grant for the
+# auto-issue bot (see the comment on the package-ci job) would never reach it.
 
 jobs:
   read-config:
@@ -24,6 +25,8 @@ jobs:
     # the matrix job below — `timeout-minutes` is resolved when a job starts,
     # so it cannot reference a step output produced inside the same job.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       skip_ollama: ${{ steps.ci-flags.outputs.skip_ollama }}
       timeout_minutes: ${{ steps.ci-flags.outputs.timeout_minutes }}
