@@ -55,11 +55,17 @@ def extract_top_k(raw: str, items: list[Any]) -> list[Any]:
         parsed = json.loads(raw)
         if isinstance(parsed, list):
             names_to_items = {i["name"]: i for i in items if isinstance(i, dict)}
-            return [
-                names_to_items[i] if i in names_to_items else i
-                for i in parsed
-                if i in names_to_items or i in items
-            ]
+            selected = []
+            for i in parsed:
+                # Models sometimes echo back whole item objects instead of just
+                # their names; resolve those by name. Dicts are unhashable, so
+                # they can't be looked up in names_to_items directly.
+                key = i.get("name") if isinstance(i, dict) else i
+                if isinstance(key, str) and key in names_to_items:
+                    selected.append(names_to_items[key])
+                elif i in items:
+                    selected.append(i)
+            return selected
     except Exception:
         pass
     return []

@@ -1,7 +1,10 @@
+import json
+
+import pytest
 from mellea import start_session
 from mellea.backends import ModelOption
 
-from mellea_contribs.agent_utilities.core.top_k import top_k
+from mellea_contribs.agent_utilities.core.top_k import extract_top_k, top_k
 
 ITEMS = [
     {
@@ -48,6 +51,25 @@ def test_top_k_selection():
 
     assert all(item in ITEMS for item in results)
     assert len(results) == 2
+
+
+@pytest.mark.unit
+def test_extract_top_k_names():
+    raw = json.dumps(["payment-svc", "flagd-config"])
+    assert extract_top_k(raw, ITEMS) == [ITEMS[2], ITEMS[0]]
+
+
+@pytest.mark.unit
+def test_extract_top_k_item_objects():
+    # Granite 4.2 sometimes echoes whole item objects rather than their names.
+    raw = json.dumps([ITEMS[2], ITEMS[0]])
+    assert extract_top_k(raw, ITEMS) == [ITEMS[2], ITEMS[0]]
+
+
+@pytest.mark.unit
+def test_extract_top_k_ignores_unknown_and_invalid():
+    assert extract_top_k(json.dumps(["nope", {"name": "nope"}, [1]]), ITEMS) == []
+    assert extract_top_k("not json", ITEMS) == []
 
 
 if __name__ == "__main__":
