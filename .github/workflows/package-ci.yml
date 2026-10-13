@@ -85,15 +85,21 @@ jobs:
       # Ollama install is pinned to a known good release tarball rather than
       # piping the upstream installer to sh — arbitrary code piped to sh is
       # exactly the supply-chain shape we don't want in CI.
+      #
+      # Keep this in step with mellea's own CI. Too-old releases fail silently:
+      # granite4.2 ships its chat template only inside the GGUF, which pre-Jinja
+      # Ollama (e.g. v0.5.7) ignores in favour of a bare `{{ .Prompt }}`, so the
+      # model just continues the prompt text. Releases through 0.32.1 also
+      # miscompile AMX kernels on GitHub runners (mellea#1388).
       - name: Install Ollama
         if: env.SKIP_OLLAMA != 'true'
         env:
-          OLLAMA_VERSION: "v0.5.7"
+          OLLAMA_VERSION: "v0.33.1"
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/ollama.tgz \
-            "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tgz"
-          sudo tar -C /usr -xzf /tmp/ollama.tgz
+          curl -fsSL -o /tmp/ollama.tar.zst \
+            "https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst"
+          sudo tar -C /usr --zstd -xf /tmp/ollama.tar.zst
           ollama --version
 
       - name: Start Ollama
