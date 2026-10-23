@@ -6,31 +6,50 @@ on:
   push:
     branches: [main]
 
+permissions: {}
+
 jobs:
+  actions-audit:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/actions-audit.yml
+
   discover-subpackages:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
       run_template_smoke: ${{ steps.discover.outputs.run_template_smoke }}
       reason: ${{ steps.discover.outputs.reason }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: Discover changed subpackages
         id: discover
+        # Template expressions are bound through env and referenced as shell
+        # vars — never interpolated directly into the run block (zizmor
+        # template-injection; same convention as package-ci.yml).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF_NAME: ${{ github.base_ref }}
+          MERGE_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           # Resolve a base SHA we can diff against. Each event type carries
           # the right base under a different payload key.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            BASE_REF="${{ github.base_ref }}"
-          elif [ "${{ github.event_name }}" = "merge_group" ]; then
-            BASE_SHA="${{ github.event.merge_group.base_sha }}"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_SHA="$PR_BASE_SHA"
+            BASE_REF="$BASE_REF_NAME"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            BASE_SHA="$MERGE_BASE_SHA"
             BASE_REF="main"
           else
-            BASE_SHA="${{ github.event.before }}"
+            BASE_SHA="$PUSH_BEFORE_SHA"
             BASE_REF="main"
           fi
           # Fallback to HEAD~1 if the event base is not available or zeroed.
@@ -44,21 +63,27 @@ jobs:
           uv run python .github/scripts/discover_subpackages.py \
             --changed-files "${CHANGED}" \
             --base-ref "${BASE_REF}" \
-            --repo-root "${{ github.workspace }}"
+            --repo-root "${GITHUB_WORKSPACE}"
 
   template-smoke:
     needs: discover-subpackages
     if: needs.discover-subpackages.outputs.run_template_smoke == 'true'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - name: Generate demo subpackage
+        env:
+          REPO_ROOT: ${{ github.workspace }}
         run: |
           mkdir -p /tmp/template-smoke
           cd /tmp/template-smoke
           uv run --with cookiecutter cookiecutter \
-            "${{ github.workspace }}/cookiecutter" \
+            "${REPO_ROOT}/cookiecutter" \
             --no-input \
             name=tplsmoke \
             core_path=stdlib.sampling_algos
@@ -71,6 +96,8 @@ jobs:
   test:
     needs: discover-subpackages
     if: fromJson(needs.discover-subpackages.outputs.matrix)[0] != null
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
