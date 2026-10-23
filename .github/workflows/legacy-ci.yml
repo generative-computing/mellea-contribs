@@ -74,6 +74,11 @@ jobs:
 
   test:
     needs: discover-subpackages
+    # Skip cleanly when the matrix is empty (no mellea_contribs/ subpackages
+    # changed — or the directory no longer exists post-restructure). Without
+    # this guard, a `uses:` job with an empty matrix fails the run instead
+    # of skipping (same guard as the test job in ci.yml).
+    if: fromJson(needs.discover-subpackages.outputs.matrix).include[0] != null
     strategy:
       matrix: ${{ fromJson(needs.discover-subpackages.outputs.matrix) }}
       max-parallel: 6
