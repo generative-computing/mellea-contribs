@@ -236,9 +236,8 @@ class ACPBackend(Backend):
                 session_id=session_id,
                 prompt=[TextContentBlock(type="text", text=prompt_text)],
             )
-            text = self._client.pop_text(session_id)
         finally:
-            self._client.pop_text(session_id)
+            text = self._client.pop_text(session_id)
             try:
                 await conn.close_session(session_id=session_id)
             except Exception:  # noqa: BLE001

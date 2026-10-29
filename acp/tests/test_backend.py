@@ -318,3 +318,56 @@ async def test_agent_without_close_session_still_works(spawn: dict[str, Any]) ->
     backend = ACPBackend()
     thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
     assert await thunk.avalue() == "hello"
+
+
+async def test_pop_text_called_exactly_once_per_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """pop_text must be called exactly once per session — not twice.
+
+    Regression test for the double-pop bug: the old code called pop_text()
+    inside the try block and again in finally. The second call always returned
+    an empty string (the entry was already removed), but it masked any chunks
+    that could accumulate between the two calls. The fix moves pop_text()
+    exclusively into finally so it is guaranteed to run exactly once.
+    """
+    pop_counts: dict[str, int] = {}
+    original_pop = module._BufferingClient.pop_text
+
+    def counting_pop(self: Any, session_id: str) -> str:
+        pop_counts[session_id] = pop_counts.get(session_id, 0) + 1
+        return original_pop(self, session_id)
+
+    monkeypatch.setattr(module._BufferingClient, "pop_text", counting_pop)
+
+    state: dict[str, Any] = {
+        "spawns": 0,
+        "spawn_cwds": [],
+        "session_cwds": [],
+        "prompts": [],
+        "inflight": 0,
+        "max_inflight": 0,
+        "reply": "hello",
+        "stop": "end_turn",
+        "closed": [],
+        "close_supported": True,
+    }
+
+    @asynccontextmanager
+    async def fake_spawn(client: Any, *args: Any, **kwargs: Any):
+        state["spawns"] += 1
+        state["spawn_cwds"].append(kwargs.get("cwd"))
+        await asyncio.sleep(0)
+        yield FakeConn(client, state), None
+
+    monkeypatch.setattr(module, "spawn_agent_process", fake_spawn)
+
+    backend = ACPBackend()
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+
+    assert len(pop_counts) == 1
+    session_id = next(iter(pop_counts))
+    assert pop_counts[session_id] == 1, (
+        f"pop_text called {pop_counts[session_id]} times for session {session_id!r}; expected 1"
+    )
