@@ -42,10 +42,12 @@ jobs:
       sdist_path: ${{ steps.find-artifacts.outputs.sdist_path }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           python-version: ${{ inputs.python_version }}
           enable-cache: true
@@ -176,7 +178,7 @@ jobs:
           PACKAGE_NAME: ${{ inputs.package_name }}
           VERSION: ${{ inputs.version }}
           PACKAGE_DIR: ${{ inputs.package_dir }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.PACKAGE_NAME }}-${{ env.VERSION }}-dist
           path: |

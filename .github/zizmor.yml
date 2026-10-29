@@ -1,0 +1,43 @@
+# zizmor configuration — ignore rules for findings tracked in sub-issues
+#
+# Each entry here suppresses a known finding that is intentionally deferred
+# to a tracked sub-issue of #92 (the zizmor audit umbrella). New occurrences
+# of the same rule in different files or on different lines are NOT
+# suppressed and will fail CI.
+#
+# Each group of ignores has a corresponding open issue that tracks the
+# underlying fix. When a fix lands, remove the relevant ignore entries here.
+#
+# Rule reference: https://docs.zizmor.sh/audits/
+
+rules:
+
+  # --- github-app ------------------------------------------------------------
+  # create-github-app-token steps mint tokens with the app's blanket
+  # installation permissions. The tokens drive release/bump automation only;
+  # scoping them via permission-* inputs is deferred to keep this PR
+  # behavior-neutral on the release paths.
+  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/104
+  github-app:
+    ignore:
+      - cd.yml:61
+      - receive-mellea-release.yml:81
+
+  # --- artipacked ------------------------------------------------------------
+  # The sync job's checkout keeps credentials persisted because
+  # open_per_package_bump_prs.py pushes branches via plain `git push`, which
+  # relies on them. Fix is to route the push through an explicit
+  # token-bearing remote URL (as release.sh already does), then un-persist.
+  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/105
+  artipacked:
+    ignore:
+      - receive-mellea-release.yml:86
+
+  # --- superfluous-actions ---------------------------------------------------
+  # softprops/action-gh-release duplicates what `gh release create` does in a
+  # plain run step. Replacement touches the tag-push release path, so it is
+  # deferred to its own change.
+  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/106
+  superfluous-actions:
+    ignore:
+      - release-package.yml:149

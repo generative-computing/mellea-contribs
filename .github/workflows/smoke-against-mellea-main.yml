@@ -19,8 +19,9 @@ name: smoke-against-mellea-main
   workflow_dispatch:
 
 permissions:
-  contents: write  # auto_issue_bot.py writes per-package state under .github/bot-state/
-  issues: write
+  # Workflow-level stays minimal; the smoke job escalates to contents/issues
+  # write for the auto-issue bot. load-matrix only needs to read the repo.
+  contents: read
 
 jobs:
   load-matrix:
@@ -29,7 +30,9 @@ jobs:
       matrix: ${{ steps.load.outputs.matrix }}
       empty: ${{ steps.load.outputs.empty }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - id: load
         run: |
           set -euo pipefail
@@ -56,4 +59,3 @@ jobs:
     permissions:
       contents: write  # auto_issue_bot.py (invoked inside package-ci) writes bot-state and issues
       issues: write
-    secrets: inherit
