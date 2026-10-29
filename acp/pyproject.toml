@@ -1,12 +1,12 @@
 [project]
 name = "mellea-contribs-acp"
 version = "0.1.0"
-description = "Mellea backend that drives Bob via the Agent Client Protocol (ACP)"
+description = "Mellea backend that drives m.instruct() and m.generate() through any ACP-compatible stdio agent (Bob, Mistral Vibe, …)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Mellea Contributor", email = "contributor@example.com" }]
-keywords = ["mellea", "contribs", "acp", "bob"]
+authors = [{ name = "Xavier Vergés", email = "github@verg.es" }]
+keywords = ["mellea", "contribs", "acp", "bob", "vibe", "mistral", "agent-client-protocol"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,8 +22,9 @@ dependencies = [
     "agent-client-protocol>=0.12.1",
 ]
 
-[project.optional-dependencies]
-test = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0"]
+[project.urls]
+Homepage = "https://github.com/generative-computing/mellea"
+Repository = "https://github.com/generative-computing/mellea-contribs"
 
 [dependency-groups]
 dev = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0"]
