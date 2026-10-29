@@ -23,7 +23,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio"]
+test = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0"]
+
+[dependency-groups]
+dev = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -31,3 +34,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mellea_contribs"]
+
+[tool.mellea-contribs.ci]
+# Tests do not call start_session() — no local model needed.
+skip_ollama = true
+timeout_minutes = 10
+python_versions = ["3.12"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+explicit_package_bases = true
+ignore_errors = true
+ignore_missing_imports = true
