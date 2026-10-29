@@ -20,7 +20,7 @@ rules:
   # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/104
   github-app:
     ignore:
-      - cd.yml:61
+      - cd.yml:64  # line moved by the enable-cache: false comment in #111
       - receive-mellea-release.yml:81
 
   # --- artipacked ------------------------------------------------------------
