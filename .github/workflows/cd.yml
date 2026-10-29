@@ -34,7 +34,10 @@ jobs:
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          enable-cache: true
+          # No cache: this job would seed the cache the release job restores;
+          # a poisoned entry could reach the release path (zizmor
+          # cache-poisoning).
+          enable-cache: false
       - name: Install dependencies
         run: uv sync --only-dev
       - name: Check version of potential release
@@ -73,7 +76,10 @@ jobs:
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          enable-cache: true
+          # No cache: this job holds release credentials and pushes the
+          # release; a cache planted by a lower-privileged run could be
+          # restored into it (zizmor cache-poisoning).
+          enable-cache: false
       - name: Install dependencies
         run: uv sync --only-dev
       - name: Run release script
