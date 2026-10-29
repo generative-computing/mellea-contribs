@@ -5,19 +5,26 @@ from __future__ import annotations
 import asyncio
 import datetime
 import os
+from collections.abc import Sequence
 from contextlib import AsyncExitStack
-from typing import Any, Sequence
+from typing import Any
 
-from acp import Client, NewSessionResponse
-from acp.interfaces import Agent
-from acp.schema import AgentMessageChunk, TextContentBlock
-from acp.stdio import spawn_agent_process
-
-from mellea.core import C, BaseModelSubclass, CBlock, Component, Context, ModelOutputThunk
+from mellea.core import (
+    BaseModelSubclass,
+    C,
+    CBlock,
+    Component,
+    Context,
+    ModelOutputThunk,
+)
 from mellea.core.backend import Backend
 from mellea.core.base import GenerateLog
 from mellea.formatters import TemplateFormatter
 from mellea.stdlib.components import Message
+
+from acp import NewSessionResponse
+from acp.schema import AgentMessageChunk, TextContentBlock
+from acp.stdio import spawn_agent_process
 
 
 class _BufferingClient:
@@ -188,7 +195,11 @@ class ACPBackend(Backend):
         results = []
         for action in actions:
             thunk, _ = await self._generate_from_context(
-                action, ctx, format=format, model_options=model_options, tool_calls=tool_calls
+                action,
+                ctx,
+                format=format,
+                model_options=model_options,
+                tool_calls=tool_calls,
             )
             results.append(thunk)
         return results, None
@@ -212,5 +223,5 @@ class ACPBackend(Backend):
                     loop.create_task(self.aclose())
                 else:
                     loop.run_until_complete(self.aclose())
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass  # best-effort: never raise from __del__

@@ -34,6 +34,10 @@ result = m.instruct(
 )
 
 if result.success:
-    print(f"***** email (all requirements met) *****\n{result.result}\n****************************************")
+    print(
+        f"***** email (all requirements met) *****\n{result.result}\n****************************************"
+    )
 else:
-    print(f"***** email (best effort) *****\n{result.sample_generations[0].value}\n*******************************")
+    print(
+        f"***** email (best effort) *****\n{result.sample_generations[0].value}\n*******************************"
+    )

@@ -667,12 +667,6 @@ dependencies = [
     { name = "mellea" },
 ]
 
-[package.optional-dependencies]
-test = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -683,10 +677,7 @@ dev = [
 requires-dist = [
     { name = "agent-client-protocol", specifier = ">=0.12.1" },
     { name = "mellea", specifier = ">=0.6.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
 ]
-provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 dev = [
