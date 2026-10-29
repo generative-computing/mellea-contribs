@@ -16,7 +16,7 @@ def test_acpbackend_instantiates() -> None:
     backend = ACPBackend()
     assert backend._model_id == "bob"
     assert backend._provider == "acp"
-    assert backend._session_id is None
+    assert backend._conn is None
 
 
 def test_acpbackend_custom_command() -> None:

@@ -676,7 +676,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-client-protocol", specifier = ">=0.12.1" },
-    { name = "mellea", specifier = ">=0.6.0" },
+    { name = "mellea", specifier = ">=0.8.0" },
 ]
 
 [package.metadata.requires-dev]

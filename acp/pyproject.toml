@@ -18,7 +18,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "mellea>=0.6.0",
+    "mellea>=0.8.0",
     "agent-client-protocol>=0.12.1",
 ]
 
@@ -44,6 +44,8 @@ python_versions = ["3.12"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.mypy]
 explicit_package_bases = true
