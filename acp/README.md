@@ -53,6 +53,7 @@ print(result)
 
 - `model_options` and `tool_calls` are ignored (a warning is logged); the agent controls its own model and tools.
 - `format=` is best-effort: the JSON schema is appended to the prompt and the first JSON value in the reply is extracted (agents often add prose, code fences or persona prefixes). ACP has no constrained decoding, so pair it with a validating sampling strategy.
+- `@generative` works (it relies on `format=`), so the same best-effort caveat applies: use a `RejectionSamplingStrategy` for retries on malformed replies. Each `precondition_requirements` entry costs one extra agent session.
 - Tool-permission requests from the agent are rejected (`reject_once`, else cancelled). The backend runs headless.
   **This is not a sandbox**: agents decide for themselves what needs permission. In testing, Bob created a file in the working directory without asking. Treat the agent as having full access to `cwd`.
 - `cwd` (default: the current directory) is the directory the agent works in. Pass `ACPBackend(cwd="/some/scratch/dir")` to confine it to a scratch directory.
@@ -71,6 +72,7 @@ print(result)
 | `104_custom_validation.py` | `req()` with `simple_validate()` lambda (Bob) |
 | `105_vibe_plain_generate.py` | Plain `instruct` using Mistral Vibe |
 | `106_structured_output.py` | `format=` with a Pydantic model + validating requirement (Bob) |
+| `107_generative.py` | `@generative` functions, with and without a sampling strategy (Bob) |
 
 ```bash
 uv run python examples/102_plain_generate.py

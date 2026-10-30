@@ -15,7 +15,9 @@ from acp.schema import (
     ToolCallUpdate,
 )
 from mellea.stdlib.components import Instruction, Message
+from mellea.stdlib.components.genstub import generative
 from mellea.stdlib.context import ChatContext
+from mellea.stdlib.session import MelleaSession
 from pydantic import BaseModel
 
 from mellea_contribs.acp import ACPBackend
@@ -371,3 +373,28 @@ async def test_pop_text_called_exactly_once_per_session(
     assert pop_counts[session_id] == 1, (
         f"pop_text called {pop_counts[session_id]} times for session {session_id!r}; expected 1"
     )
+
+
+# --- @generative -----------------------------------------------------------
+
+
+@generative
+async def is_positive(text: str) -> bool:
+    """Return True if the sentiment of the text is positive."""
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        '{"result": true}',
+        'Sure!\n```json\n{"result": true}\n```',
+        '🧞‍♀️ {"result": true}',
+    ],
+)
+async def test_generative_stub_parses_result(spawn: dict[str, Any], reply: str) -> None:
+    spawn["reply"] = reply
+    m = MelleaSession(ACPBackend())
+    assert await is_positive(m, text="I love this!") is True
+    sent = spawn["prompts"][0][1]
+    assert "I love this!" in sent
+    assert "result" in sent  # response schema included in the prompt
