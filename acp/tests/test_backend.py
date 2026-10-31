@@ -44,6 +44,11 @@ class FakeConn:
         text = prompt[0].text
         st = self.state
         st["prompts"].append((session_id, text))
+        if st.get("hang"):
+            await asyncio.sleep(3600)
+        if st.get("die"):
+            st["die"] = False
+            raise ConnectionError("Connection closed")
         st["inflight"] += 1
         st["max_inflight"] = max(st["max_inflight"], st["inflight"])
         await asyncio.sleep(0.01)
@@ -72,6 +77,8 @@ def spawn(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "reply": "hello",  # None => echo the prompt
         "stop": "end_turn",
         "closed": [],
+        "hang": False,
+        "die": False,
         "close_supported": True,
     }
 
@@ -263,6 +270,63 @@ async def test_empty_reply_raises(spawn: dict[str, Any], reply: str) -> None:
     thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
     with pytest.raises(RuntimeError, match="empty"):
         await thunk.avalue()
+
+
+async def test_timeout_raises_and_respawns(spawn: dict[str, Any]) -> None:
+    spawn["hang"] = True
+    backend = ACPBackend(timeout=0.05)
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    with pytest.raises(TimeoutError, match="did not reply"):
+        await thunk.avalue()
+    assert spawn["spawns"] == 1
+    spawn["hang"] = False
+    thunk, _ = await backend._generate_from_context(Instruction("y"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert spawn["spawns"] == 2
+
+
+async def test_dead_agent_fails_call_then_respawns(spawn: dict[str, Any]) -> None:
+    backend = ACPBackend()
+    spawn["die"] = True
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    with pytest.raises(ConnectionError):
+        await thunk.avalue()
+    assert spawn["spawns"] == 1
+    thunk, _ = await backend._generate_from_context(Instruction("y"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert spawn["spawns"] == 2
+
+
+async def test_agent_exited_while_idle_respawns(spawn: dict[str, Any]) -> None:
+    backend = ACPBackend()
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    backend._proc = SimpleNamespace(returncode=1)
+    thunk, _ = await backend._generate_from_context(Instruction("y"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert spawn["spawns"] == 2
+
+
+async def test_timeout_none_passes_none_to_asyncio(
+    spawn: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Verify that timeout=None threads through to asyncio.timeout(None) rather
+    # than being coerced to 0 or some other value.
+    import asyncio as _asyncio
+    import mellea_contribs.acp.backends.acp_backend as _mod
+
+    delays: list[Any] = []
+    real_timeout = _asyncio.timeout
+
+    def capturing_timeout(delay: Any) -> Any:
+        delays.append(delay)
+        return real_timeout(delay)
+
+    monkeypatch.setattr(_mod.asyncio, "timeout", capturing_timeout)
+    backend = ACPBackend(timeout=None)
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    assert delays[0] is None  # generation timeout — first asyncio.timeout() call
 
 
 # --- format ----------------------------------------------------------------

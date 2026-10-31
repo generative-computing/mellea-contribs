@@ -38,6 +38,9 @@ from acp.stdio import spawn_agent_process
 
 _logger = logging.getLogger(__name__)
 
+# Max seconds to wait for the agent to acknowledge ``close_session``.
+_CLOSE_SESSION_TIMEOUT = 5.0
+
 
 class _BufferingClient:
     """Minimal ACP Client that accumulates AgentMessageChunk text per session."""
@@ -129,6 +132,7 @@ class ACPBackend(Backend):
         command: list[str] | None = None,
         cwd: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
+        timeout: float | None = 300.0,
     ) -> None:
         """Create an ACPBackend.
 
@@ -144,14 +148,23 @@ class ACPBackend(Backend):
                  ``BOB_API_KEY``. If given, the agent receives only the ACP
                  SDK's minimal allowlist (``PATH``, ``HOME``, ...) plus these
                  entries.
+            timeout: Max seconds for one generation (new session + prompt) before
+                     ``TimeoutError`` is raised. ``None`` disables the limit.
+                     Defaults to 300.
+
+        If the agent subprocess dies, the call in flight fails with
+        ``ConnectionError`` (it is not retried: the agent may already have acted
+        on the prompt) and the next call spawns a fresh agent.
         """
         self._command: list[str] = command if command is not None else ["bob", "acp"]
         self._cwd: str | None = os.fspath(cwd) if cwd is not None else None
         self._env: dict[str, str] | None = dict(env) if env is not None else None
+        self._timeout = timeout
         self._model_id: str = self._command[0]
         self._formatter = TemplateFormatter(model_id=self._model_id)
         self._client = _BufferingClient()
         self._conn: Any = None  # ClientSideConnection, set after first use
+        self._proc: Any = None
         self._exit_stack: AsyncExitStack | None = None
         self._spawn_lock = asyncio.Lock()
 
@@ -171,11 +184,14 @@ class ACPBackend(Backend):
         """Spawn the shared ACP agent subprocess once and return its connection."""
         self._raise_if_closed()
         async with self._spawn_lock:
+            if self._proc is not None and self._proc.returncode is not None:
+                # Agent exited while idle: tear down and respawn below.
+                await self._teardown_locked()
             if self._conn is None:
                 cwd = self._cwd if self._cwd is not None else os.getcwd()
                 stack = AsyncExitStack()
                 try:
-                    conn, _proc = await stack.enter_async_context(
+                    conn, proc = await stack.enter_async_context(
                         spawn_agent_process(
                             self._client,
                             self._command[0],
@@ -193,7 +209,24 @@ class ACPBackend(Backend):
                     raise
                 self._exit_stack = stack
                 self._conn = conn
+                self._proc = proc
             return self._conn
+
+    async def _teardown_locked(self) -> None:
+        """Close the agent subprocess. Caller must hold ``_spawn_lock``."""
+        stack, self._exit_stack = self._exit_stack, None
+        self._conn = self._proc = None
+        if stack is not None:
+            try:
+                await stack.aclose()
+            except Exception:
+                _logger.debug("Error tearing down dead ACP agent", exc_info=True)
+
+    async def _discard_agent(self, conn: Any) -> None:
+        """Forget a dead ``conn`` so the next call spawns a fresh agent."""
+        async with self._spawn_lock:
+            if self._conn is conn:  # else already replaced by a concurrent caller
+                await self._teardown_locked()
 
     def _render_prompt(
         self,
@@ -243,19 +276,34 @@ class ACPBackend(Backend):
         """Run one prompt in a fresh ACP session and return the reply text."""
         conn = await self._ensure_agent()
         cwd = self._cwd if self._cwd is not None else os.getcwd()
-        session = await conn.new_session(cwd=cwd)
-        session_id: str = session.session_id
         try:
-            resp = await conn.prompt(
-                session_id=session_id,
-                prompt=[TextContentBlock(type="text", text=prompt_text)],
-            )
-        finally:
-            text = self._client.pop_text(session_id)
-            try:
-                await conn.close_session(session_id=session_id)
-            except Exception:  # noqa: BLE001
-                _logger.debug("ACP agent did not close session %s", session_id)
+            async with asyncio.timeout(self._timeout):
+                session = await conn.new_session(cwd=cwd)
+                session_id: str = session.session_id
+                try:
+                    resp = await conn.prompt(
+                        session_id=session_id,
+                        prompt=[TextContentBlock(type="text", text=prompt_text)],
+                    )
+                finally:
+                    text = self._client.pop_text(session_id)
+                    try:
+                        async with asyncio.timeout(_CLOSE_SESSION_TIMEOUT):
+                            await conn.close_session(session_id=session_id)
+                    except Exception:  # noqa: BLE001
+                        _logger.debug("ACP agent did not close session %s", session_id)
+        except ConnectionError:
+            # Agent subprocess died or the pipe broke: drop it so the next call
+            # respawns. This call is not retried; the prompt may have had effects.
+            await self._discard_agent(conn)
+            raise
+        except TimeoutError:
+            # Generation timed out: drop the agent because it may be stuck or
+            # desynchronized, then raise with a descriptive message.
+            await self._discard_agent(conn)
+            raise TimeoutError(
+                f"ACP agent {self._model_id!r} did not reply within {self._timeout}s"
+            ) from None
 
         if resp.stop_reason in ("cancelled", "refusal"):
             raise RuntimeError(
@@ -384,7 +432,4 @@ class ACPBackend(Backend):
         """
         self._closed = True
         async with self._spawn_lock:
-            stack, self._exit_stack = self._exit_stack, None
-            self._conn = None
-            if stack is not None:
-                await stack.aclose()
+            await self._teardown_locked()

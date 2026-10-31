@@ -59,6 +59,8 @@ print(result)
   **This is not a sandbox**: agents decide for themselves what needs permission. In testing, Bob created a file in the working directory without asking. Treat the agent as having full access to `cwd`.
 - `cwd` (default: the current directory) is the directory the agent works in. Pass `ACPBackend(cwd="/some/scratch/dir")` to confine it to a scratch directory.
 - `env` (default: a copy of the current environment) sets the agent's environment variables. The default lets agents read API keys such as `BOB_API_KEY`. Pass `ACPBackend(env={...})` to give the agent only those variables plus a minimal set (`PATH`, `HOME`, ...).
+- `timeout` (default: 300 seconds) is the maximum time for one generation. On expiry a `TimeoutError` is raised. Pass `timeout=None` to disable.
+- If the agent subprocess dies, the call in flight fails with `ConnectionError` (it is not retried, since the agent may already have acted on the prompt) and the next call starts a fresh agent.
 - Responses with stop reason `cancelled` or `refusal`, and empty replies, raise `RuntimeError`.
 - `generate_from_raw` runs each action in its own session, concurrently, and ignores the context.
 - The agent's own rules and persona (e.g. a custom reply prefix configured in Bob) are applied to its replies.
