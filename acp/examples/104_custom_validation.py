@@ -13,7 +13,6 @@ Usage:
 from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 from mellea.stdlib.session import MelleaSession
-
 from mellea_contribs.acp import ACPBackend
 
 m = MelleaSession(ACPBackend())

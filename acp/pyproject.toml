@@ -27,7 +27,11 @@ Homepage = "https://github.com/generative-computing/mellea"
 Repository = "https://github.com/generative-computing/mellea-contribs"
 
 [dependency-groups]
-dev = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.6",
+]
 
 [build-system]
 requires = ["hatchling"]

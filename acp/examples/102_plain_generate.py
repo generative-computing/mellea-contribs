@@ -8,7 +8,6 @@ Usage:
 """
 
 from mellea.stdlib.session import MelleaSession
-
 from mellea_contribs.acp import ACPBackend
 
 m = MelleaSession(ACPBackend())

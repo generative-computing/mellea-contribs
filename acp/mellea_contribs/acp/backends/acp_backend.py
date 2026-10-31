@@ -7,7 +7,7 @@ import datetime
 import json
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import AsyncExitStack
 from typing import Any, Self
 
@@ -23,6 +23,7 @@ from mellea.core.backend import Backend
 from mellea.core.base import GenerateLog, GenerateType
 from mellea.formatters import TemplateFormatter
 from mellea.helpers.async_helpers import send_to_queue
+from mellea.helpers.event_loop_helper import _run_async_in_thread
 from mellea.stdlib.components import Message
 from mellea.stdlib.context import SimpleContext
 
@@ -127,6 +128,7 @@ class ACPBackend(Backend):
         self,
         command: list[str] | None = None,
         cwd: str | os.PathLike[str] | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> None:
         """Create an ACPBackend.
 
@@ -137,9 +139,15 @@ class ACPBackend(Backend):
             cwd: Working directory for the agent and its sessions. This is the
                  directory the agent can see. Defaults to ``os.getcwd()`` at the
                  time the agent is first used.
+            env: Environment variables for the agent subprocess. Defaults to a
+                 copy of ``os.environ`` so agents can read API keys such as
+                 ``BOB_API_KEY``. If given, the agent receives only the ACP
+                 SDK's minimal allowlist (``PATH``, ``HOME``, ...) plus these
+                 entries.
         """
         self._command: list[str] = command if command is not None else ["bob", "acp"]
         self._cwd: str | None = os.fspath(cwd) if cwd is not None else None
+        self._env: dict[str, str] | None = dict(env) if env is not None else None
         self._model_id: str = self._command[0]
         self._formatter = TemplateFormatter(model_id=self._model_id)
         self._client = _BufferingClient()
@@ -161,6 +169,7 @@ class ACPBackend(Backend):
 
     async def _ensure_agent(self) -> Any:
         """Spawn the shared ACP agent subprocess once and return its connection."""
+        self._raise_if_closed()
         async with self._spawn_lock:
             if self._conn is None:
                 cwd = self._cwd if self._cwd is not None else os.getcwd()
@@ -172,6 +181,11 @@ class ACPBackend(Backend):
                             self._command[0],
                             *self._command[1:],
                             cwd=cwd,
+                            # The SDK default scrubs the env to a tiny allowlist,
+                            # which drops API keys such as BOB_API_KEY.
+                            env=self._env
+                            if self._env is not None
+                            else dict(os.environ),
                         )
                     )
                 except BaseException:
@@ -355,9 +369,22 @@ class ACPBackend(Backend):
             results.append(thunk)
         return results, None
 
+    def close(self) -> None:
+        """Tear down the ACP agent subprocess from synchronous code.
+
+        Runs :meth:`aclose` on mellea's event loop. Safe to call more than once.
+        The backend cannot be reused afterwards.
+        """
+        _run_async_in_thread(self.aclose())
+
     async def aclose(self) -> None:
-        """Tear down the ACP agent subprocess."""
-        if self._exit_stack is not None:
-            await self._exit_stack.aclose()
-            self._exit_stack = None
+        """Tear down the ACP agent subprocess.
+
+        Safe to call more than once. The backend cannot be reused afterwards.
+        """
+        self._closed = True
+        async with self._spawn_lock:
+            stack, self._exit_stack = self._exit_stack, None
             self._conn = None
+            if stack is not None:
+                await stack.aclose()

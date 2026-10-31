@@ -10,7 +10,6 @@ Usage:
 
 from mellea.stdlib.context import ChatContext
 from mellea.stdlib.session import MelleaSession
-
 from mellea_contribs.acp import ACPBackend
 
 m = MelleaSession(ACPBackend(), ctx=ChatContext())

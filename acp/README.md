@@ -3,8 +3,8 @@
 Mellea backend that drives `m.instruct()` and `m.generate()` through any
 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) stdio agent.
 
-Works out of the box with **Bob** (`bob acp`) and **Mistral Vibe** (`vibe-acp`),
-or any other ACP-compatible stdio agent.
+Tested with **Bob** (`bob acp`) and **Mistral Vibe** (`vibe-acp`); other
+ACP-compatible stdio agents should work via `command=`.
 
 ## How it works
 
@@ -36,7 +36,8 @@ from mellea_contribs.acp import ACPBackend
 # Bob (default) — requires `bob` on PATH with ACP support
 m = MelleaSession(ACPBackend())
 
-# Mistral Vibe — requires `pip install vibe-acp` and `vibe-acp --setup`
+# Mistral Vibe — install the CLI from https://github.com/mistralai/mistral-vibe,
+# then run `vibe-acp --setup`
 m = MelleaSession(ACPBackend(command=["vibe-acp"]))
 
 # Bob with extra flags
@@ -57,6 +58,7 @@ print(result)
 - Tool-permission requests from the agent are rejected (`reject_once`, else cancelled). The backend runs headless.
   **This is not a sandbox**: agents decide for themselves what needs permission. In testing, Bob created a file in the working directory without asking. Treat the agent as having full access to `cwd`.
 - `cwd` (default: the current directory) is the directory the agent works in. Pass `ACPBackend(cwd="/some/scratch/dir")` to confine it to a scratch directory.
+- `env` (default: a copy of the current environment) sets the agent's environment variables. The default lets agents read API keys such as `BOB_API_KEY`. Pass `ACPBackend(env={...})` to give the agent only those variables plus a minimal set (`PATH`, `HOME`, ...).
 - Responses with stop reason `cancelled` or `refusal`, and empty replies, raise `RuntimeError`.
 - `generate_from_raw` runs each action in its own session, concurrently, and ignores the context.
 - The agent's own rules and persona (e.g. a custom reply prefix configured in Bob) are applied to its replies.

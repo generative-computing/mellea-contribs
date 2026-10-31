@@ -18,10 +18,9 @@ from mellea.stdlib.components import Instruction, Message
 from mellea.stdlib.components.genstub import generative
 from mellea.stdlib.context import ChatContext
 from mellea.stdlib.session import MelleaSession
-from pydantic import BaseModel
-
 from mellea_contribs.acp import ACPBackend
 from mellea_contribs.acp.backends import acp_backend as module
+from pydantic import BaseModel
 
 
 class FakeConn:
@@ -65,6 +64,7 @@ def spawn(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     state: dict[str, Any] = {
         "spawns": 0,
         "spawn_cwds": [],
+        "spawn_envs": [],
         "session_cwds": [],
         "prompts": [],
         "inflight": 0,
@@ -79,6 +79,7 @@ def spawn(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def fake_spawn(client: Any, *args: Any, **kwargs: Any):
         state["spawns"] += 1
         state["spawn_cwds"].append(kwargs.get("cwd"))
+        state["spawn_envs"].append(kwargs.get("env"))
         await asyncio.sleep(0)
         yield FakeConn(client, state), None
 
@@ -136,6 +137,50 @@ async def test_each_prompt_gets_fresh_session(spawn: dict[str, Any]) -> None:
     assert spawn["spawns"] == 1
     session_ids = [sid for sid, _ in spawn["prompts"]]
     assert len(set(session_ids)) == 2
+
+
+async def test_parent_env_is_forwarded_to_agent(
+    spawn: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BOB_API_KEY", "secret")
+    backend = ACPBackend()
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    assert spawn["spawn_envs"][0]["BOB_API_KEY"] == "secret"
+
+
+async def test_explicit_env_replaces_parent_env(
+    spawn: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BOB_API_KEY", "secret")
+    backend = ACPBackend(env={"FOO": "bar"})
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    assert spawn["spawn_envs"][0] == {"FOO": "bar"}
+
+
+def test_close_is_sync_idempotent_and_blocks_reuse(spawn: dict[str, Any]) -> None:
+    backend = ACPBackend()
+    backend.close()
+    backend.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        asyncio.run(backend._ensure_agent())
+
+
+def test_close_tears_down_running_agent(spawn: dict[str, Any]) -> None:
+    from mellea.helpers.event_loop_helper import _run_async_in_thread
+
+    backend = ACPBackend()
+
+    async def use() -> None:
+        thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+        await thunk.avalue()
+
+    _run_async_in_thread(use())
+    assert backend._conn is not None
+    backend.close()
+    assert backend._conn is None
+    assert backend._exit_stack is None
 
 
 async def test_prompts_run_concurrently_without_mixing_replies(
@@ -345,6 +390,7 @@ async def test_pop_text_called_exactly_once_per_session(
     state: dict[str, Any] = {
         "spawns": 0,
         "spawn_cwds": [],
+        "spawn_envs": [],
         "session_cwds": [],
         "prompts": [],
         "inflight": 0,
@@ -359,6 +405,7 @@ async def test_pop_text_called_exactly_once_per_session(
     async def fake_spawn(client: Any, *args: Any, **kwargs: Any):
         state["spawns"] += 1
         state["spawn_cwds"].append(kwargs.get("cwd"))
+        state["spawn_envs"].append(kwargs.get("env"))
         await asyncio.sleep(0)
         yield FakeConn(client, state), None
 
