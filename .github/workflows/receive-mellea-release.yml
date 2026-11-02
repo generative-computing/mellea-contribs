@@ -84,8 +84,9 @@ jobs:
           private-key: ${{ secrets.CI_PRIVATE_KEY }}
 
       # persist-credentials: false — the App token must not linger in the
-      # runner's git config. open_per_package_bump_prs.py re-points origin
-      # at a token-bearing URL itself before its ls-remote/push calls.
+      # runner's git config. open_per_package_bump_prs.py installs a
+      # gh-backed credential helper instead: git gets the token from GH_TOKEN
+      # on demand, so no credential is ever written to disk or a command line.
       - name: Checkout mellea-contribs
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
