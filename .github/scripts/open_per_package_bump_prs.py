@@ -26,6 +26,7 @@ itself is not a subpackage and is skipped.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -54,6 +55,21 @@ def _discover_subpackages(repo: Path) -> list[Path]:
         if (child / "pyproject.toml").exists():
             out.append(child)
     return out
+
+
+def _token_remote_url() -> str:
+    """Auth-bearing origin URL for pushes, from the job's GH_TOKEN env.
+
+    The workflow checks out with ``persist-credentials: false`` (issue
+    #105), so git has no persisted credential to draw on — both the
+    ``git ls-remote`` existence checks and the branch pushes in
+    ``_open_pr`` authenticate through this URL instead. Same pattern as
+    ``release.sh``.
+    """
+    return (
+        f"https://x-access-token:{os.environ['GH_TOKEN']}"
+        f"@github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+    )
 
 
 def _needs_bump(pyproject: Path, target: str) -> bool:
@@ -259,6 +275,15 @@ def main() -> int:
     except UnacceptableMelleaLine as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    # Point origin at the token-bearing URL before any _open_pr call: with
+    # persist-credentials: false on the checkout, both the ls-remote
+    # existence checks and the branch pushes need the explicit credential.
+    subprocess.run(
+        ["git", "remote", "set-url", "origin", _token_remote_url()],
+        cwd=args.repo_root,
+        check=True,
+    )
 
     for pp in pyprojects:
         _open_pr(args.repo_root, pp, args.version)

@@ -23,16 +23,6 @@ rules:
       - cd.yml:64  # line moved by the enable-cache: false comment in #111
       - receive-mellea-release.yml:81
 
-  # --- artipacked ------------------------------------------------------------
-  # The sync job's checkout keeps credentials persisted because
-  # open_per_package_bump_prs.py pushes branches via plain `git push`, which
-  # relies on them. Fix is to route the push through an explicit
-  # token-bearing remote URL (as release.sh already does), then un-persist.
-  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/105
-  artipacked:
-    ignore:
-      - receive-mellea-release.yml:86
-
   # --- superfluous-actions ---------------------------------------------------
   # softprops/action-gh-release duplicates what `gh release create` does in a
   # plain run step. Replacement touches the tag-push release path, so it is

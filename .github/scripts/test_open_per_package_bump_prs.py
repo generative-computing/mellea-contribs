@@ -15,6 +15,7 @@ from open_per_package_bump_prs import (
     _discover_subpackages,
     _load_owner_handles,
     _select_pass,
+    _token_remote_url,
 )
 
 
@@ -36,6 +37,16 @@ def test_load_owner_handles_empty_or_missing_returns_empty(tmp_path: Path) -> No
     assert _load_owner_handles(tmp_path) == []  # missing
     (tmp_path / "OWNERS").write_text("")
     assert _load_owner_handles(tmp_path) == []  # empty
+
+
+def test_token_remote_url_embeds_app_token(monkeypatch) -> None:
+    """origin is re-pointed at a token-bearing URL, mirroring release.sh."""
+    monkeypatch.setenv("GH_TOKEN", "sekrit-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "generative-computing/mellea-contribs")
+    assert _token_remote_url() == (
+        "https://x-access-token:sekrit-token"
+        "@github.com/generative-computing/mellea-contribs.git"
+    )
 
 
 def _make_subpackage(repo: Path, name: str, version: str) -> None:
