@@ -125,14 +125,25 @@ def _open_pr(repo: Path, subpackage: Path, target: str) -> None:
     branch = f"sync-mellea-{target}-{name}"
 
     # Skip if branch already exists upstream (PR already opened).
+    # --exit-code makes ls-remote exit 0 when the ref matches and 2 when
+    # it doesn't. Any other code means the query itself failed (credential
+    # helper rejected the token, network error) — treating that as
+    # "branch absent" would let the run branch/commit and then die at
+    # push mid-pass, so fail fast instead, before any tree edits.
     result = subprocess.run(
         ["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{branch}"],
         cwd=repo,
         capture_output=True,
+        text=True,
     )
     if result.returncode == 0:
         print(f"  [{name}] branch {branch} already exists upstream — skipping.")
         return
+    if result.returncode != 2:
+        raise RuntimeError(
+            f"[{name}] git ls-remote failed (exit {result.returncode}): "
+            f"{result.stderr.strip()}"
+        )
 
     # Everything from here edits the tree (pyproject bump, uv.lock, branch).
     # Wrap it all so that if any step raises — `uv lock` resolution/network
@@ -260,8 +271,33 @@ def main() -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    # Route git auth through gh before any _open_pr call: with
+    # persist-credentials: false on the checkout, both the ls-remote
+    # existence checks and the branch pushes need a credential. gh serves
+    # it on demand from the job's GH_TOKEN env, so no secret is written to
+    # .git/config or a command line (issue #105).
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "credential.https://github.com/.helper",
+            "!gh auth git-credential",
+        ],
+        cwd=args.repo_root,
+        check=True,
+    )
+
     for pp in pyprojects:
-        _open_pr(args.repo_root, pp, args.version)
+        try:
+            _open_pr(args.repo_root, pp, args.version)
+        except (RuntimeError, subprocess.CalledProcessError) as exc:
+            detail = (
+                f"command {exc.cmd!r} exited {exc.returncode}"
+                if isinstance(exc, subprocess.CalledProcessError)
+                else exc
+            )
+            print(f"error: {pp.parent.name}: {detail}", file=sys.stderr)
+            return 1
 
     return 0
 
