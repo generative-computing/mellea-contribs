@@ -15,15 +15,14 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
-
 jobs:
   read-config:
     # Hoisted into its own job so its output can drive `timeout-minutes` on
     # the matrix job below — `timeout-minutes` is resolved when a job starts,
     # so it cannot reference a step output produced inside the same job.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       skip_ollama: ${{ steps.ci-flags.outputs.skip_ollama }}
       timeout_minutes: ${{ steps.ci-flags.outputs.timeout_minutes }}
