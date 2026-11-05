@@ -15,10 +15,6 @@ on:
         type: string
         default: ""
 
-# No workflow-level `permissions:` here. In a reusable workflow it would cap
-# every job below it, so the caller's contents/issues:write grant for the
-# auto-issue bot (see the comment on the package-ci job) would never reach it.
-
 jobs:
   read-config:
     # Hoisted into its own job so its output can drive `timeout-minutes` on
