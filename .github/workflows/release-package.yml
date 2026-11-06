@@ -148,21 +148,23 @@ jobs:
 
       - name: Create GitHub Release
         env:
+          GH_TOKEN: ${{ github.token }}
           PACKAGE_NAME: ${{ needs.parse-tag.outputs.package_name }}
           VERSION: ${{ needs.parse-tag.outputs.version }}
           CHANGELOG_FILE: ${{ steps.release-notes.outputs.changelog_file }}
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
-        with:
-          tag_name: ${{ env.PACKAGE_NAME }}/v${{ env.VERSION }}
-          name: ${{ env.PACKAGE_NAME }} v${{ env.VERSION }}
-          body_path: ${{ env.CHANGELOG_FILE }}
-          draft: false
-          prerelease: ${{ contains(needs.parse-tag.outputs.version, '-') }}
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/SHA256SUMS
-          fail_on_unmatched_files: true
+          IS_PRERELEASE: ${{ contains(needs.parse-tag.outputs.version, '-') }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            set -- --prerelease
+          else
+            set --
+          fi
+          gh release create "${PACKAGE_NAME}/v${VERSION}" \
+            --title "${PACKAGE_NAME} v${VERSION}" \
+            --notes-file "$CHANGELOG_FILE" \
+            "$@" \
+            dist/*.whl dist/*.tar.gz dist/SHA256SUMS
 
       - name: Release summary
         env:
