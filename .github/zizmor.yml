@@ -22,12 +22,3 @@ rules:
     ignore:
       - cd.yml:64  # line moved by the enable-cache: false comment in #111
       - receive-mellea-release.yml:81
-
-  # --- superfluous-actions ---------------------------------------------------
-  # softprops/action-gh-release duplicates what `gh release create` does in a
-  # plain run step. Replacement touches the tag-push release path, so it is
-  # deferred to its own change.
-  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/106
-  superfluous-actions:
-    ignore:
-      - release-package.yml:149
