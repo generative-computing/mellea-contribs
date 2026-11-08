@@ -31,6 +31,7 @@ from acp.schema import (
     AgentMessageChunk,
     AllowedOutcome,
     DeniedOutcome,
+    Implementation,
     RequestPermissionResponse,
     TextContentBlock,
 )
@@ -40,6 +41,13 @@ _logger = logging.getLogger(__name__)
 
 # Max seconds to wait for the agent to acknowledge ``close_session``.
 _CLOSE_SESSION_TIMEOUT = 5.0
+
+# Protocol version this backend implementation supports.
+_SUPPORTED_PROTOCOL_VERSION = 1
+
+# Client identification sent during ACP initialization handshake.
+_CLIENT_NAME = "mellea-acp"
+_CLIENT_VERSION = "0.1.0"
 
 
 class _BufferingClient:
@@ -191,19 +199,41 @@ class ACPBackend(Backend):
                 cwd = self._cwd if self._cwd is not None else os.getcwd()
                 stack = AsyncExitStack()
                 try:
-                    conn, proc = await stack.enter_async_context(
-                        spawn_agent_process(
-                            self._client,
-                            self._command[0],
-                            *self._command[1:],
-                            cwd=cwd,
-                            # The SDK default scrubs the env to a tiny allowlist,
-                            # which drops API keys such as BOB_API_KEY.
-                            env=self._env
-                            if self._env is not None
-                            else dict(os.environ),
+                    async with asyncio.timeout(self._timeout):
+                        conn, proc = await stack.enter_async_context(
+                            spawn_agent_process(
+                                self._client,
+                                self._command[0],
+                                *self._command[1:],
+                                cwd=cwd,
+                                # The SDK default scrubs the env to a tiny allowlist,
+                                # which drops API keys such as BOB_API_KEY.
+                                env=self._env
+                                if self._env is not None
+                                else dict(os.environ),
+                            )
                         )
-                    )
+                        init_resp = await conn.initialize(
+                            protocol_version=_SUPPORTED_PROTOCOL_VERSION,
+                            client_info=Implementation(
+                                name=_CLIENT_NAME,
+                                version=_CLIENT_VERSION,
+                            ),
+                        )
+                        if (
+                            getattr(init_resp, "protocol_version", None)
+                            != _SUPPORTED_PROTOCOL_VERSION
+                        ):
+                            raise RuntimeError(
+                                f"ACP agent negotiated unsupported protocol version "
+                                f"{getattr(init_resp, 'protocol_version', None)} "
+                                f"(supported: {_SUPPORTED_PROTOCOL_VERSION})"
+                            )
+                except TimeoutError:
+                    await stack.aclose()
+                    raise TimeoutError(
+                        f"ACP agent {self._model_id!r} failed to initialize within {self._timeout}s"
+                    ) from None
                 except BaseException:
                     await stack.aclose()
                     raise
@@ -353,6 +383,7 @@ class ACPBackend(Backend):
         model_options: dict | None = None,
         tool_calls: bool = False,
     ) -> tuple[ModelOutputThunk[C], Context]:
+        await self.do_generate_walk(action)
         self._warn_ignored(model_options, tool_calls)
         prompt_text = self._build_prompt(action, ctx, format)
 
@@ -399,6 +430,7 @@ class ACPBackend(Backend):
 
         ``ctx`` is ignored: each action is rendered on its own.
         """
+        await self.do_generate_walks(list(actions))
         self._warn_ignored(model_options, tool_calls)
         empty = SimpleContext()
         prompts = [self._build_prompt(a, empty, format) for a in actions]

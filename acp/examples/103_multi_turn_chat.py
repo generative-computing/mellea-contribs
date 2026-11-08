@@ -2,7 +2,7 @@
 
 Demonstrates that ACPBackend supports ChatContext and m.chat(). Mellea
 accumulates the turn history in the context and ACPBackend renders it into
-each prompt; the ACP session on the agent side also retains prior turns.
+each prompt (a fresh ACP session is used per call).
 
 Usage:
     uv run python examples/103_multi_turn_chat.py
@@ -10,6 +10,7 @@ Usage:
 
 from mellea.stdlib.context import ChatContext
 from mellea.stdlib.session import MelleaSession
+
 from mellea_contribs.acp import ACPBackend
 
 m = MelleaSession(ACPBackend(), ctx=ChatContext())

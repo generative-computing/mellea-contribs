@@ -2,7 +2,9 @@
 
 import asyncio
 import os
+import tomllib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,9 +20,10 @@ from mellea.stdlib.components import Instruction, Message
 from mellea.stdlib.components.genstub import generative
 from mellea.stdlib.context import ChatContext
 from mellea.stdlib.session import MelleaSession
+from pydantic import BaseModel
+
 from mellea_contribs.acp import ACPBackend
 from mellea_contribs.acp.backends import acp_backend as module
-from pydantic import BaseModel
 
 
 class FakeConn:
@@ -30,7 +33,17 @@ class FakeConn:
         self.client = client
         self.state = state
 
+    async def initialize(self, protocol_version: int = 1, **kwargs: Any) -> Any:
+        if self.state.get("init_hang"):
+            await asyncio.sleep(3600)
+        self.state["initialized"] = True
+        self.state["client_info"] = kwargs.get("client_info")
+        return SimpleNamespace(
+            protocol_version=self.state.get("protocol_version", protocol_version)
+        )
+
     async def new_session(self, cwd: str, **kwargs: Any) -> Any:
+        assert self.state.get("initialized"), "new_session before initialize"
         await asyncio.sleep(0)  # yield, so concurrent callers interleave
         self.state["session_cwds"].append(cwd)
         return SimpleNamespace(session_id=f"s{len(self.state['session_cwds'])}")
@@ -80,6 +93,7 @@ def spawn(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "hang": False,
         "die": False,
         "close_supported": True,
+        "initialized": False,
     }
 
     @asynccontextmanager
@@ -118,6 +132,30 @@ async def test_thunk_is_lazy_then_resolves_via_astream(spawn: dict[str, Any]) ->
     assert thunk.generate_log is not None
     assert thunk.generate_log.backend == "acp::bob"
     assert thunk.generate_log.model_output == "hello"
+
+
+async def test_lazy_grounding_context_is_resolved_before_rendering(
+    spawn: dict[str, Any],
+) -> None:
+    backend = ACPBackend()
+    lazy, _ = await backend._generate_from_context(Instruction("inner"), ChatContext())
+    assert not lazy.is_computed()
+    action = Instruction("Summarise", grounding_context={"doc": lazy})
+    thunk, _ = await backend._generate_from_context(action, ChatContext())
+    await thunk.avalue()
+    assert "hello" in spawn["prompts"][-1][1]
+
+
+async def test_lazy_grounding_context_is_resolved_before_rendering_batch(
+    spawn: dict[str, Any],
+) -> None:
+    backend = ACPBackend()
+    lazy, _ = await backend._generate_from_context(Instruction("inner"), ChatContext())
+    assert not lazy.is_computed()
+    action = Instruction("Summarise", grounding_context={"doc": lazy})
+    results, _ = await backend._generate_from_raw([action], ChatContext())
+    assert len(results) == 1
+    assert "hello" in spawn["prompts"][-1][1]
 
 
 # --- sessions / concurrency ------------------------------------------------
@@ -313,6 +351,7 @@ async def test_timeout_none_passes_none_to_asyncio(
     # Verify that timeout=None threads through to asyncio.timeout(None) rather
     # than being coerced to 0 or some other value.
     import asyncio as _asyncio
+
     import mellea_contribs.acp.backends.acp_backend as _mod
 
     delays: list[Any] = []
@@ -463,6 +502,7 @@ async def test_pop_text_called_exactly_once_per_session(
         "stop": "end_turn",
         "closed": [],
         "close_supported": True,
+        "initialized": False,
     }
 
     @asynccontextmanager
@@ -484,6 +524,51 @@ async def test_pop_text_called_exactly_once_per_session(
     assert pop_counts[session_id] == 1, (
         f"pop_text called {pop_counts[session_id]} times for session {session_id!r}; expected 1"
     )
+
+
+def test_client_version_matches_pyproject() -> None:
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        pyproject = tomllib.load(f)
+    assert module._CLIENT_VERSION == pyproject["project"]["version"]
+
+
+async def test_initialize_passes_client_info(spawn: dict[str, Any]) -> None:
+    backend = ACPBackend()
+    thunk, _ = await backend._generate_from_context(Instruction("hi"), ChatContext())
+    await thunk.avalue()
+    assert spawn["initialized"] is True
+    client_info = spawn.get("client_info")
+    assert client_info is not None
+    assert client_info.name == module._CLIENT_NAME
+    assert client_info.version == module._CLIENT_VERSION
+
+
+async def test_initialize_unsupported_protocol_version_raises(
+    spawn: dict[str, Any],
+) -> None:
+    spawn["protocol_version"] = 99
+    backend = ACPBackend()
+    with pytest.raises(RuntimeError, match="unsupported protocol version 99"):
+        thunk, _ = await backend._generate_from_context(
+            Instruction("hi"), ChatContext()
+        )
+        await thunk.avalue()
+
+
+async def test_initialize_timeout_raises_and_respawns(
+    spawn: dict[str, Any],
+) -> None:
+    spawn["init_hang"] = True
+    backend = ACPBackend(timeout=0.05)
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    with pytest.raises(TimeoutError, match="failed to initialize within"):
+        await thunk.avalue()
+    assert spawn["spawns"] == 1
+    spawn["init_hang"] = False
+    thunk, _ = await backend._generate_from_context(Instruction("y"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert spawn["spawns"] == 2
 
 
 # --- @generative -----------------------------------------------------------

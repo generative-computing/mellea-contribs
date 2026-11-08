@@ -5,7 +5,7 @@ instead of Bob. Demonstrates that ACPBackend works with any ACP-compatible
 stdio agent — just pass a different command.
 
 Prerequisites:
-    pip install vibe-acp
+    pip install mistral-vibe
     vibe-acp --setup   # configure your Mistral API key
 
 Usage:
@@ -13,6 +13,7 @@ Usage:
 """
 
 from mellea.stdlib.session import MelleaSession
+
 from mellea_contribs.acp import ACPBackend
 
 m = MelleaSession(ACPBackend(command=["vibe-acp"]))
