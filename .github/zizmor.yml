@@ -10,15 +10,4 @@
 #
 # Rule reference: https://docs.zizmor.sh/audits/
 
-rules:
-
-  # --- github-app ------------------------------------------------------------
-  # create-github-app-token steps mint tokens with the app's blanket
-  # installation permissions. The tokens drive release/bump automation only;
-  # scoping them via permission-* inputs is deferred to keep this PR
-  # behavior-neutral on the release paths.
-  # Fix tracked in: https://github.com/generative-computing/mellea-contribs/issues/104
-  github-app:
-    ignore:
-      - cd.yml:64  # line moved by the enable-cache: false comment in #111
-      - receive-mellea-release.yml:81
+rules: {}
