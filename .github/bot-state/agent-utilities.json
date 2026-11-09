@@ -1,6 +1,7 @@
 {
-  "consecutive_failures": 1,
+  "consecutive_failures": 2,
   "label_applied_days": 0,
-  "last_failure_run_url": "https://github.com/generative-computing/mellea-contribs/actions/runs/29011971934",
-  "milestones_posted": []
+  "last_failure_run_url": "https://github.com/generative-computing/mellea-contribs/actions/runs/42665044466",
+  "milestones_posted": [],
+  "open_issue_number": 120
 }
