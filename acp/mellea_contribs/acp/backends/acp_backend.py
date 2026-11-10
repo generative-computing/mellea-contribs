@@ -156,9 +156,10 @@ class ACPBackend(Backend):
                  ``BOB_API_KEY``. If given, the agent receives only the ACP
                  SDK's minimal allowlist (``PATH``, ``HOME``, ...) plus these
                  entries.
-            timeout: Max seconds for one generation (new session + prompt) before
-                     ``TimeoutError`` is raised. ``None`` disables the limit.
-                     Defaults to 300.
+            timeout: Max seconds for agent startup (spawn + ``initialize``) and,
+                     separately, for each generation (new session + prompt)
+                     before ``TimeoutError`` is raised. ``None`` disables the
+                     limit. Defaults to 300.
 
         If the agent subprocess dies, the call in flight fails with
         ``ConnectionError`` (it is not retried: the agent may already have acted
