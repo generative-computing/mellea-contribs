@@ -14,9 +14,12 @@ then read that record:
 Each rejection-sampling attempt is a fresh ACP session, i.e. a full agent re-run,
 so the loop budget is 1: the example stops after the first (failing) attempt.
 
-Caveat: ``session_id`` is not linked to a Mellea call or sampling attempt. This
-example runs one generation at a time, so the validator simply uses the most
-recent session. With concurrent calls you would need another way to correlate.
+Matching a validated output to its tool calls: every result carries the id of
+the ACP session that produced it in ``thunk._meta["acp_session_id"]``, which is
+also the ``session_id`` passed to ``on_update``. The validators below are written
+as ``validation_fn(ctx)`` (not ``simple_validate``) so they can read the output
+from ``ctx.last_output()`` and look up exactly its tool calls. This stays correct
+with concurrent calls.
 
 Usage:
     uv run python examples/110_validate_with_tool_calls.py
@@ -32,7 +35,8 @@ from pathlib import Path
 from typing import Any
 
 from acp.schema import TextContentBlock, ToolCallProgress, ToolCallStart
-from mellea.stdlib.requirements import check, req, simple_validate
+from mellea.core import Context, ValidationResult
+from mellea.stdlib.requirements import check, req
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 from mellea.stdlib.session import MelleaSession
 
@@ -48,7 +52,7 @@ class ToolCall:
 
 @dataclass
 class Recorder:
-    """Collects tool calls per ACP session, in the order sessions were opened."""
+    """Collects tool calls per ACP session."""
 
     sessions: dict[str, dict[str, ToolCall]] = field(default_factory=dict)
 
@@ -63,30 +67,34 @@ class Recorder:
                 if isinstance(block, TextContentBlock):
                     calls[update.tool_call_id].output += block.text
 
-    def latest(self) -> list[ToolCall]:
-        """Tool calls of the most recent session (valid for sequential use)."""
-        if not self.sessions:
-            return []
-        return list(list(self.sessions.values())[-1].values())
+    def for_output(self, ctx: Context) -> list[ToolCall]:
+        """Tool calls of the session that produced the last output in ``ctx``."""
+        output = ctx.last_output()
+        session_id = output._meta.get("acp_session_id") if output else None
+        return list(self.sessions.get(session_id, {}).values())
 
 
 recorder = Recorder()
 
 
-def numbers_come_from_tools(reply: str) -> tuple[bool, str]:
-    tool_text = " ".join(c.output for c in recorder.latest())
+def numbers_come_from_tools(ctx: Context) -> ValidationResult:
+    reply = str(ctx.last_output())
+    tool_text = " ".join(c.output for c in recorder.for_output(ctx))
     seen = set(re.findall(r"\d+", tool_text))
     missing = sorted(set(re.findall(r"\d+", reply)) - seen)
     if missing:
-        return False, f"numbers {missing} do not appear in any tool output"
-    return True, "all numbers in the reply appear in tool output"
+        reason = f"numbers {missing} do not appear in any tool output"
+        return ValidationResult(False, reason=reason)
+    return ValidationResult(
+        True, reason="all numbers in the reply appear in tool output"
+    )
 
 
-def no_shell(reply: str) -> tuple[bool, str]:
-    shell = [c.title for c in recorder.latest() if c.kind == "execute"]
+def no_shell(ctx: Context) -> ValidationResult:
+    shell = [c.title for c in recorder.for_output(ctx) if c.kind == "execute"]
     if shell:
-        return False, f"the agent used the shell: {shell[0]}"
-    return True, "no shell commands were used"
+        return ValidationResult(False, reason=f"the agent used the shell: {shell[0]}")
+    return ValidationResult(True, reason="no shell commands were used")
 
 
 with tempfile.TemporaryDirectory(prefix="mellea-acp-demo-") as workdir:
@@ -107,11 +115,11 @@ with tempfile.TemporaryDirectory(prefix="mellea-acp-demo-") as workdir:
             requirements=[
                 req(
                     "Numbers in the reply come from tool output",
-                    validation_fn=simple_validate(numbers_come_from_tools),
+                    validation_fn=numbers_come_from_tools,
                 ),
                 check(
                     "The agent does not use the shell",
-                    validation_fn=simple_validate(no_shell),
+                    validation_fn=no_shell,
                 ),
             ],
             strategy=RejectionSamplingStrategy(loop_budget=1),

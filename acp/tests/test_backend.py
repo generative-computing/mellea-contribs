@@ -666,3 +666,44 @@ async def test_on_update_exception_does_not_break_generation(
     thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
     assert await thunk.avalue() == "hello"
     assert "on_update callback raised" in caplog.text
+
+
+# --- acp_session_id on the result -----------------------------------------
+
+
+async def test_thunk_meta_has_session_id(spawn: dict[str, Any]) -> None:
+    backend = ACPBackend()
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    assert thunk._meta["acp_session_id"] == spawn["prompts"][0][0]
+
+
+async def test_session_id_matches_on_update_for_concurrent_raw_calls(
+    spawn: dict[str, Any],
+) -> None:
+    seen: list[str] = []
+    backend = ACPBackend(on_update=lambda sid, upd: seen.append(sid))
+    results, _ = await backend._generate_from_raw(
+        [Instruction("alpha-task"), Instruction("bravo-task")], ChatContext()
+    )
+    ids = [r._meta["acp_session_id"] for r in results]
+    assert sorted(ids) == sorted(seen)
+    prompt_of = dict(spawn["prompts"])
+    # each result carries the id of the session that ran *its* prompt
+    assert "alpha-task" in prompt_of[ids[0]]
+    assert "bravo-task" in prompt_of[ids[1]]
+
+
+async def test_validator_can_read_session_id_from_ctx(spawn: dict[str, Any]) -> None:
+    from mellea.core import ValidationResult
+    from mellea.stdlib.requirements import req
+
+    seen: list[str] = []
+
+    def validate(ctx: Any) -> ValidationResult:
+        seen.append(ctx.last_output()._meta["acp_session_id"])
+        return ValidationResult(True)
+
+    m = MelleaSession(ACPBackend())
+    m.instruct("x", requirements=[req("anything", validation_fn=validate)])
+    assert seen == [spawn["prompts"][0][0]]

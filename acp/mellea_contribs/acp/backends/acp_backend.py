@@ -187,6 +187,9 @@ class ACPBackend(Backend):
                        as the ``acp.schema`` object. May be sync or async.
                        ``session_id`` identifies one generation (each call uses
                        its own session), so concurrent calls can be told apart.
+                       The same id is available on the result as
+                       ``thunk._meta["acp_session_id"]``, so a requirement can
+                       find the updates that belong to the output it validates.
                        Exceptions raised by the callback are logged and ignored.
 
         If the agent subprocess dies, the call in flight fails with
@@ -339,15 +342,23 @@ class ACPBackend(Backend):
         return prompt_text
 
     async def _run_prompt(
-        self, prompt_text: str, format: type[BaseModelSubclass] | None
+        self,
+        prompt_text: str,
+        format: type[BaseModelSubclass] | None,
+        meta: dict[str, Any],
     ) -> str:
-        """Run one prompt in a fresh ACP session and return the reply text."""
+        """Run one prompt in a fresh ACP session and return the reply text.
+
+        The session id is stored in ``meta["acp_session_id"]`` as soon as the
+        session exists, so it can be matched with ``on_update`` callbacks.
+        """
         conn = await self._ensure_agent()
         cwd = self._resolve_cwd()
         try:
             async with asyncio.timeout(self._timeout):
                 session = await conn.new_session(cwd=cwd)
                 session_id: str = session.session_id
+                meta["acp_session_id"] = session_id
                 try:
                     resp = await conn.prompt(
                         session_id=session_id,
@@ -449,7 +460,7 @@ class ACPBackend(Backend):
         output._gen.process = process
         output._gen.post_process = post_process
         output._gen.generate = asyncio.create_task(
-            send_to_queue(self._run_prompt(prompt_text, format), output)
+            send_to_queue(self._run_prompt(prompt_text, format, output._meta), output)
         )
         output._gen.generate_type = GenerateType.ASYNC
 
@@ -473,11 +484,16 @@ class ACPBackend(Backend):
         empty = SimpleContext()
         prompts = [self._build_prompt(a, empty, format) for a in actions]
         dates = [datetime.datetime.now() for _ in actions]
-        texts = await asyncio.gather(*(self._run_prompt(p, format) for p in prompts))
+        metas: list[dict[str, Any]] = [{} for _ in prompts]
+        texts = await asyncio.gather(
+            *(self._run_prompt(p, format, meta) for p, meta in zip(prompts, metas))
+        )
 
         results: list[ModelOutputThunk] = []
-        for action, prompt_text, date, text in zip(actions, prompts, dates, texts):
-            thunk: ModelOutputThunk = ModelOutputThunk(value=text)
+        for action, prompt_text, date, text, meta in zip(
+            actions, prompts, dates, texts, metas
+        ):
+            thunk: ModelOutputThunk = ModelOutputThunk(value=text, meta=meta)
             thunk.parsed_repr = Message(role="assistant", content=text)
             thunk.generation.model = self._model_id
             thunk.generation.provider = self._provider
