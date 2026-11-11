@@ -4,7 +4,8 @@ Mellea backend that drives `m.instruct()` and `m.generate()` through any
 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) stdio agent.
 
 Tested with **Bob** (`bob acp`) and **Mistral Vibe** (`vibe-acp`); other
-ACP-compatible stdio agents should work via `command=`.
+ACP-compatible stdio agents (see the
+[ACP agent list](https://agentclientprotocol.com/overview/agents)) should work via `command=`.
 
 ## How it works
 
@@ -40,7 +41,7 @@ m = MelleaSession(ACPBackend())
 # then run `vibe-acp --setup`
 m = MelleaSession(ACPBackend(command=["vibe-acp"]))
 
-# Bob with extra flags
+# Bob with extra flags (`--trust` trusts the workspace; see https://bob.ibm.com/docs/shell/features/acp)
 m = MelleaSession(ACPBackend(command=["bob", "acp", "--trust"]))
 
 result = m.instruct(
@@ -55,7 +56,7 @@ print(result)
 - `model_options` and `tool_calls` are ignored (a warning is logged); the agent controls its own model and tools.
 - `format=` is best-effort: the JSON schema is appended to the prompt and the first JSON value in the reply is extracted (agents often add prose, code fences or persona prefixes). ACP has no constrained decoding, so pair it with a validating sampling strategy.
 - `@generative` works (it relies on `format=`), so the same best-effort caveat applies: use a `RejectionSamplingStrategy` for retries on malformed replies. Each `precondition_requirements` entry costs one extra agent session.
-- Tool-permission requests from the agent are rejected (`reject_once`, else cancelled). The backend runs headless.
+- Tool-permission requests from the agent are rejected (`reject_once`, else cancelled). The backend runs headless. Whether a tool call reaches this callback is up to the agent: with an agent's default settings, expect prompts that need tools to fail (Bob, for example, replies that it has no tool access). Agents usually have their own setting that lets tool calls run without asking (for Bob, `bob acp --auto-approve`). With it, the agent's own safety rules decide what runs, not this backend, so check the agent's docs before enabling it. See `108_agentic_tool_use.py`.
   **This is not a sandbox**: agents decide for themselves what needs permission. In testing, Bob created a file in the working directory without asking. Treat the agent as having full access to `cwd`.
 - `cwd` (default: a fresh empty temporary directory, removed on `close()`/`aclose()`) is the directory the agent works in. Pass `ACPBackend(cwd=os.getcwd())` or any path to let the agent work on real files.
 - `env` (default: a copy of the current environment) sets the agent's environment variables. The default lets agents read API keys such as `BOB_API_KEY`. Pass `ACPBackend(env={...})` to give the agent only those variables plus a minimal set (`PATH`, `HOME`, ...).
@@ -77,6 +78,7 @@ print(result)
 | `105_vibe_plain_generate.py` | Plain `instruct` using Mistral Vibe |
 | `106_structured_output.py` | `format=` with a Pydantic model + validating requirement (Bob) |
 | `107_generative.py` | `@generative` functions, with and without a sampling strategy (Bob) |
+| `108_agentic_tool_use.py` | Agent uses its own tools (`--trust --auto-approve`); a requirement checks the reply against ground truth |
 
 ```bash
 uv run python examples/102_plain_generate.py
