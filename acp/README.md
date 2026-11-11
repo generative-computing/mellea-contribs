@@ -61,6 +61,7 @@ print(result)
 - `cwd` (default: a fresh empty temporary directory, removed on `close()`/`aclose()`) is the directory the agent works in. Pass `ACPBackend(cwd=os.getcwd())` or any path to let the agent work on real files.
 - `env` (default: a copy of the current environment) sets the agent's environment variables. The default lets agents read API keys such as `BOB_API_KEY`. Pass `ACPBackend(env={...})` to give the agent only those variables plus a minimal set (`PATH`, `HOME`, ...).
 - `timeout` (default: 300 seconds) is the maximum time for agent startup (spawn + `initialize`) and, separately, for each generation. On expiry a `TimeoutError` is raised. Pass `timeout=None` to disable.
+- `on_update(session_id, update)` (optional, sync or async) is called for every session update the agent sends: message and thought chunks, tool calls and their results, plans. `update` is the `acp.schema` object, and `session_id` identifies one generation, so concurrent calls can be told apart. Use it to show progress or log tool calls (see `108_agentic_tool_use.py`). Exceptions in the callback are logged and ignored. The backend does not otherwise keep tool calls or their output.
 - If the agent subprocess dies, the call in flight fails with `ConnectionError` (it is not retried, since the agent may already have acted on the prompt) and the next call starts a fresh agent.
 - Responses with stop reason `cancelled` or `refusal`, and empty replies, raise `RuntimeError`.
 - `generate_from_raw` runs each action in its own session, concurrently, and ignores the context.
@@ -78,7 +79,9 @@ print(result)
 | `105_vibe_plain_generate.py` | Plain `instruct` using Mistral Vibe |
 | `106_structured_output.py` | `format=` with a Pydantic model + validating requirement (Bob) |
 | `107_generative.py` | `@generative` functions, with and without a sampling strategy (Bob) |
-| `108_agentic_tool_use.py` | Agent uses its own tools (`--trust --auto-approve`); a requirement checks the reply against ground truth |
+| `108_agentic_tool_use.py` | Agent uses its own tools (`--trust --auto-approve`); a requirement checks the reply against ground truth; `on_update` prints the tool calls |
+| `109_observe_updates.py` | `on_update` timeline of everything the agent reports (tool calls, thoughts, usage); takes the agent command as argument (Bob, Vibe) |
+| `110_validate_with_tool_calls.py` | Requirements that read tool calls and outputs collected by `on_update`; a hidden `check()` that fails on purpose |
 
 ```bash
 uv run python examples/102_plain_generate.py

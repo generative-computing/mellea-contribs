@@ -14,6 +14,7 @@ from acp.schema import (
     PermissionOption,
     PromptResponse,
     TextContentBlock,
+    ToolCallProgress,
     ToolCallUpdate,
 )
 from mellea.stdlib.components import Instruction, Message
@@ -66,6 +67,8 @@ class FakeConn:
         st["max_inflight"] = max(st["max_inflight"], st["inflight"])
         await asyncio.sleep(0.01)
         reply = st["reply"] if st["reply"] is not None else f"echo:{text}"
+        for extra in st.get("extra_updates", []):
+            await self.client.session_update(session_id, extra)
         await self.client.session_update(
             session_id,
             AgentMessageChunk(
@@ -599,3 +602,67 @@ async def test_generative_stub_parses_result(spawn: dict[str, Any], reply: str) 
     sent = spawn["prompts"][0][1]
     assert "I love this!" in sent
     assert "result" in sent  # response schema included in the prompt
+
+
+# --- on_update -------------------------------------------------------------
+
+
+def _tool_update(call_id: str) -> ToolCallProgress:
+    return ToolCallProgress(
+        session_update="tool_call_update",
+        tool_call_id=call_id,
+        status="completed",
+        raw_output={"result": "42"},
+    )
+
+
+async def test_on_update_sees_every_update_with_session_id(
+    spawn: dict[str, Any],
+) -> None:
+    spawn["extra_updates"] = [_tool_update("t1")]
+    seen: list[tuple[str, Any]] = []
+    backend = ACPBackend(on_update=lambda sid, upd: seen.append((sid, upd)))
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert [type(u) for _, u in seen] == [ToolCallProgress, AgentMessageChunk]
+    assert {sid for sid, _ in seen} == {spawn["prompts"][0][0]}
+    assert seen[0][1].raw_output == {"result": "42"}
+
+
+async def test_on_update_may_be_async(spawn: dict[str, Any]) -> None:
+    spawn["extra_updates"] = [_tool_update("t1")]
+    seen: list[str] = []
+
+    async def observer(session_id: str, update: Any) -> None:
+        await asyncio.sleep(0)
+        seen.append(update.session_update)
+
+    backend = ACPBackend(on_update=observer)
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    await thunk.avalue()
+    assert seen == ["tool_call_update", "agent_message_chunk"]
+
+
+async def test_on_update_concurrent_calls_are_told_apart_by_session_id(
+    spawn: dict[str, Any],
+) -> None:
+    seen: list[str] = []
+    backend = ACPBackend(on_update=lambda sid, upd: seen.append(sid))
+    results = await backend.generate_from_raw(
+        [Instruction("a"), Instruction("b")], ChatContext()
+    )
+    assert len(results) == 2
+    assert sorted(seen) == sorted(sid for sid, _ in spawn["prompts"])
+    assert len(set(seen)) == 2
+
+
+async def test_on_update_exception_does_not_break_generation(
+    spawn: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    def boom(session_id: str, update: Any) -> None:
+        raise ValueError("observer bug")
+
+    backend = ACPBackend(on_update=boom)
+    thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
+    assert await thunk.avalue() == "hello"
+    assert "on_update callback raised" in caplog.text

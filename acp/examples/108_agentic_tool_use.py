@@ -4,7 +4,8 @@ This is what ACPBackend offers that a plain LLM backend does not: the agent
 reads files with its own tools, and a Mellea requirement plus rejection sampling
 wraps the whole agent run. The requirement compares the reply against ground
 truth computed in Python, so a hallucinated answer is rejected and retried.
-Each retry is a fresh agent session, i.e. a full re-run.
+Each retry is a fresh agent session, i.e. a full re-run. The ``on_update``
+observer prints the agent's tool calls as they happen.
 
 The agent runs in a scratch directory that this script fills with a few files.
 ``--trust --auto-approve`` lets Bob run tools without asking; Bob's own safety
@@ -21,7 +22,9 @@ Prerequisites:
 import re
 import tempfile
 from pathlib import Path
+from typing import Any
 
+from acp.schema import ToolCallProgress, ToolCallStart
 from mellea.stdlib.requirements import req, simple_validate
 from mellea.stdlib.sampling import RejectionSamplingStrategy
 from mellea.stdlib.session import MelleaSession
@@ -39,12 +42,34 @@ def lines_match_truth(reply: str) -> bool:
     return found == FILES
 
 
+tool_titles: dict[str, str] = {}
+
+
+def show_tool_calls(session_id: str, update: Any) -> None:
+    """Print each tool call and its outcome (``on_update`` observer).
+
+    A call is announced by a ``ToolCallStart`` carrying its title; later
+    ``ToolCallProgress`` updates refer to it by id only, so remember the title.
+    """
+    if isinstance(update, ToolCallStart):
+        tool_titles[update.tool_call_id] = update.title
+        print(f"[{session_id[:8]}] tool: {update.title}")
+    elif isinstance(update, ToolCallProgress) and update.status in (
+        "completed",
+        "failed",
+    ):
+        title = tool_titles.pop(update.tool_call_id, update.tool_call_id)
+        print(f"[{session_id[:8]}]   {update.status}: {title}")
+
+
 with tempfile.TemporaryDirectory(prefix="mellea-acp-demo-") as workdir:
     for name, n_lines in FILES.items():
         Path(workdir, name).write_text("".join(f"line {i}\n" for i in range(n_lines)))
 
     backend = ACPBackend(
-        command=["bob", "acp", "--trust", "--auto-approve"], cwd=workdir
+        command=["bob", "acp", "--trust", "--auto-approve"],
+        cwd=workdir,
+        on_update=show_tool_calls,
     )
     m = MelleaSession(backend)
 

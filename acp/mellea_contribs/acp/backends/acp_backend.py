@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import inspect
 import json
 import logging
 import os
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import AsyncExitStack
 from typing import Any, Self
 
@@ -51,11 +52,19 @@ _CLIENT_NAME = "mellea-acp"
 _CLIENT_VERSION = "0.1.0"
 
 
-class _BufferingClient:
-    """Minimal ACP Client that accumulates AgentMessageChunk text per session."""
+#: Signature of the ``on_update`` observer: ``(session_id, update)``. May be sync or async.
+UpdateCallback = Callable[[str, Any], Awaitable[None] | None]
 
-    def __init__(self) -> None:
+
+class _BufferingClient:
+    """Minimal ACP Client that accumulates AgentMessageChunk text per session.
+
+    Every session update, of any type, is also forwarded to ``on_update``.
+    """
+
+    def __init__(self, on_update: UpdateCallback | None = None) -> None:
         self._chunks: dict[str, list[str]] = {}
+        self._on_update = on_update
 
     def pop_text(self, session_id: str) -> str:
         """Return and discard the text collected so far for ``session_id``."""
@@ -73,6 +82,14 @@ class _BufferingClient:
             content = update.content
             if isinstance(content, TextContentBlock):
                 self._chunks.setdefault(session_id, []).append(content.text)
+        if self._on_update is not None:
+            try:
+                result = self._on_update(session_id, update)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                # An observer must never break the generation.
+                _logger.exception("ACP on_update callback raised; ignoring")
 
     async def request_permission(
         self, session_id: str, tool_call: Any, options: list[Any], **kwargs: Any
@@ -142,6 +159,7 @@ class ACPBackend(Backend):
         cwd: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
         timeout: float | None = 300.0,
+        on_update: UpdateCallback | None = None,
     ) -> None:
         """Create an ACPBackend.
 
@@ -163,6 +181,13 @@ class ACPBackend(Backend):
                      separately, for each generation (new session + prompt)
                      before ``TimeoutError`` is raised. ``None`` disables the
                      limit. Defaults to 300.
+            on_update: Optional observer called as ``on_update(session_id, update)``
+                       for every session update the agent sends (message and
+                       thought chunks, tool calls and their results, plans, ...),
+                       as the ``acp.schema`` object. May be sync or async.
+                       ``session_id`` identifies one generation (each call uses
+                       its own session), so concurrent calls can be told apart.
+                       Exceptions raised by the callback are logged and ignored.
 
         If the agent subprocess dies, the call in flight fails with
         ``ConnectionError`` (it is not retried: the agent may already have acted
@@ -175,7 +200,7 @@ class ACPBackend(Backend):
         self._timeout = timeout
         self._model_id: str = self._command[0]
         self._formatter = TemplateFormatter(model_id=self._model_id)
-        self._client = _BufferingClient()
+        self._client = _BufferingClient(on_update)
         self._conn: Any = None  # ClientSideConnection, set after first use
         self._proc: Any = None
         self._exit_stack: AsyncExitStack | None = None
