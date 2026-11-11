@@ -57,7 +57,7 @@ print(result)
 - `@generative` works (it relies on `format=`), so the same best-effort caveat applies: use a `RejectionSamplingStrategy` for retries on malformed replies. Each `precondition_requirements` entry costs one extra agent session.
 - Tool-permission requests from the agent are rejected (`reject_once`, else cancelled). The backend runs headless.
   **This is not a sandbox**: agents decide for themselves what needs permission. In testing, Bob created a file in the working directory without asking. Treat the agent as having full access to `cwd`.
-- `cwd` (default: the current directory) is the directory the agent works in. Pass `ACPBackend(cwd="/some/scratch/dir")` to confine it to a scratch directory.
+- `cwd` (default: a fresh empty temporary directory, removed on `close()`/`aclose()`) is the directory the agent works in. Pass `ACPBackend(cwd=os.getcwd())` or any path to let the agent work on real files.
 - `env` (default: a copy of the current environment) sets the agent's environment variables. The default lets agents read API keys such as `BOB_API_KEY`. Pass `ACPBackend(env={...})` to give the agent only those variables plus a minimal set (`PATH`, `HOME`, ...).
 - `timeout` (default: 300 seconds) is the maximum time for agent startup (spawn + `initialize`) and, separately, for each generation. On expiry a `TimeoutError` is raised. Pass `timeout=None` to disable.
 - If the agent subprocess dies, the call in flight fails with `ConnectionError` (it is not retried, since the agent may already have acted on the prompt) and the next call starts a fresh agent.

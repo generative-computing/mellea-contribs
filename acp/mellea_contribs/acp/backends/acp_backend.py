@@ -7,6 +7,7 @@ import datetime
 import json
 import logging
 import os
+import tempfile
 from collections.abc import Mapping, Sequence
 from contextlib import AsyncExitStack
 from typing import Any, Self
@@ -149,8 +150,10 @@ class ACPBackend(Backend):
                      Defaults to ``["bob", "acp"]``.
                      Example: ``["vibe-acp"]``, ``["bob", "acp", "--trust"]``.
             cwd: Working directory for the agent and its sessions. This is the
-                 directory the agent can see. Defaults to ``os.getcwd()`` at the
-                 time the agent is first used.
+                 directory the agent can see. Defaults to a fresh empty
+                 temporary directory, created when the agent is first used and
+                 removed by :meth:`close` / :meth:`aclose`. Pass a path
+                 (e.g. ``os.getcwd()``) to let the agent work on real files.
             env: Environment variables for the agent subprocess. Defaults to a
                  copy of ``os.environ`` so agents can read API keys such as
                  ``BOB_API_KEY``. If given, the agent receives only the ACP
@@ -168,6 +171,7 @@ class ACPBackend(Backend):
         self._command: list[str] = command if command is not None else ["bob", "acp"]
         self._cwd: str | None = os.fspath(cwd) if cwd is not None else None
         self._env: dict[str, str] | None = dict(env) if env is not None else None
+        self._tmp_cwd: tempfile.TemporaryDirectory[str] | None = None
         self._timeout = timeout
         self._model_id: str = self._command[0]
         self._formatter = TemplateFormatter(model_id=self._model_id)
@@ -189,6 +193,14 @@ class ACPBackend(Backend):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _resolve_cwd(self) -> str:
+        """Return the agent's working directory, creating a scratch dir if unset."""
+        if self._cwd is not None:
+            return self._cwd
+        if self._tmp_cwd is None:
+            self._tmp_cwd = tempfile.TemporaryDirectory(prefix="mellea-acp-")
+        return self._tmp_cwd.name
+
     async def _ensure_agent(self) -> Any:
         """Spawn the shared ACP agent subprocess once and return its connection."""
         self._raise_if_closed()
@@ -197,7 +209,7 @@ class ACPBackend(Backend):
                 # Agent exited while idle: tear down and respawn below.
                 await self._teardown_locked()
             if self._conn is None:
-                cwd = self._cwd if self._cwd is not None else os.getcwd()
+                cwd = self._resolve_cwd()
                 stack = AsyncExitStack()
                 try:
                     async with asyncio.timeout(self._timeout):
@@ -306,7 +318,7 @@ class ACPBackend(Backend):
     ) -> str:
         """Run one prompt in a fresh ACP session and return the reply text."""
         conn = await self._ensure_agent()
-        cwd = self._cwd if self._cwd is not None else os.getcwd()
+        cwd = self._resolve_cwd()
         try:
             async with asyncio.timeout(self._timeout):
                 session = await conn.new_session(cwd=cwd)
@@ -466,3 +478,6 @@ class ACPBackend(Backend):
         self._closed = True
         async with self._spawn_lock:
             await self._teardown_locked()
+        if self._tmp_cwd is not None:
+            self._tmp_cwd.cleanup()
+            self._tmp_cwd = None

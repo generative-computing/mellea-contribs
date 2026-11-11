@@ -247,12 +247,17 @@ async def test_prompts_run_concurrently_without_mixing_replies(
 # --- cwd -------------------------------------------------------------------
 
 
-async def test_cwd_defaults_to_process_cwd(spawn: dict[str, Any]) -> None:
+async def test_cwd_defaults_to_scratch_dir(spawn: dict[str, Any]) -> None:
     backend = ACPBackend()
     thunk, _ = await backend._generate_from_context(Instruction("x"), ChatContext())
     await thunk.avalue()
-    assert spawn["spawn_cwds"] == [os.getcwd()]
-    assert spawn["session_cwds"] == [os.getcwd()]
+    (scratch,) = spawn["spawn_cwds"]
+    assert scratch != os.getcwd()
+    assert os.path.isdir(scratch)
+    assert os.listdir(scratch) == []
+    assert spawn["session_cwds"] == [scratch]
+    await backend.aclose()
+    assert not os.path.exists(scratch)
 
 
 async def test_cwd_override(spawn: dict[str, Any]) -> None:
