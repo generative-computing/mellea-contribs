@@ -71,6 +71,10 @@ ignore_missing_imports = true
 skip_ollama = false
 timeout_minutes = 30
 python_versions = ["3.12"]
+# Models these tests request beyond mellea's start_session() default. CI pulls
+# this set plus the default, and fails if anything else is pulled. See
+# test_mprogram_robustness.py (backend granite3.3:8b, generator qwen3:8b).
+ollama_models = ["granite3.3:8b", "qwen3:8b"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

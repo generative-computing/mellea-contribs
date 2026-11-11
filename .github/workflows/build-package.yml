@@ -113,11 +113,6 @@ jobs:
         run: |
           nohup ollama serve &
 
-      - name: Pull model granite4:micro
-        if: steps.check-ollama.outputs.skip_ollama == 'false'
-        run: |
-          ollama pull granite4:micro
-
       - name: Install dependencies and build
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
@@ -127,6 +122,25 @@ jobs:
           echo "Building with $BUILD_BACKEND..."
           uv sync --all-extras
           uv build
+
+      # Pull exactly the models the tests request, derived from the *installed*
+      # mellea rather than a hardcoded tag (see issue #94). Runs after `uv sync`
+      # so mellea is importable; declared extras come from the package's
+      # [tool.mellea-contribs.ci].ollama_models.
+      - name: Pull required ollama models
+        if: steps.check-ollama.outputs.skip_ollama == 'false'
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PACKAGE_DIR"
+          # Resolve into a variable first: piping straight into the loop would
+          # swallow a resolver failure (its exit status is lost, so a mellea
+          # import error pulls nothing silently instead of failing the step).
+          models=$(uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" resolve .)
+          while read -r model; do
+            [ -n "$model" ] && ollama pull "$model"
+          done <<< "$models"
 
       - name: Run tests
         env:
@@ -147,6 +161,18 @@ jobs:
           
           # Run tests, excluding integration tests - fail if tests fail
           uv run -- pytest -v "$TEST_DIR/" --ignore="$TEST_DIR/integration"
+
+      # Verify only the needed models were pulled (issue #94): fail if a test
+      # downloaded something beyond the declared set. `always()` so it reports
+      # even when the test step failed.
+      - name: Validate pulled ollama models
+        if: ${{ always() && steps.check-ollama.outputs.skip_ollama == 'false' }}
+        env:
+          PACKAGE_DIR: ${{ inputs.package_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PACKAGE_DIR"
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" validate .
 
       - name: Find built artifacts
         id: find-artifacts
