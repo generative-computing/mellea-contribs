@@ -1,6 +1,6 @@
 # mellea-contribs-acp
 
-Mellea backend that drives `m.instruct()` and `m.generate()` through any
+Mellea backend that drives `m.instruct()`, `m.chat()`, and `@generative` through any
 [Agent Client Protocol (ACP)](https://agentclientprotocol.com) stdio agent.
 
 Tested with **Bob** (`bob acp`) and **Mistral Vibe** (`vibe-acp`); other

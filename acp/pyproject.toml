@@ -1,7 +1,7 @@
 [project]
 name = "mellea-contribs-acp"
 version = "0.1.0"
-description = "Mellea backend that drives m.instruct() and m.generate() through any ACP-compatible stdio agent (Bob, Mistral Vibe, …)"
+description = "Mellea backend that drives m.instruct(), m.chat(), and @generative through any ACP-compatible stdio agent (Bob, Mistral Vibe, …)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
