@@ -12,6 +12,9 @@ CLI usage (run from a package directory so the right mellea env is active)::
     # Print the required model tags, one per line, for CI to pull.
     uv run python .github/scripts/resolve_ollama_models.py resolve .
 
+    # `ollama pull` each required model.
+    uv run python .github/scripts/resolve_ollama_models.py pull .
+
     # Fail if `ollama list` is not exactly the required set.
     uv run python .github/scripts/resolve_ollama_models.py validate .
 """
@@ -172,8 +175,14 @@ def _installed_models() -> list[str]:
     return models
 
 
+def _pull_models(required: list[str]) -> None:
+    """``ollama pull`` each required model, in order."""
+    for model in required:
+        subprocess.run(["ollama", "pull", model], check=True)
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run the ``resolve`` or ``validate`` subcommand.
+    """Run the ``resolve``, ``pull`` or ``validate`` subcommand.
 
     Args:
         argv: Argument vector, defaulting to ``sys.argv[1:]``.
@@ -183,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve", "validate"):
+    for name in ("resolve", "pull", "validate"):
         p = sub.add_parser(name)
         p.add_argument("package_dir", help="Path to the package directory")
     args = parser.parse_args(argv)
@@ -193,10 +202,12 @@ def main(argv: list[str] | None = None) -> int:
         required = required_models(pyproject)
         if args.command == "resolve":
             print("\n".join(required))
+        elif args.command == "pull":
+            _pull_models(required)
         else:
             validate_pulled(required, _installed_models())
             print(f"OK — pulled exactly: {required}")
-    except (RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     return 0

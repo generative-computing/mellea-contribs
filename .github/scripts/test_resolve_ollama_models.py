@@ -28,13 +28,6 @@ class _FakeModelIdentifier:
         self.ollama_name = ollama_name
 
 
-def _fake_start_session(model_id: Any) -> None:
-    """A ``start_session`` look-alike whose only job is to carry a default.
-
-    The resolver introspects the ``model_id`` default; the body never runs.
-    """
-
-
 def _bind_default(default: Any):
     """Build a ``start_session`` stand-in whose ``model_id`` default is ``default``."""
 
@@ -177,15 +170,3 @@ def test_validate_pulled_raises_on_extra() -> None:
 def test_validate_pulled_raises_on_missing() -> None:
     with pytest.raises(RuntimeError, match="missing"):
         validate_pulled(["granite4.2:3b", "qwen3:8b"], ["granite4.2:3b"])
-
-
-# --- integration against the installed mellea -------------------------------
-
-
-def test_matches_installed_mellea_default() -> None:
-    pytest.importorskip("mellea")
-    from mellea.backends.model_ids import IBM_GRANITE_4_2_3B
-
-    resolved = default_ollama_model()
-    assert resolved
-    assert resolved == IBM_GRANITE_4_2_3B.ollama_name

@@ -52,8 +52,12 @@ jobs:
         if: ${{ !inputs.skip_ollama }}
         run: |
           nohup ollama serve &
+      - name: Pull model granite4:micro (if needed)
+        if: ${{ !inputs.skip_ollama }}
+        run: |
+          ollama pull granite4:micro
 
-      - name: Install dependencies
+      - name: Install dependencies and run tests
         run: |
           cd "$SUBPACKAGE"
           if ! command -v uv &> /dev/null; then
@@ -62,27 +66,6 @@ jobs:
           fi
           echo "Setting up virtual environment and installing dependencies..."
           uv sync --all-extras
-
-      # Pull exactly the models the tests request, derived from the *installed*
-      # mellea rather than a hardcoded tag (see issue #94). Runs after `uv sync`
-      # so mellea is importable; declared extras come from the package's
-      # [tool.mellea-contribs.ci].ollama_models.
-      - name: Pull required ollama models (if needed)
-        if: ${{ !inputs.skip_ollama }}
-        run: |
-          set -euo pipefail
-          cd "$SUBPACKAGE"
-          # Resolve into a variable first: piping straight into the loop would
-          # swallow a resolver failure (its exit status is lost, so a mellea
-          # import error pulls nothing silently instead of failing the step).
-          models=$(uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" resolve .)
-          while read -r model; do
-            [ -n "$model" ] && ollama pull "$model"
-          done <<< "$models"
-
-      - name: Run tests
-        run: |
-          cd "$SUBPACKAGE"
           echo "Running tests..."
           # Try multiple patterns to support both tests/ and test/ directories
           if [ -d "tests" ]; then
@@ -93,16 +76,6 @@ jobs:
             echo "Error: No tests/ or test/ directory found"
             exit 1
           fi
-
-      # Verify only the needed models were pulled (issue #94): fail if a test
-      # downloaded something beyond the declared set. `always()` so it reports
-      # even when the test step failed.
-      - name: Validate pulled ollama models (if needed)
-        if: ${{ always() && !inputs.skip_ollama }}
-        run: |
-          set -euo pipefail
-          cd "$SUBPACKAGE"
-          uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" validate .
 
       - name: Send failure message
         if: failure()

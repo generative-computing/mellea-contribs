@@ -136,15 +136,7 @@ jobs:
       - name: Pull required ollama models
         if: env.SKIP_OLLAMA != 'true'
         working-directory: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          # Resolve into a variable first: piping straight into the loop would
-          # swallow a resolver failure (its exit status is lost, so a mellea
-          # import error pulls nothing silently instead of failing the step).
-          models=$(uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" resolve .)
-          while read -r model; do
-            [ -n "$model" ] && ollama pull "$model"
-          done <<< "$models"
+        run: uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" pull .
 
       - name: Lint
         working-directory: ${{ inputs.package }}
@@ -161,9 +153,9 @@ jobs:
         working-directory: ${{ inputs.package }}
         run: uv run pytest -m "not qualitative and not e2e"
 
-      # Verify only the needed models were pulled (issue #94): fail if a test
-      # downloaded something beyond the declared set, or if a required model is
-      # absent. `always()` so it reports even when the test step failed.
+      # Verify only the needed models were pulled: fail if a test downloaded
+      # something beyond the declared set, or if a required model is absent.
+      # `always()` so it reports even when the test step failed.
       - name: Validate pulled ollama models
         if: ${{ always() && env.SKIP_OLLAMA != 'true' }}
         working-directory: ${{ inputs.package }}
