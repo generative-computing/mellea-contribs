@@ -19,8 +19,9 @@ plain-text prompt, and sends it via `prompt()`. Streamed `AgentMessageChunk`
 responses are buffered and resolved through a `ModelOutputThunk` (so Mellea
 hooks and async streaming semantics apply). The session is closed afterwards,
 so the agent keeps no hidden history: the Mellea context is the only memory, and
-rejection-sampling retries do not pollute each other. Concurrent calls run in
-parallel.
+rejection-sampling retries do not share conversation history. All calls share
+one `cwd`, so files the agent writes persist across calls and retries.
+Concurrent calls run in parallel.
 
 ## Install
 

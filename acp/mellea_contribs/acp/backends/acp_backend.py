@@ -134,8 +134,8 @@ class ACPBackend(Backend):
 
     One agent subprocess is spawned lazily and shared. Every generation runs in
     its own fresh ACP session, so the agent never carries hidden history between
-    calls: Mellea's context is the single source of truth, and rejection-sampling
-    retries do not pollute each other.
+    calls: Mellea's context is the single source of truth. All calls share one
+    working directory, so files the agent writes persist between calls.
 
     Usage::
 
