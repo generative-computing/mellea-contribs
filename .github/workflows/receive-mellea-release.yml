@@ -82,6 +82,11 @@ jobs:
         with:
           app-id: ${{ vars.CI_APP_ID }}
           private-key: ${{ secrets.CI_PRIVATE_KEY }}
+          # open_per_package_bump_prs.py pushes a branch (contents) and
+          # creates labels + PRs (label endpoints accept Issues or
+          # Pull-requests write; we scope to pull-requests).
+          permission-contents: write
+          permission-pull-requests: write
 
       # persist-credentials: false — the App token must not linger in the
       # runner's git config. open_per_package_bump_prs.py installs a
