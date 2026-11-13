@@ -142,8 +142,21 @@ When you open a PR:
   namespace package shape, valid `core_path` mirror dirs, explicit `mellea`
   constraint, distribution-name uniqueness across the repo.
 - **`package-ci`** runs lint, mypy, and `pytest` for each touched subpackage.
-  CI flags (`skip_ollama`, `timeout_minutes`, `python_versions`) come from
-  your `[tool.mellea-contribs.ci]` table — no need to edit the workflow.
+  CI flags (`skip_ollama`, `timeout_minutes`, `python_versions`, `ollama_models`)
+  come from your `[tool.mellea-contribs.ci]` table — no need to edit the workflow.
+- **Ollama models** are pulled automatically. CI derives the default model from
+  the *installed* mellea (whatever bare `start_session()` resolves to), so you
+  never hardcode a tag. If your tests request other models — i.e. you call
+  `start_session(model_id=...)` or otherwise pull a non-default model — list
+  them under `ollama_models` so CI pulls them too:
+
+  ```toml
+  [tool.mellea-contribs.ci]
+  ollama_models = ["granite3.3:8b", "qwen3:8b"]
+  ```
+
+  CI then verifies that *only* those models (plus the default) were pulled and
+  fails otherwise — so a test that silently downloads a model mid-run is caught.
 - **Stacked PRs** (when `base_ref` isn't `main`) automatically promote to the
   all-packages matrix so cumulative drift across the stack gets caught.
 

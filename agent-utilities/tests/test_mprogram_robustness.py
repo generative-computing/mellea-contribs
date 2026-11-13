@@ -91,6 +91,7 @@ def _extract_answer(response: Any) -> str:
     return text.strip()[:40]
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(
     not HAS_BENCHDRIFT,
     reason="benchdrift not installed; install with: pip install -e '.[robustness]'",

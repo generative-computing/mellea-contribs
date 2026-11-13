@@ -28,6 +28,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      # .github/scripts/ is outside every package's testpaths, so test the resolver here.
+      - name: Test resolve_ollama_models.py
+        run: uv run --with pytest pytest .github/scripts/test_resolve_ollama_models.py -q
       - name: Discover changed subpackages
         id: discover
         # Template expressions are bound through env and referenced as shell

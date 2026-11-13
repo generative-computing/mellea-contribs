@@ -109,17 +109,6 @@ jobs:
         if: env.SKIP_OLLAMA != 'true'
         run: nohup ollama serve &
 
-      # Must match the model the tests actually request. They call bare
-      # `start_session()`, so that is whatever mellea defaults to — NOT a tag we
-      # get to choose here. mellea v0.8.0 defaults to granite4.2:3b, and pulling the stale
-      # tag meant the real model was downloaded mid-test instead.
-      #
-      # Keep this in step when bumping mellea. Deriving it from the installed
-      # mellea instead of hardcoding is tracked as follow-up work.
-      - name: Pull granite4.2:3b
-        if: env.SKIP_OLLAMA != 'true'
-        run: ollama pull granite4.2:3b
-
       - name: Sync dependencies
         working-directory: ${{ inputs.package }}
         env:
@@ -137,6 +126,18 @@ jobs:
           set -euo pipefail
           uv add "mellea @ git+https://github.com/generative-computing/mellea.git" --branch "${MELLEA_REF}"
 
+      # Pull exactly the models the tests request, derived from the *installed*
+      # mellea rather than a hardcoded tag that silently drifts. Tests call bare
+      # `start_session()`, so the model is whatever mellea defaults to; packages
+      # that need more declare them in [tool.mellea-contribs.ci].ollama_models.
+      # Runs after `uv sync` (and any mellea@ref override) so it reflects the
+      # mellea actually under test. The validate step then fails if anything
+      # beyond that set was pulled — e.g. a test downloading a model mid-run.
+      - name: Pull required ollama models
+        if: env.SKIP_OLLAMA != 'true'
+        working-directory: ${{ inputs.package }}
+        run: uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" pull .
+
       - name: Lint
         working-directory: ${{ inputs.package }}
         run: |
@@ -151,6 +152,16 @@ jobs:
         id: pytest
         working-directory: ${{ inputs.package }}
         run: uv run pytest -m "not qualitative and not e2e"
+
+      # Verify only the needed models were pulled: fail if a test downloaded
+      # something beyond the declared set, or if a required model is absent.
+      # `always()` so it reports even when the test step failed.
+      - name: Validate pulled ollama models
+        if: ${{ always() && env.SKIP_OLLAMA != 'true' }}
+        working-directory: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" validate .
 
       # --- Smoke-only auto-issue bot reporting ------------------------------
       # These steps run only when this workflow was invoked as a mellea@<ref>
