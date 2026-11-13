@@ -1,0 +1,524 @@
+"""ACPBackend — Mellea backend that drives an ACP stdio agent (Bob, Mistral Vibe, ...)."""
+
+from __future__ import annotations
+
+import asyncio
+import datetime
+import inspect
+import json
+import logging
+import os
+import tempfile
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AsyncExitStack
+from typing import Any, Self
+
+from mellea.core import (
+    BaseModelSubclass,
+    C,
+    CBlock,
+    Component,
+    Context,
+    ModelOutputThunk,
+)
+from mellea.core.backend import Backend
+from mellea.core.base import GenerateLog, GenerateType
+from mellea.formatters import TemplateFormatter
+from mellea.helpers.async_helpers import send_to_queue
+from mellea.helpers.event_loop_helper import _run_async_in_thread
+from mellea.stdlib.components import Message
+from mellea.stdlib.context import SimpleContext
+
+from acp.schema import (
+    AgentMessageChunk,
+    AllowedOutcome,
+    DeniedOutcome,
+    Implementation,
+    RequestPermissionResponse,
+    TextContentBlock,
+)
+from acp.stdio import spawn_agent_process
+
+_logger = logging.getLogger(__name__)
+
+# Max seconds to wait for the agent to acknowledge ``close_session``.
+_CLOSE_SESSION_TIMEOUT = 5.0
+
+# Protocol version this backend implementation supports.
+_SUPPORTED_PROTOCOL_VERSION = 1
+
+# Client identification sent during ACP initialization handshake.
+_CLIENT_NAME = "mellea-acp"
+_CLIENT_VERSION = "0.1.0"
+
+
+#: Signature of the ``on_update`` observer: ``(session_id, update)``. May be sync or async.
+UpdateCallback = Callable[[str, Any], Awaitable[None] | None]
+
+
+class _BufferingClient:
+    """Minimal ACP Client that accumulates AgentMessageChunk text per session.
+
+    Every session update, of any type, is also forwarded to ``on_update``.
+    """
+
+    def __init__(self, on_update: UpdateCallback | None = None) -> None:
+        self._chunks: dict[str, list[str]] = {}
+        self._on_update = on_update
+
+    def pop_text(self, session_id: str) -> str:
+        """Return and discard the text collected so far for ``session_id``."""
+        return "".join(self._chunks.pop(session_id, []))
+
+    # --- ACP Client protocol ---
+
+    async def session_update(
+        self,
+        session_id: str,
+        update: Any,
+        **kwargs: Any,
+    ) -> None:
+        if isinstance(update, AgentMessageChunk):
+            content = update.content
+            if isinstance(content, TextContentBlock):
+                self._chunks.setdefault(session_id, []).append(content.text)
+        if self._on_update is not None:
+            try:
+                result = self._on_update(session_id, update)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                # An observer must never break the generation.
+                _logger.exception("ACP on_update callback raised; ignoring")
+
+    async def request_permission(
+        self, session_id: str, tool_call: Any, options: list[Any], **kwargs: Any
+    ) -> RequestPermissionResponse:
+        """Deny tool-permission requests; this backend runs headless.
+
+        Selects a ``reject_once`` option if offered (agent continues and can adapt),
+        otherwise cancels. ``*_always`` options are never selected.
+        """
+        for option in options:
+            if option.kind == "reject_once":
+                return RequestPermissionResponse(
+                    outcome=AllowedOutcome(
+                        outcome="selected", option_id=option.option_id
+                    )
+                )
+        return RequestPermissionResponse(outcome=DeniedOutcome(outcome="cancelled"))
+
+
+def _extract_json(text: str) -> str:
+    """Return the first JSON object or array embedded in ``text``.
+
+    ACP agents often wrap replies in prose, code fences or persona prefixes.
+    If no valid JSON value is found, ``text`` is returned unchanged.
+    """
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch in "{[":
+            try:
+                _, end = decoder.raw_decode(text, i)
+            except ValueError:
+                continue
+            return text[i:end]
+    return text
+
+
+class ACPBackend(Backend):
+    """Mellea Backend that drives any ACP-compatible stdio agent subprocess.
+
+    By default spawns Bob (``bob acp``). Pass a different ``command`` to use
+    any other ACP agent — e.g. ``command=["vibe-acp"]`` for Mistral Vibe.
+
+    One agent subprocess is spawned lazily and shared. Every generation runs in
+    its own fresh ACP session, so the agent never carries hidden history between
+    calls: Mellea's context is the single source of truth. All calls share one
+    working directory, so files the agent writes persist between calls.
+
+    Usage::
+
+        from mellea.stdlib.session import MelleaSession
+        from mellea_contribs.acp import ACPBackend
+
+        # Bob (default)
+        m = MelleaSession(ACPBackend())
+
+        # Mistral Vibe
+        m = MelleaSession(ACPBackend(command=["vibe-acp"]))
+
+        result = m.instruct("Write a haiku about Python.")
+    """
+
+    _provider: str = "acp"
+
+    def __init__(
+        self,
+        command: list[str] | None = None,
+        cwd: str | os.PathLike[str] | None = None,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = 300.0,
+        on_update: UpdateCallback | None = None,
+    ) -> None:
+        """Create an ACPBackend.
+
+        Args:
+            command: The command used to launch the ACP agent subprocess.
+                     Defaults to ``["bob", "acp"]``.
+                     Example: ``["vibe-acp"]``, ``["bob", "acp", "--trust"]``.
+            cwd: Working directory for the agent and its sessions. This is the
+                 directory the agent can see. Defaults to a fresh empty
+                 temporary directory, created when the agent is first used and
+                 removed by :meth:`close` / :meth:`aclose`. Pass a path
+                 (e.g. ``os.getcwd()``) to let the agent work on real files.
+            env: Environment variables for the agent subprocess. Defaults to a
+                 copy of ``os.environ`` so agents can read API keys such as
+                 ``BOB_API_KEY``. If given, the agent receives only the ACP
+                 SDK's minimal allowlist (``PATH``, ``HOME``, ...) plus these
+                 entries.
+            timeout: Max seconds for agent startup (spawn + ``initialize``) and,
+                     separately, for each generation (new session + prompt)
+                     before ``TimeoutError`` is raised. ``None`` disables the
+                     limit. Defaults to 300.
+            on_update: Optional observer called as ``on_update(session_id, update)``
+                       for every session update the agent sends (message and
+                       thought chunks, tool calls and their results, plans, ...),
+                       as the ``acp.schema`` object. May be sync or async.
+                       ``session_id`` identifies one generation (each call uses
+                       its own session), so concurrent calls can be told apart.
+                       The same id is available on the result as
+                       ``thunk._meta["acp_session_id"]``, so a requirement can
+                       find the updates that belong to the output it validates.
+                       Exceptions raised by the callback are logged and ignored.
+
+        If the agent subprocess dies, the call in flight fails with
+        ``ConnectionError`` (it is not retried: the agent may already have acted
+        on the prompt) and the next call spawns a fresh agent.
+        """
+        self._command: list[str] = command if command is not None else ["bob", "acp"]
+        self._cwd: str | None = os.fspath(cwd) if cwd is not None else None
+        self._env: dict[str, str] | None = dict(env) if env is not None else None
+        self._tmp_cwd: tempfile.TemporaryDirectory[str] | None = None
+        self._timeout = timeout
+        self._model_id: str = self._command[0]
+        self._formatter = TemplateFormatter(model_id=self._model_id)
+        self._client = _BufferingClient(on_update)
+        self._conn: Any = None  # ClientSideConnection, set after first use
+        self._proc: Any = None
+        self._exit_stack: AsyncExitStack | None = None
+        self._spawn_lock = asyncio.Lock()
+
+    async def __aenter__(self) -> Self:
+        """Enter async context; the agent is spawned lazily on first use."""
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Tear down the agent subprocess."""
+        await self.aclose()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_cwd(self) -> str:
+        """Return the agent's working directory, creating a scratch dir if unset."""
+        if self._cwd is not None:
+            return self._cwd
+        if self._tmp_cwd is None:
+            self._tmp_cwd = tempfile.TemporaryDirectory(prefix="mellea-acp-")
+        return self._tmp_cwd.name
+
+    async def _ensure_agent(self) -> Any:
+        """Spawn the shared ACP agent subprocess once and return its connection."""
+        self._raise_if_closed()
+        async with self._spawn_lock:
+            if self._proc is not None and self._proc.returncode is not None:
+                # Agent exited while idle: tear down and respawn below.
+                await self._teardown_locked()
+            if self._conn is None:
+                cwd = self._resolve_cwd()
+                stack = AsyncExitStack()
+                try:
+                    async with asyncio.timeout(self._timeout):
+                        conn, proc = await stack.enter_async_context(
+                            spawn_agent_process(
+                                self._client,
+                                self._command[0],
+                                *self._command[1:],
+                                cwd=cwd,
+                                # The SDK default scrubs the env to a tiny allowlist,
+                                # which drops API keys such as BOB_API_KEY.
+                                env=self._env
+                                if self._env is not None
+                                else dict(os.environ),
+                            )
+                        )
+                        init_resp = await conn.initialize(
+                            protocol_version=_SUPPORTED_PROTOCOL_VERSION,
+                            client_info=Implementation(
+                                name=_CLIENT_NAME,
+                                version=_CLIENT_VERSION,
+                            ),
+                        )
+                        if (
+                            getattr(init_resp, "protocol_version", None)
+                            != _SUPPORTED_PROTOCOL_VERSION
+                        ):
+                            raise RuntimeError(
+                                f"ACP agent negotiated unsupported protocol version "
+                                f"{getattr(init_resp, 'protocol_version', None)} "
+                                f"(supported: {_SUPPORTED_PROTOCOL_VERSION})"
+                            )
+                except TimeoutError:
+                    await stack.aclose()
+                    raise TimeoutError(
+                        f"ACP agent {self._model_id!r} failed to initialize within {self._timeout}s"
+                    ) from None
+                except BaseException:
+                    await stack.aclose()
+                    raise
+                self._exit_stack = stack
+                self._conn = conn
+                self._proc = proc
+            return self._conn
+
+    async def _teardown_locked(self) -> None:
+        """Close the agent subprocess. Caller must hold ``_spawn_lock``."""
+        stack, self._exit_stack = self._exit_stack, None
+        self._conn = self._proc = None
+        if stack is not None:
+            try:
+                await stack.aclose()
+            except Exception:
+                _logger.debug("Error tearing down dead ACP agent", exc_info=True)
+
+    async def _discard_agent(self, conn: Any) -> None:
+        """Forget a dead ``conn`` so the next call spawns a fresh agent."""
+        async with self._spawn_lock:
+            if self._conn is conn:  # else already replaced by a concurrent caller
+                await self._teardown_locked()
+
+    def _render_prompt(
+        self,
+        action: Component[C] | CBlock | ModelOutputThunk,
+        ctx: Context,
+    ) -> str:
+        """Render context + action into a plain-text prompt string.
+
+        Uses to_chat_messages() so that role information (user/assistant/system)
+        from ChatContext history is preserved as role-prefixed lines.
+        For SimpleContext, view_for_generation() returns [] so only the action
+        is rendered.
+        """
+        prior = ctx.view_for_generation() or []
+        all_spans = [*prior, action]
+        messages: list[Message] = self._formatter.to_chat_messages(all_spans)
+
+        parts: list[str] = []
+        for msg in messages:
+            role = msg.role
+            content = self._formatter.print(msg)
+            # Only prefix with role when there's actual history (multi-turn)
+            if len(prior) > 0:
+                parts.append(f"{role}: {content}")
+            else:
+                parts.append(content)
+        return "\n".join(parts)
+
+    def _build_prompt(
+        self,
+        action: Component[C] | CBlock | ModelOutputThunk,
+        ctx: Context,
+        format: type[BaseModelSubclass] | None,
+    ) -> str:
+        prompt_text = self._render_prompt(action, ctx)
+        if format is not None:
+            # Best-effort: ACP has no constrained decoding, so ask in the prompt.
+            prompt_text += (
+                "\n\nRespond with ONLY a JSON object (no prose, no code fences) "
+                f"matching this JSON schema:\n{json.dumps(format.model_json_schema())}"
+            )
+        return prompt_text
+
+    async def _run_prompt(
+        self,
+        prompt_text: str,
+        format: type[BaseModelSubclass] | None,
+        meta: dict[str, Any],
+    ) -> str:
+        """Run one prompt in a fresh ACP session and return the reply text.
+
+        The session id is stored in ``meta["acp_session_id"]`` as soon as the
+        session exists, so it can be matched with ``on_update`` callbacks.
+        """
+        conn = await self._ensure_agent()
+        cwd = self._resolve_cwd()
+        try:
+            async with asyncio.timeout(self._timeout):
+                session = await conn.new_session(cwd=cwd)
+                session_id: str = session.session_id
+                meta["acp_session_id"] = session_id
+                try:
+                    resp = await conn.prompt(
+                        session_id=session_id,
+                        prompt=[TextContentBlock(type="text", text=prompt_text)],
+                    )
+                finally:
+                    text = self._client.pop_text(session_id)
+                    try:
+                        async with asyncio.timeout(_CLOSE_SESSION_TIMEOUT):
+                            await conn.close_session(session_id=session_id)
+                    except Exception:  # noqa: BLE001
+                        _logger.debug("ACP agent did not close session %s", session_id)
+        except ConnectionError:
+            # Agent subprocess died or the pipe broke: drop it so the next call
+            # respawns. This call is not retried; the prompt may have had effects.
+            await self._discard_agent(conn)
+            raise
+        except TimeoutError:
+            # Generation timed out: drop the agent because it may be stuck or
+            # desynchronized, then raise with a descriptive message.
+            await self._discard_agent(conn)
+            raise TimeoutError(
+                f"ACP agent {self._model_id!r} did not reply within {self._timeout}s"
+            ) from None
+
+        if resp.stop_reason in ("cancelled", "refusal"):
+            raise RuntimeError(
+                f"ACP agent {self._model_id!r} stopped with "
+                f"stop_reason={resp.stop_reason!r}"
+            )
+        if not text.strip():
+            raise RuntimeError(
+                f"ACP agent {self._model_id!r} returned an empty reply "
+                f"(stop_reason={resp.stop_reason!r})"
+            )
+        return _extract_json(text) if format is not None else text
+
+    @staticmethod
+    def _warn_ignored(model_options: dict | None, tool_calls: bool) -> None:
+        if model_options or tool_calls:
+            _logger.warning(
+                "ACPBackend ignores model_options and tool_calls; the ACP agent "
+                "controls its own model and tools."
+            )
+
+    def _make_generate_log(
+        self,
+        action: Component[C] | CBlock | ModelOutputThunk,
+        prompt_text: str,
+        date: datetime.datetime,
+        response_text: str,
+    ) -> GenerateLog:
+        log = GenerateLog()
+        log.date = date
+        log.prompt = prompt_text
+        log.backend = f"acp::{self._model_id}"
+        log.model_output = response_text
+        log.action = action
+        return log
+
+    # ------------------------------------------------------------------
+    # Backend protocol
+    # ------------------------------------------------------------------
+
+    async def _generate_from_context(
+        self,
+        action: Component[C] | CBlock | ModelOutputThunk,
+        ctx: Context,
+        *,
+        format: type[BaseModelSubclass] | None = None,
+        model_options: dict | None = None,
+        tool_calls: bool = False,
+    ) -> tuple[ModelOutputThunk[C], Context]:
+        await self.do_generate_walk(action)
+        self._warn_ignored(model_options, tool_calls)
+        prompt_text = self._build_prompt(action, ctx, format)
+
+        output: ModelOutputThunk[C] = ModelOutputThunk(None)
+        output._gen.start = datetime.datetime.now()
+        output._call.action = action
+        output._call.model_options = model_options or {}
+        output.generation.model = self._model_id
+        output.generation.provider = self._provider
+        output.raw.provider = self._provider
+
+        async def process(thunk: ModelOutputThunk, chunk: str) -> None:
+            thunk._underlying_value = (thunk._underlying_value or "") + chunk
+
+        async def post_process(thunk: ModelOutputThunk) -> None:
+            thunk._generate_log = self._make_generate_log(
+                action,
+                prompt_text,
+                thunk._gen.start or datetime.datetime.now(),
+                thunk.value or "",
+            )
+            thunk._generate_log.result = thunk
+            thunk._gen.generate = None
+
+        output._gen.process = process
+        output._gen.post_process = post_process
+        output._gen.generate = asyncio.create_task(
+            send_to_queue(self._run_prompt(prompt_text, format, output._meta), output)
+        )
+        output._gen.generate_type = GenerateType.ASYNC
+
+        return output, ctx.add(action).add(output)
+
+    async def _generate_from_raw(
+        self,
+        actions: Sequence[Component[C] | CBlock],
+        ctx: Context,
+        *,
+        format: type[BaseModelSubclass] | None = None,
+        model_options: dict | None = None,
+        tool_calls: bool = False,
+    ) -> tuple[list[ModelOutputThunk], dict[str, Any] | None]:
+        """Batch generation: one fresh session per action, run concurrently.
+
+        ``ctx`` is ignored: each action is rendered on its own.
+        """
+        await self.do_generate_walks(list(actions))
+        self._warn_ignored(model_options, tool_calls)
+        empty = SimpleContext()
+        prompts = [self._build_prompt(a, empty, format) for a in actions]
+        dates = [datetime.datetime.now() for _ in actions]
+        metas: list[dict[str, Any]] = [{} for _ in prompts]
+        texts = await asyncio.gather(
+            *(self._run_prompt(p, format, meta) for p, meta in zip(prompts, metas))
+        )
+
+        results: list[ModelOutputThunk] = []
+        for action, prompt_text, date, text, meta in zip(
+            actions, prompts, dates, texts, metas
+        ):
+            thunk: ModelOutputThunk = ModelOutputThunk(value=text, meta=meta)
+            thunk.parsed_repr = Message(role="assistant", content=text)
+            thunk.generation.model = self._model_id
+            thunk.generation.provider = self._provider
+            thunk._generate_log = self._make_generate_log(
+                action, prompt_text, date, text
+            )
+            results.append(thunk)
+        return results, None
+
+    def close(self) -> None:
+        """Tear down the ACP agent subprocess from synchronous code.
+
+        Runs :meth:`aclose` on mellea's event loop. Safe to call more than once.
+        The backend cannot be reused afterwards.
+        """
+        _run_async_in_thread(self.aclose())
+
+    async def aclose(self) -> None:
+        """Tear down the ACP agent subprocess.
+
+        Safe to call more than once. The backend cannot be reused afterwards.
+        """
+        self._closed = True
+        async with self._spawn_lock:
+            await self._teardown_locked()
+        if self._tmp_cwd is not None:
+            self._tmp_cwd.cleanup()
+            self._tmp_cwd = None
