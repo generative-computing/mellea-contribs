@@ -354,7 +354,7 @@ m = start_session(backend_name="ollama", model_id="granite4:micro")
 
 ## Layout convention
 
-The source is laid out flat (`<core mirror>/...`); the wheel exposes the namespaced path:
+Modules mirror mellea core's package layout under the `mellea_contribs.dspy` namespace:
 
 - On disk:  `mellea_contribs/dspy/core/lm.py`
 - Imports:  `from mellea_contribs.dspy.core.lm import MelleaLM`
