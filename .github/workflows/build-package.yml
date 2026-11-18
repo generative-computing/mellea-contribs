@@ -128,6 +128,7 @@ jobs:
       # importable; declared extras come from the package's
       # [tool.mellea-contribs.ci].ollama_models.
       - name: Pull required ollama models
+        id: pull-models
         if: steps.check-ollama.outputs.skip_ollama == 'false'
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
@@ -158,9 +159,13 @@ jobs:
 
       # Verify only the needed models were pulled: fail if a test downloaded
       # something beyond the declared set. `always()` so it reports even when
-      # the test step failed.
+      # the test step failed, but gated on the pull step succeeding — otherwise
+      # a failed `uv sync` skips the pull, leaves `ollama list` empty, and this
+      # step would fire a misleading "missing required models" red. pull-models
+      # only reports `success` when it ran, so this also subsumes the
+      # skip_ollama guard.
       - name: Validate pulled ollama models
-        if: ${{ always() && steps.check-ollama.outputs.skip_ollama == 'false' }}
+        if: ${{ always() && steps.pull-models.outcome == 'success' }}
         env:
           PACKAGE_DIR: ${{ inputs.package_dir }}
         run: |

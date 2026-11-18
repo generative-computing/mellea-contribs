@@ -134,6 +134,7 @@ jobs:
       # mellea actually under test. The validate step then fails if anything
       # beyond that set was pulled — e.g. a test downloading a model mid-run.
       - name: Pull required ollama models
+        id: pull-models
         if: env.SKIP_OLLAMA != 'true'
         working-directory: ${{ inputs.package }}
         run: uv run python "$GITHUB_WORKSPACE/.github/scripts/resolve_ollama_models.py" pull .
@@ -155,9 +156,15 @@ jobs:
 
       # Verify only the needed models were pulled: fail if a test downloaded
       # something beyond the declared set, or if a required model is absent.
-      # `always()` so it reports even when the test step failed.
+      # `always()` so it reports even when the test step failed, but gated on
+      # the pull step succeeding — otherwise a failed `uv sync` / mellea override
+      # skips the pull, leaves `ollama list` empty, and this step would fire a
+      # misleading "missing required models" red that misattributes the real
+      # failure (and feeds the smoke-mode auto-issue bot the wrong signal).
+      # pull-models only reports `success` when it actually ran, so this also
+      # subsumes the SKIP_OLLAMA guard.
       - name: Validate pulled ollama models
-        if: ${{ always() && env.SKIP_OLLAMA != 'true' }}
+        if: ${{ always() && steps.pull-models.outcome == 'success' }}
         working-directory: ${{ inputs.package }}
         run: |
           set -euo pipefail
