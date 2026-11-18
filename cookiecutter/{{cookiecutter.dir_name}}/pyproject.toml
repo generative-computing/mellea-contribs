@@ -51,6 +51,9 @@ dev = [
 skip_ollama = false
 timeout_minutes = 30
 python_versions = ["3.12"]
+# If your tests request ollama models beyond mellea's start_session() default,
+# list them here so CI pulls them (and fails if anything else is pulled):
+# ollama_models = ["granite3.3:8b"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
