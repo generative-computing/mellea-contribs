@@ -170,7 +170,7 @@ uv run examples/07_ollama_granite.py
 The `model` parameter in `MelleaLM` constructor is only used for metadata in response objects. The actual model used for generation is determined by the backend configuration in the MelleaSession.
 
 
-### 08. BestOfN Verification (`08_bestofn_verification.py`) ⭐ NEW
+### 08. BestOfN Verification (`08_bestofn_verification.py`)
 **Runtime verification with BestOfN and Mellea requirements**
 
 Demonstrates how to use MelleaBestOfN to generate multiple candidates and select the best one:
@@ -201,7 +201,7 @@ uv run examples/08_bestofn_verification.py
 
 ---
 
-### 09. Refine Verification (`09_refine_verification.py`) ⭐ NEW
+### 09. Refine Verification (`09_refine_verification.py`)
 **Iterative refinement with Mellea requirements**
 
 Demonstrates how to use MelleaRefine to iteratively improve outputs:
@@ -232,7 +232,7 @@ uv run examples/09_refine_verification.py
 
 ---
 
-### 10. Hybrid Approach (`10_hybrid_approach.py`) ⭐ NEW
+### 10. Hybrid Approach (`10_hybrid_approach.py`)
 **Two ways to use Mellea requirements with DSPy**
 
 Demonstrates both approaches for using Mellea requirements:
@@ -290,11 +290,9 @@ uv run examples/04_async_operations.py
 uv run examples/05_dspy_modules.py
 uv run examples/06_optimization.py
 uv run examples/07_ollama_granite.py
-```
-
-Or run the original comprehensive example:
-```bash
-uv run example_mellea_dspy.py
+uv run examples/08_bestofn_verification.py
+uv run examples/09_refine_verification.py
+uv run examples/10_hybrid_approach.py
 ```
 
 ---
@@ -312,7 +310,9 @@ uv run example_mellea_dspy.py
 
 **Advanced:**
 6. Master optimization in `06_optimization.py`
-7. Combine techniques for production systems
+7. Configure specific models in `07_ollama_granite.py`
+8. Add runtime verification with `08_bestofn_verification.py` and `09_refine_verification.py`
+9. Choose between wrappers and direct DSPy in `10_hybrid_approach.py`
 
 ---
 
@@ -349,11 +349,10 @@ uv run example_mellea_dspy.py
 
 ### Model Selection
 
-Change the model in any example:
+The model is chosen by the Mellea session (see below); `MelleaLM` only takes generation options:
 ```python
 lm = MelleaLM(
     mellea_session=m,
-    model="mellea-ollama",  # or "mellea-openai", "mellea-anthropic"
     temperature=0.7,
     max_tokens=1000
 )
@@ -369,13 +368,10 @@ from mellea import start_session
 m = start_session()
 
 # With specific backend
-m = start_session(backend="openai")
+m = start_session(backend_name="openai", model_id="gpt-4o")
 
-# With custom options
-m = start_session(
-    backend="ollama",
-    model="granite4:micro"
-)
+# With a specific model
+m = start_session(backend_name="ollama", model_id="granite4:micro")
 ```
 
 ---
@@ -439,11 +435,10 @@ m = start_session(
 ### Documentation
 - [Mellea Documentation](https://mellea.ai/)
 - [DSPy Documentation](https://dspy-docs.vercel.app/)
-- [Integration README](../README_MELLEA_DSPY.md)
+- [Integration README](../README.md)
 
-### Related Examples
-- [Test Suite](../test_mellea_dspy.py) - Integration tests
-- [Original Example](../example_mellea_dspy.py) - Comprehensive demo
+### Related
+- [Test Suite](../tests/) - Unit and integration tests
 
 ### Community
 - [Mellea GitHub](https://github.com/generative-computing/mellea)
@@ -515,7 +510,7 @@ if __name__ == "__main__":
 
 ## 📄 License
 
-This integration follows the same license as the parent project.
+Apache-2.0. See [LICENSE](../../LICENSE).
 
 ---
 
