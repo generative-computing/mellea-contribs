@@ -30,7 +30,7 @@ This document explains the organization of the `mellea-contribs` directory and t
 | --- | --- |
 | [mellea-integration-core/](#mellea-integration-core)| Core abstractions for framework integrations | 
 | [crewai_backend/](#crewai-backend) | CrewAI integration with Mellea | 
-| [dspy_backend/](#dspy-backend) | DSPy integration with Mellea | 
+| [dspy/](#dspy) | DSPy integration with Mellea |
 | [langchain_backend/](#langchain-backend) | LangChain integration with Mellea | 
 | [tools_package/](#tools-package) | Generative tools and utilities library | 
 | [reqlib_package/](#reqlib-package) | Requirements library for validation | 
@@ -62,13 +62,13 @@ This document explains the organization of the `mellea-contribs` directory and t
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 90 minutes (extended due to complex integration tests)
 
-### [DSPy Backend](https://github.com/generative-computing/mellea-contribs/tree/main/mellea_contribs/dspy_backend)
+### [DSPy](https://github.com/generative-computing/mellea-contribs/tree/main/dspy)
 - **Purpose**: DSPy integration enabling structured prompting with generative programming
 - **Key Features**:
   - DSPy module integration with Mellea
   - Structured prompting capabilities
   - Inherits from `MelleaIntegrationBase`
-- **Dependencies**: `dspy>=3.1.3`, `mellea>=0.3.2`, `mellea-integration-core`
+- **Dependencies**: `dspy>=3.1.3`, `mellea>=0.3.2`, `mellea-contribs-integration-core`
 - **Python Version**: ≥3.11
 - **CI Requirements**: Ollama support enabled
 - **Timeout**: 30 minutes
@@ -139,7 +139,7 @@ The CI pipeline looks for either `tests/` or `test/` directory. Integration test
 #### 3. **Dependency Management**
 - **Package Format**: Each subpackage is a Python package with `pyproject.toml`
 - **Build System**: 
-  - `crewai_backend`, `dspy_backend`, `langchain_backend`, `mellea-integration-core`: Use `hatchling`
+  - `crewai_backend`, `dspy`, `langchain_backend`, `mellea-integration-core`: Use `hatchling`
   - `tools_package`: Uses `pdm-backend`
   - `reqlib_package`: Uses appropriate build backend
 - **Local Path Dependencies**: Subpackages can reference each other via path-based dependencies in `pyproject.toml`:
@@ -151,7 +151,7 @@ The CI pipeline looks for either `tests/` or `test/` directory. Integration test
 #### 4. **Ollama Setup (for backends)**
 Some subpackages require Ollama for testing:
 - **Skip Ollama**: `mellea-integration-core`, `reqlib_package`, `tools_package`
-- **Include Ollama**: `crewai_backend`, `dspy_backend`, `langchain_backend`
+- **Include Ollama**: `crewai_backend`, `dspy`, `langchain_backend`
 
 When Ollama is enabled:
 1. Ollama service is installed and started

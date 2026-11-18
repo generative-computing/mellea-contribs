@@ -12,12 +12,10 @@ pip install "mellea-contribs[{{ cookiecutter.dir_name }}] @ https://github.com/g
 
 ## Layout convention
 
-The source is laid out flat (`<core mirror>/...`); the wheel exposes the namespaced path:
+Modules mirror mellea core's package layout under the `mellea_contribs.{{ cookiecutter.name }}` namespace:
 
-- On disk:  `{{ cookiecutter.core_path | replace('.', '/') }}/{{ cookiecutter.name }}.py`
+- On disk:  `mellea_contribs/{{ cookiecutter.name }}/{{ cookiecutter.core_path | replace('.', '/') }}/{{ cookiecutter.name }}.py`
 - Imports:  `from mellea_contribs.{{ cookiecutter.name }}.{{ cookiecutter.core_path }}.{{ cookiecutter.name }} import …`
-
-The doubled segment (e.g., `mellea_contribs.{{ cookiecutter.name }}.{{ cookiecutter.core_path }}`) is deliberate — outer = subpackage; inner = identical to core.
 
 ## Development
 

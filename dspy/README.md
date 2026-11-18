@@ -7,7 +7,7 @@ A powerful integration that combines [Mellea](https://mellea.ai/)'s generative p
 This integration enables you to use Mellea as a backend for DSPy, bringing together:
 
 - **Mellea's Features:**
-  - Multi-model support (Ollama, OpenAI, Anthropic)
+  - Multi-backend support (Ollama, OpenAI, WatsonX, LiteLLM, HuggingFace)
   - Requirements validation
   - Sampling strategies for inference-time scaling
   - Generative programming patterns
@@ -23,12 +23,13 @@ This integration enables you to use Mellea as a backend for DSPy, bringing toget
 ### Installation
 
 ```bash
-# Install dependencies
-uv add dspy
+pip install "mellea-contribs[dspy] @ https://github.com/generative-computing/mellea-contribs/releases/latest/download/mellea_contribs-py3-none-any.whl"
 
 # Ensure Ollama is running
 ollama pull granite4:micro
 ```
+
+See the [contribs README](../README.md) for details.
 
 ### Basic Usage
 
@@ -123,6 +124,8 @@ Improve program performance:
 
 ```bash
 uv run examples/06_optimization.py
+```
+
 ### [07. Ollama with Granite](examples/07_ollama_granite.py)
 Configure specific models:
 - OllamaBackend setup
@@ -283,17 +286,20 @@ response = await lm.aforward(
 
 ### Multi-Model Support
 
+The backend and model are chosen by the Mellea session. The `model` argument of `MelleaLM` is only metadata on response objects.
+
 ```python
-# Use different backends
-lm_ollama = MelleaLM(mellea_session=m, model="mellea-ollama")
-lm_openai = MelleaLM(mellea_session=m, model="mellea-openai")
+# Ollama (default)
+lm_ollama = MelleaLM(mellea_session=start_session(backend_name="ollama"))
+
+# OpenAI
+lm_openai = MelleaLM(mellea_session=start_session(backend_name="openai", model_id="gpt-4o"))
 ```
 
 ## Documentation
 
-- **[Integration Guide](README_MELLEA_DSPY.md)** - Detailed integration documentation
 - **[Examples README](examples/README.md)** - Comprehensive examples guide
-- **[API Reference](mellea_lm.py)** - MelleaLM class documentation
+- **[API Reference](mellea_contribs/dspy/core/lm.py)** - MelleaLM class documentation
 
 ## Architecture
 
@@ -304,7 +310,7 @@ DSPy Application
        ↓
   Mellea Session
        ↓
-  Model Backend (Ollama/OpenAI/Anthropic)
+  Model Backend (Ollama/OpenAI/WatsonX/LiteLLM/HF)
 ```
 
 The `MelleaLM` class implements DSPy's `BaseLM` interface, translating between DSPy's expectations and Mellea's capabilities.
@@ -316,7 +322,6 @@ The `MelleaLM` class implements DSPy's `BaseLM` interface, translating between D
 ```python
 lm = MelleaLM(
     mellea_session=m,
-    model="mellea-ollama",
     temperature=0.7,
     max_tokens=2000
 )
@@ -329,13 +334,10 @@ lm = MelleaLM(
 m = start_session()
 
 # With specific backend
-m = start_session(backend="openai")
+m = start_session(backend_name="openai", model_id="gpt-4o")
 
-# With custom options
-m = start_session(
-    backend="ollama",
-    model="granite4:micro"
-)
+# With a specific model
+m = start_session(backend_name="ollama", model_id="granite4:micro")
 ```
 
 ## Learning Path
@@ -346,19 +348,25 @@ m = start_session(
 4. **Performance:** [Async Operations](examples/04_async_operations.py)
 5. **Modularity:** [DSPy Modules](examples/05_dspy_modules.py)
 6. **Optimization:** [Optimization](examples/06_optimization.py)
+7. **Model Configuration:** [Ollama with Granite](examples/07_ollama_granite.py)
+8. **Runtime Verification:** [BestOfN](examples/08_bestofn_verification.py), [Refine](examples/09_refine_verification.py)
+9. **Choosing an Approach:** [Hybrid](examples/10_hybrid_approach.py)
 
-## Testing
+## Layout convention
 
-Run the test suite:
+Modules mirror mellea core's package layout under the `mellea_contribs.dspy` namespace:
+
+- On disk:  `mellea_contribs/dspy/core/lm.py`
+- Imports:  `from mellea_contribs.dspy.core.lm import MelleaLM`
+
+Public API is re-exported from `mellea_contribs.dspy`.
+
+## Development
 
 ```bash
-uv run test_mellea_dspy.py
-```
-
-Run the original comprehensive example:
-
-```bash
-uv run example_mellea_dspy.py
+cd dspy
+uv sync --all-extras
+uv run pytest -m "not qualitative and not e2e"
 ```
 
 ## Use Cases
@@ -386,16 +394,6 @@ response = summarizer(text="Long article...")
 coder = dspy.Predict("task -> code")
 response = coder(task="Write a factorial function")
 ```
-
-## Comparison with Other Integrations
-
-| Feature | LangChain | DSPy |
-|---------|-----------|------|
-| Interface | `BaseChatModel` | `BaseLM` |
-| Primary Use | Chains & agents | Structured prompting |
-| Optimization | Manual | Built-in |
-| Modularity | High | Very High |
-| Learning Curve | Moderate | Moderate |
 
 ## Contributing
 
@@ -440,7 +438,7 @@ See [examples/README.md](examples/README.md) for more troubleshooting tips.
 
 ## License
 
-This integration follows the same license as the parent project.
+Apache-2.0. See [LICENSE](../LICENSE).
 
 ---
 
