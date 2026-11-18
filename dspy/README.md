@@ -359,7 +359,7 @@ Modules mirror mellea core's package layout under the `mellea_contribs.dspy` nam
 - On disk:  `mellea_contribs/dspy/core/lm.py`
 - Imports:  `from mellea_contribs.dspy.core.lm import MelleaLM`
 
-The doubled segment (`mellea_contribs.dspy.core`) is deliberate — outer = subpackage; inner = mirror of mellea core. Public API is re-exported from `mellea_contribs.dspy`.
+Public API is re-exported from `mellea_contribs.dspy`.
 
 ## Development
 
