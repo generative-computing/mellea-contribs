@@ -239,8 +239,7 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
             action: The action object to be sampled.
             context: The context to be passed to the sampling strategy.
             backend: The backend used for generating samples.
-            requirements: Already-merged requirements (global and per-call, via
-                ``_merge_requirements``).
+            requirements: Merged and deduplicated list of requirements.
             effective_loop_budget: Unused; SIMBA-UQ samples a fixed number of
                 generations.
             validation_ctx: Optional context to use for validation.
@@ -304,7 +303,11 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
             result_mot, result_ctx = gen_result
             await result_mot.avalue()
             try:
-                result_mot.parsed_repr = task_action.parse(result_mot)
+                result_mot.parsed_repr = (
+                    task_action.parse(result_mot)
+                    if isinstance(task_action, Component)
+                    else result_mot.value
+                )
             except ComponentParseError as e:
                 failed_count += 1
                 flog.warning(f"Error parsing result: {e}")

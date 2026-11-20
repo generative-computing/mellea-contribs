@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from mellea.core import Component
+from mellea.core import CBlock, Component
 from mellea.core.base import ModelOutputThunk
 from mellea.stdlib.context import SimpleContext
 
@@ -493,6 +493,19 @@ class TestSampleMockedBackend:
         assert meta["confidence"] is None
         assert meta["failed_count"] == 3
         assert len(result.sample_generations) == 1
+
+    async def test_cblock_action_is_not_parsed(self):
+        strategy = SIMBAUQSamplingStrategy(
+            temperatures=[0.5], n_per_temp=2, similarity_metric="jaccard"
+        )
+        result = await strategy.sample(
+            CBlock("prompt"),
+            SimpleContext(),
+            _ScriptedBackend(["answer one", "answer one"]),
+            requirements=None,
+        )
+        assert len(result.sample_generations) == 2
+        assert result.result._meta["simba_uq"]["failed_count"] == 0
 
     async def test_all_samples_failing_raises(self):
         outcomes = [RuntimeError("x"), RuntimeError("y")]

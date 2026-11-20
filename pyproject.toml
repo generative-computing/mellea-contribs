@@ -32,6 +32,10 @@ Repository = "https://github.com/generative-computing/mellea-contribs"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.codespell]
+ignore-words-list = 'mot,rouge,strat,ans,nd'
+skip = 'uv.lock,reqlib/tests/legal/*.json'
+
 [tool.hatch.build.targets.wheel]
 # Meta-package ships no code of its own. Its only job is to declare extras
 # that resolve to subpackage release assets at install time. Hatch's default

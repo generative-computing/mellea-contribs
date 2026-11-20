@@ -276,7 +276,7 @@ def test_citation_exists_last_output_none(database):
 
 
 def test_citation_exists_last_output_not_string(database):
-    """Ensures that citation_exists corrrectly handles a Context whose last_output()
+    """Ensures that citation_exists correctly handles a Context whose last_output()
     returns a non-string value.
     """
     ctx = MockContext(123)  # not a string

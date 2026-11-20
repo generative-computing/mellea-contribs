@@ -31,4 +31,3 @@ repos:
       - id: codespell
         additional_dependencies:
           - tomli
-        args: [--ignore-words-list, "mot,rouge"]
