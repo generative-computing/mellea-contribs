@@ -35,8 +35,10 @@ from mellea.core.utils import MelleaLogger
 from mellea.core import (
     Backend,
     BaseModelSubclass,
+    CBlock,
     Component,
     Context,
+    ModelOutputThunk,
     Requirement,
     S,
     SamplingResult,
@@ -214,32 +216,41 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
                 )
                 raise ValueError(msg)
 
-    async def sample(
+    async def _sample(
         self,
-        action: Component[S],
+        action: Component[S] | CBlock | ModelOutputThunk,
         context: Context,
         backend: Backend,
-        requirements: list[Requirement] | None,
+        requirements: list[Requirement],
         *,
+        effective_loop_budget: int,
         validation_ctx: Context | None = None,
         format: type[BaseModelSubclass] | None = None,
         model_options: dict | None = None,
         tool_calls: bool = False,
+        sampling_id: str,
+        show_progress: bool = True,
     ) -> SamplingResult[S]:
         """Sample across temperatures and select the most confident result.
+
+        Called by ``SamplingStrategy.sample``, which owns the lifecycle hooks.
 
         Args:
             action: The action object to be sampled.
             context: The context to be passed to the sampling strategy.
             backend: The backend used for generating samples.
-            requirements: List of requirements to test against (merged with
-                global requirements).
+            requirements: Already-merged requirements (global and per-call, via
+                ``_merge_requirements``).
+            effective_loop_budget: Unused; SIMBA-UQ samples a fixed number of
+                generations.
             validation_ctx: Optional context to use for validation.
             format: Output format for structured outputs.
             model_options: Model options to pass to the backend during
                 generation.
             tool_calls: True if tool calls should be used during this sampling
                 strategy.
+            sampling_id: Unused; correlates lifecycle hooks.
+            show_progress: Unused.
 
         Returns:
             SamplingResult with the most confident sample selected.
@@ -247,8 +258,7 @@ class SIMBAUQSamplingStrategy(SamplingStrategy):
         if model_options is None:
             model_options = {}
 
-        # Merge requirements: global requirements override local.
-        reqs = self._merge_requirements(requirements)
+        reqs = requirements
 
         # --- Phase 1: Generate samples across temperatures ---
         generation_tasks: list[asyncio.Task] = []
