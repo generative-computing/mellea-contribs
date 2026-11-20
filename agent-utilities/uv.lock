@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
@@ -1955,7 +1955,7 @@ wheels = [
 
 [[package]]
 name = "mellea"
-version = "0.8.0"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
@@ -1971,9 +1971,9 @@ dependencies = [
     { name = "requests" },
     { name = "rouge-score" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8d/95/0af95584600a11b9755fb7bb0983ba7f188e430c81a459b8204c74d5ffd2/mellea-0.8.0.tar.gz", hash = "sha256:ffce4a18adfd7f0985c942d98cfff826f12c2564d7d1f3a643f2245dbaf9149a", size = 676483, upload-time = "2026-09-23T18:22:38.404Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/76/6c30b5893489f0841145504f13ea66dcb18df788df9f9994b31c1ba328a3/mellea-0.9.0.tar.gz", hash = "sha256:6ba5cae4d64965d534e0b8858256c7526546c7e1cd3ca1523c7a23442bbc312d", size = 699350, upload-time = "2026-11-12T19:19:56.748Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/af/59/7e024174c3408b97cea8d014458811570c9231c47b3ddf9a0185a814ed88/mellea-0.8.0-py3-none-any.whl", hash = "sha256:d8fc50a4563e1bbeb4bf7a2561b52310055e75aa47f2fbb0b250c150d94d0357", size = 862992, upload-time = "2026-09-23T18:22:36.673Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/0b/0386b84e90eec814bc0444cc87c9ec9b6d00c6c35f14e99394074ee83fdb/mellea-0.9.0-py3-none-any.whl", hash = "sha256:866099aab8bd5269d22400b67a5742cdc6961036076bb9bf563b9d5bf5923771", size = 887951, upload-time = "2026-11-12T19:19:54.62Z" },
 ]
 
 [package.optional-dependencies]
@@ -2021,7 +2021,7 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'simbauq'" },
     { name = "eyecite" },
     { name = "markdown" },
-    { name = "mellea", extras = ["litellm"], specifier = ">=0.3.2" },
+    { name = "mellea", extras = ["litellm"], specifier = ">=0.9.0" },
     { name = "playwright" },
     { name = "rapidfuzz", specifier = ">=3.14.3" },
     { name = "scikit-learn", marker = "extra == 'simbauq'" },
