@@ -493,6 +493,49 @@ def _package_state_path(package: str) -> str:
     return f"{STATE_DIR_PATH}/{safe}.json"
 
 
+# SHA of git's empty blob; the seed commit's .gitkeep points at it.
+_EMPTY_BLOB_SHA = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+
+
+def _ensure_state_branch(repo: Any, branch: str) -> None:
+    """Create the bot-state branch if it does not exist yet.
+
+    The GitHub Contents API cannot create a branch, so the first state
+    write on a repository that was never seeded (e.g. a fork running
+    the scheduled smoke) fails with 404 "No commit found for the ref".
+    Seed it the way the original manual seed did: an orphan commit
+    holding only a ``.gitkeep``, so the branch shares no history with
+    the default branch. Concurrent smoke legs may race to seed it; the
+    loser sees 422 "reference already exists" and treats it as success.
+    """
+    from github import GithubException  # type: ignore[import-not-found]
+
+    try:
+        repo.get_git_ref(f"heads/{branch}")
+        return
+    except GithubException as e:
+        if e.status != 404:
+            raise
+    tree = repo.create_git_tree(
+        [
+            {
+                "path": ".gitkeep",
+                "mode": "100644",
+                "type": "blob",
+                "sha": _EMPTY_BLOB_SHA,
+            }
+        ]
+    )
+    commit = repo.create_git_commit(
+        "chore: seed auto-issue bot state branch", tree, []
+    )
+    try:
+        repo.create_git_ref(f"refs/heads/{branch}", commit.sha)
+    except GithubException as e:
+        if e.status != 422:
+            raise
+
+
 def _load_package_state(repo: Any, branch: str, package: str) -> BotState:
     """Fetch the per-package state file from the managed branch.
 
@@ -603,6 +646,7 @@ def _real_main(args: argparse.Namespace) -> int:  # pragma: no cover
 
     gh_api = Github(token)
     repo = gh_api.get_repo(repo_full_name)
+    _ensure_state_branch(repo, branch)
     gh = RealGitHub(repo=repo)
 
     if args.action in ("record-failure", "record-recovery"):
