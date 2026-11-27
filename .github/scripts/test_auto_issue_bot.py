@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from github import GithubException
 
 # Make the sibling module importable when pytest is invoked from the
 # repo root (``uv run pytest .github/scripts/test_auto_issue_bot.py``).
@@ -22,6 +27,8 @@ from auto_issue_bot import (  # noqa: E402
     apply_archival_timeline,
     record_failure,
     record_recovery,
+    _EMPTY_BLOB_SHA,
+    _ensure_state_branch,
 )
 
 
@@ -276,3 +283,78 @@ def test_bot_state_json_round_trip() -> None:
     assert restored.label_applied_days == state.label_applied_days
     assert restored.last_failure_run_url == state.last_failure_run_url
     assert restored.milestones_posted == state.milestones_posted
+
+
+# ---------------------------------------------------------------------------
+# _ensure_state_branch (real-mode branch bootstrap)
+# ---------------------------------------------------------------------------
+
+
+class _FakePyGithubRepo:
+    """Stand-in for a PyGithub Repository covering _ensure_state_branch."""
+
+    def __init__(self, *, ref_exists: bool, seed_status: int | None = None) -> None:
+        self.ref_exists = ref_exists
+        self.seed_status = seed_status
+        self.tree: list[dict[str, str]] | None = None
+        self.commit_parents: list[str] | None = None
+        self.created_ref: tuple[str, str] | None = None
+
+    def get_git_ref(self, ref: str) -> Any:
+        if self.ref_exists:
+            return object()
+        raise GithubException(404, {"message": "Not Found"}, {})
+
+    def create_git_tree(self, tree: list[dict[str, str]]) -> Any:
+        self.tree = tree
+        return SimpleNamespace(sha="tree-sha")
+
+    def create_git_commit(self, message: str, tree: Any, parents: list[str]) -> Any:
+        self.commit_parents = parents
+        return SimpleNamespace(sha="seed-sha")
+
+    def create_git_ref(self, ref: str, sha: str) -> None:
+        if self.seed_status is not None:
+            raise GithubException(self.seed_status, {"message": "exists"}, {})
+        self.created_ref = (ref, sha)
+
+
+def test_ensure_state_branch_seeds_orphan_when_missing() -> None:
+    """A missing branch is seeded as an orphan commit holding only .gitkeep."""
+    repo = _FakePyGithubRepo(ref_exists=False)
+    _ensure_state_branch(repo, "bot-state/auto-issue-bot")
+    assert repo.tree == [
+        {
+            "path": ".gitkeep",
+            "mode": "100644",
+            "type": "blob",
+            "sha": _EMPTY_BLOB_SHA,
+        }
+    ]
+    assert repo.commit_parents == []
+    assert repo.created_ref == ("refs/heads/bot-state/auto-issue-bot", "seed-sha")
+
+
+def test_ensure_state_branch_is_noop_when_ref_exists() -> None:
+    """An existing branch is left untouched."""
+    repo = _FakePyGithubRepo(ref_exists=True)
+    _ensure_state_branch(repo, "bot-state/auto-issue-bot")
+    assert repo.tree is None
+    assert repo.created_ref is None
+
+
+def test_ensure_state_branch_tolerates_race_on_create() -> None:
+    """A concurrent leg seeding first shows up as 422, not an error."""
+    repo = _FakePyGithubRepo(ref_exists=False, seed_status=422)
+    _ensure_state_branch(repo, "bot-state/auto-issue-bot")
+    assert repo.created_ref is None
+
+
+def test_ensure_state_branch_raises_other_errors() -> None:
+    """Non-404/422 failures (e.g. 403 permissions) surface to the caller."""
+    repo = _FakePyGithubRepo(ref_exists=True)
+    repo.get_git_ref = lambda ref: (_ for _ in ()).throw(  # type: ignore[assignment]
+        GithubException(403, {"message": "Forbidden"}, {})
+    )
+    with pytest.raises(GithubException):
+        _ensure_state_branch(repo, "bot-state/auto-issue-bot")
